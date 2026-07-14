@@ -1,0 +1,21 @@
+{
+  "name": "mokara",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "pnpm --filter @mokara/frontend dev",
+    "build:frontend": "pnpm --filter @mokara/frontend build",
+    "typecheck:frontend": "pnpm --filter @mokara/frontend typecheck",
+    "typecheck:db": "pnpm --filter @mokara/db typecheck",
+    "db:migrate": "pnpm --filter @mokara/db migrate",
+    "db:migrate:init": "pnpm --filter @mokara/db migrate:init",
+    "db:migrate:deploy": "pnpm --filter @mokara/db migrate:deploy",
+    "db:migrate:reset": "pnpm --filter @mokara/db migrate:reset",
+    "db:generate": "pnpm --filter @mokara/db generate",
+    "db:seed": "pnpm --filter @mokara/db seed"
+  },
+  "packageManager": "pnpm@11.13.0",
+  "engines": {
+    "node": ">=24"
+  }
+}

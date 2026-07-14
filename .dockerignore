@@ -1,0 +1,7 @@
+.git
+**/.git
+**/.env
+**/node_modules
+**/.next
+**/*.tsbuildinfo
+packages/backend/backend

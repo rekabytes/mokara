@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16.14-alpine3.24
+    container_name: mokara-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mokara
+      POSTGRES_PASSWORD: mokara_password
+      POSTGRES_DB: mokara
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mokara"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.4.9-alpine3.21
+    container_name: mokara-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:

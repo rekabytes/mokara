@@ -4,10 +4,22 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type Task, type TaskStatus } from "@/lib/api";
 
 type Filter = "all" | TaskStatus;
-
 const FILTERS: Filter[] = ["all", "todo", "in_progress", "done"];
+const PRIORITY_CLASS: Record<string, string> = {
+  high: "prio-high",
+  medium: "prio-medium",
+  low: "prio-low",
+};
 
-const label = (s: string) => s.replace(/_/g, " ");
+const titleCase = (s: string) =>
+  s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
 
 export default function Page() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -37,7 +49,10 @@ export default function Page() {
     e.preventDefault();
     if (!title.trim()) return;
     try {
-      const created = await api.create({ title: title.trim(), description: description.trim() });
+      const created = await api.create({
+        title: title.trim(),
+        description: description.trim(),
+      });
       setTasks((prev) => [created, ...prev]);
       setTitle("");
       setDescription("");
@@ -66,60 +81,159 @@ export default function Page() {
   }
 
   return (
-    <main className="container">
-      <h1>Tasks</h1>
+    <main className="shell">
+      <header className="hero">
+        <div className="brand">
+          <span className="logo-dot" />
+          <span className="brand-name">MOKARA</span>
+        </div>
+        <h1 className="title">Your tasks, calmly.</h1>
+        <p className="subtitle">
+          A minimal place to capture what matters and move it forward.
+        </p>
+      </header>
 
-      <form className="card form" onSubmit={create}>
+      <form className="card composer" onSubmit={create}>
         <input
+          className="field title-field"
           type="text"
-          placeholder="What needs to be done?"
+          placeholder="Add a task…"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+          aria-label="Task title"
         />
-        <textarea
-          placeholder="Description (optional)"
-          rows={2}
+        <input
+          className="field desc-field"
+          type="text"
+          placeholder="Add a note (optional)"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
+          aria-label="Task description"
         />
-        <button type="submit">Add task</button>
+        <button
+          className="btn primary add-btn"
+          type="submit"
+          disabled={!title.trim()}
+        >
+          <PlusIcon /> Add
+        </button>
       </form>
 
-      <div className="filters">
+      <div className="segmented" role="tablist" aria-label="Filter tasks">
         {FILTERS.map((f) => (
           <button
             key={f}
-            className={filter === f ? "" : "secondary"}
+            role="tab"
+            aria-selected={filter === f}
+            className={`seg ${filter === f ? "active" : ""}`}
             onClick={() => setFilter(f)}
           >
-            {label(f)}
+            {f === "all" ? "All" : titleCase(f)}
           </button>
         ))}
       </div>
 
-      {error && <p className="error">{error}</p>}
-      {loading && <p className="muted">Loading…</p>}
-      {!loading && tasks.length === 0 && <p className="muted">No tasks yet.</p>}
+      {error && <div className="alert">{error}</div>}
+      {loading && <p className="empty">Loading…</p>}
 
-      {tasks.map((t) => (
-        <div key={t.id} className="card task">
-          <div className="top">
-            <strong style={{ textDecoration: t.status === "done" ? "line-through" : "none" }}>
-              {t.title}
-            </strong>
-            <span className={`badge ${t.status}`}>{label(t.status)}</span>
-          </div>
-          {t.description && <p className="muted">{t.description}</p>}
-          <div className="actions">
-            <button className="secondary" onClick={() => toggle(t)}>
-              {t.status === "done" ? "Mark todo" : "Mark done"}
-            </button>
-            <button className="danger" onClick={() => remove(t.id)}>
-              Delete
-            </button>
-          </div>
+      {!loading && tasks.length === 0 && (
+        <div className="card empty-state">
+          <div className="empty-illu" />
+          <p className="empty-title">Nothing here yet</p>
+          <p className="empty-sub">Add your first task above to get started.</p>
         </div>
-      ))}
+      )}
+
+      <ul className="task-list">
+        {tasks.map((t) => {
+          const done = t.status === "done";
+          return (
+            <li key={t.id} className={`card task ${done ? "is-done" : ""}`}>
+              <button
+                className={`check ${done ? "checked" : ""}`}
+                onClick={() => toggle(t)}
+                aria-label={done ? "Mark as not done" : "Mark as done"}
+                aria-pressed={done}
+              >
+                <CheckIcon done={done} />
+              </button>
+
+              <div className="task-body">
+                <span className="task-title">{t.title}</span>
+                {t.description && (
+                  <span className="task-desc">{t.description}</span>
+                )}
+                <div className="meta">
+                  <span className={`pill status ${t.status}`}>
+                    {titleCase(t.status)}
+                  </span>
+                  <span
+                    className={`prio ${PRIORITY_CLASS[t.priority] ?? "prio-low"}`}
+                  >
+                    <span className="dot" />
+                    {t.priority}
+                  </span>
+                  {t.due_date && (
+                    <span className="due">· {formatDate(t.due_date)}</span>
+                  )}
+                </div>
+              </div>
+
+              <button
+                className="icon-btn"
+                onClick={() => remove(t.id)}
+                aria-label="Delete task"
+              >
+                <TrashIcon />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      <footer className="foot">Mokara · v1</footer>
     </main>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 5v14M5 12h14"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function CheckIcon({ done }: { done: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M5 12.5l4.5 4.5L19 7"
+        stroke="currentColor"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity={done ? 1 : 0}
+      />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m2 0v12a2 2 0 01-2 2H8a2 2 0 01-2-2V7"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

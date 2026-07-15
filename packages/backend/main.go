@@ -33,6 +33,7 @@ func main() {
 
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(corsMiddleware())
 	r.Use(simpleLogger())
 
 	r.GET("/health", func(c *gin.Context) {

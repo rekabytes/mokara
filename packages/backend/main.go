@@ -25,7 +25,13 @@ func main() {
 	}
 	defer db.Close()
 
-	h := &Handler{DB: db}
+	if os.Getenv("AUTH_SECRET") == "" {
+		log.Println("WARNING: AUTH_SECRET is not set — using insecure dev fallback. Set AUTH_SECRET in .env for any non-dev use.")
+	}
+
+	taskH := &Handler{DB: db}
+	authH := &AuthHandler{DB: db}
+	teamH := &TeamHandler{DB: db}
 
 	if os.Getenv("GIN_MODE") == "" {
 		gin.SetMode(gin.ReleaseMode)
@@ -42,11 +48,37 @@ func main() {
 
 	api := r.Group("/api")
 	{
-		api.GET("/tasks", h.listTasks)
-		api.GET("/tasks/:id", h.getTask)
-		api.POST("/tasks", h.createTask)
-		api.PATCH("/tasks/:id", h.updateTask)
-		api.DELETE("/tasks/:id", h.deleteTask)
+		// Public auth
+		api.POST("/auth/signup", authH.signUp)
+		api.POST("/auth/login", authH.logIn)
+		api.POST("/auth/logout", authH.logOut)
+
+		// Authenticated
+		authed := api.Group("")
+		authed.Use(authRequired())
+		{
+			authed.GET("/me", authH.me)
+
+			// Teams
+			authed.POST("/teams", teamH.createTeam)
+			authed.GET("/teams", teamH.listMyTeams)
+			authed.GET("/teams/:id", teamH.getTeam)
+			authed.POST("/teams/:id/leave", teamH.leaveTeam)
+			authed.POST("/teams/:id/invitations", teamH.inviteToTeam)
+
+			// Team-scoped tasks
+			authed.GET("/teams/:id/tasks", taskH.listTeamTasks)
+			authed.POST("/teams/:id/tasks", taskH.createTeamTask)
+
+			// Single-task routes (membership-checked)
+			authed.GET("/tasks/:id", taskH.getTask)
+			authed.PATCH("/tasks/:id", taskH.updateTask)
+			authed.DELETE("/tasks/:id", taskH.deleteTask)
+
+			// Invitations
+			authed.GET("/invitations", teamH.listMyInvitations)
+			authed.POST("/invitations/:id/respond", teamH.respondToInvitation)
+		}
 	}
 
 	port := os.Getenv("PORT")

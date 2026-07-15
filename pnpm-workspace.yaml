@@ -1,6 +1,20 @@
 packages:
   - "packages/frontend"
   - "packages/db"
+
+# Disable pnpm v11's global virtual store. With it enabled, packages are
+# symlinked from ~/Library/pnpm/store/v11/.../node_modules/next and the
+# realpath resolves outside the project root. Turbopack then can't find
+# `next/package.json` from inside the project root.
+enableGlobalVirtualStore: false
+
+# Hoist every dep to the root node_modules. Without this, pnpm symlinks
+# packages from .pnpm/ into each workspace package's node_modules. Next.js
+# 16's Turbopack can't resolve `next` through those symlinks during dev,
+# failing with "We couldn't find the Next.js package from the project
+# directory". Hoisting makes `next` live directly at `node_modules/next`.
+shamefullyHoist: true
+
 allowBuilds:
   "@prisma/client": true
   "@prisma/engines": true

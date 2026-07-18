@@ -1,4 +1,4 @@
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api";
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4200/api";
 
 export type TaskStatus = "todo" | "in_progress" | "done";
 export type TaskPriority = "low" | "medium" | "high";
@@ -10,6 +10,7 @@ export type Task = {
   description: string;
   status: TaskStatus;
   priority: TaskPriority;
+  start_date: string | null;
   due_date: string | null;
   created_at: string;
   updated_at: string;
@@ -166,6 +167,8 @@ export const api = {
       description?: string;
       status?: TaskStatus;
       priority?: TaskPriority;
+      start_date?: string;
+      due_date?: string;
     },
   ) =>
     req<Task>(`/teams/${teamId}/tasks`, {

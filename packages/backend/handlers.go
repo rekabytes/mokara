@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +13,32 @@ type Handler struct {
 	DB *sql.DB
 }
 
-const taskColumns = `id, team_id, title, COALESCE(description, ''), status, priority, due_date, created_at, updated_at`
+const taskColumns = `id, team_id, title, COALESCE(description, ''), status, priority, start_date, due_date, created_at, updated_at`
+
+var (
+	validTaskStatus   = map[string]struct{}{"todo": {}, "in_progress": {}, "done": {}}
+	validTaskPriority = map[string]struct{}{"low": {}, "medium": {}, "high": {}}
+)
+
+func validateTaskStatus(s string) error {
+	if s == "" {
+		return nil
+	}
+	if _, ok := validTaskStatus[s]; !ok {
+		return fmt.Errorf("status must be one of: todo, in_progress, done")
+	}
+	return nil
+}
+
+func validateTaskPriority(p string) error {
+	if p == "" {
+		return nil
+	}
+	if _, ok := validTaskPriority[p]; !ok {
+		return fmt.Errorf("priority must be one of: low, medium, high")
+	}
+	return nil
+}
 
 // listTeamTasks: GET /api/teams/:id/tasks
 func (h *Handler) listTeamTasks(c *gin.Context) {
@@ -64,16 +90,24 @@ func (h *Handler) createTeamTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, errorResponse("invalid_input", err.Error()))
 		return
 	}
+	if err := validateTaskStatus(in.Status); err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse("invalid_status", err.Error()))
+		return
+	}
+	if err := validateTaskPriority(in.Priority); err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse("invalid_priority", err.Error()))
+		return
+	}
 	status := defaultIfEmpty(in.Status, "todo")
 	priority := defaultIfEmpty(in.Priority, "medium")
 
 	var t Task
 	err = h.DB.QueryRowContext(c.Request.Context(), `
-		INSERT INTO tasks (team_id, title, description, status, priority, due_date, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, now())
+		INSERT INTO tasks (team_id, title, description, status, priority, start_date, due_date, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, now())
 		RETURNING `+taskColumns,
-		teamID, in.Title, nilIfEmpty(in.Description), status, priority, in.DueDate,
-	).Scan(&t.ID, &t.TeamID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.DueDate, &t.CreatedAt, &t.UpdatedAt)
+		teamID, in.Title, nilIfEmpty(in.Description), status, priority, in.StartDate, in.DueDate,
+	).Scan(&t.ID, &t.TeamID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.StartDate, &t.DueDate, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, errorResponse("create_failed", err.Error()))
 		return
@@ -89,7 +123,7 @@ func (h *Handler) getTask(c *gin.Context) {
 	var teamID string
 	err := h.DB.QueryRowContext(c.Request.Context(),
 		`SELECT `+taskColumns+` FROM tasks WHERE id = $1`, taskID,
-	).Scan(&t.ID, &teamID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.DueDate, &t.CreatedAt, &t.UpdatedAt)
+	).Scan(&t.ID, &teamID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.StartDate, &t.DueDate, &t.CreatedAt, &t.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		c.JSON(http.StatusNotFound, errorResponse("not_found", "task not found"))
 		return
@@ -118,6 +152,18 @@ func (h *Handler) updateTask(c *gin.Context) {
 	if err := c.ShouldBindJSON(&in); err != nil {
 		c.JSON(http.StatusBadRequest, errorResponse("invalid_input", err.Error()))
 		return
+	}
+	if in.Status != nil {
+		if err := validateTaskStatus(*in.Status); err != nil {
+			c.JSON(http.StatusBadRequest, errorResponse("invalid_status", err.Error()))
+			return
+		}
+	}
+	if in.Priority != nil {
+		if err := validateTaskPriority(*in.Priority); err != nil {
+			c.JSON(http.StatusBadRequest, errorResponse("invalid_priority", err.Error()))
+			return
+		}
 	}
 
 	var teamID string
@@ -150,12 +196,13 @@ func (h *Handler) updateTask(c *gin.Context) {
 			description = COALESCE($2, description),
 			status      = COALESCE($3, status),
 			priority    = COALESCE($4, priority),
-			due_date    = COALESCE($5, due_date),
+			start_date  = COALESCE($5, start_date),
+			due_date    = COALESCE($6, due_date),
 			updated_at  = now()
-		WHERE id = $6
+		WHERE id = $7
 		RETURNING `+taskColumns,
-		in.Title, in.Description, in.Status, in.Priority, in.DueDate, c.Param("id"),
-	).Scan(&t.ID, &t.TeamID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.DueDate, &t.CreatedAt, &t.UpdatedAt)
+		in.Title, in.Description, in.Status, in.Priority, in.StartDate, in.DueDate, c.Param("id"),
+	).Scan(&t.ID, &t.TeamID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.StartDate, &t.DueDate, &t.CreatedAt, &t.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		c.JSON(http.StatusNotFound, errorResponse("not_found", "task not found"))
 		return
@@ -209,7 +256,7 @@ func scanTasks(rows *sql.Rows) []Task {
 	tasks := []Task{}
 	for rows.Next() {
 		var t Task
-		if err := rows.Scan(&t.ID, &t.TeamID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.DueDate, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.TeamID, &t.Title, &t.Description, &t.Status, &t.Priority, &t.StartDate, &t.DueDate, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return tasks
 		}
 		tasks = append(tasks, t)

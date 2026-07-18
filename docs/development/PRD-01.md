@@ -156,7 +156,7 @@ Schema and migrations are managed by **Prisma** in `packages/db/prisma/schema.pr
 
 ## 10. API (Basic, REST)
 
-Base URL configured via frontend `.env` (e.g. `http://localhost:8080/api`).
+Base URL configured via frontend `.env` (e.g. `http://localhost:4200/api`).
 
 | Method | Path | Description |
 |--------|------|-------------|

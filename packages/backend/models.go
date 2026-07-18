@@ -9,6 +9,7 @@ type Task struct {
 	Description string     `json:"description"`
 	Status      string     `json:"status"`
 	Priority    string     `json:"priority"`
+	StartDate   *time.Time `json:"start_date"`
 	DueDate     *time.Time `json:"due_date"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
@@ -19,6 +20,7 @@ type CreateTaskInput struct {
 	Description string     `json:"description"`
 	Status      string     `json:"status"`
 	Priority    string     `json:"priority"`
+	StartDate   *time.Time `json:"start_date" time_format:"2006-01-02T15:04:05Z07:00"`
 	DueDate     *time.Time `json:"due_date" time_format:"2006-01-02T15:04:05Z07:00"`
 }
 
@@ -27,5 +29,6 @@ type UpdateTaskInput struct {
 	Description *string    `json:"description"`
 	Status      *string    `json:"status"`
 	Priority    *string    `json:"priority"`
+	StartDate   *time.Time `json:"start_date" time_format:"2006-01-02T15:04:05Z07:00"`
 	DueDate     *time.Time `json:"due_date" time_format:"2006-01-02T15:04:05Z07:00"`
 }

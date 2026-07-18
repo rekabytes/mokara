@@ -28,7 +28,7 @@ export default function SignupPage() {
         password,
         display_name: displayName.trim() || undefined,
       });
-      router.push("/");
+      router.push("/tasks");
       router.refresh();
     } catch (e: unknown) {
       if (isApiError(e)) {
@@ -50,20 +50,26 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="auth-shell">
-      <div className="auth-card card">
-        <div className="brand">
-          <span className="logo-dot" />
-          <span className="brand-name">MOKARA</span>
+    <main className="relative z-10 grid min-h-screen place-items-center px-5 py-8">
+      <div className="card w-full max-w-[420px] px-7 pt-8 pb-7 text-center">
+        <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-[0.8rem] py-[0.3rem] backdrop-blur-[22px]">
+          <span className="block size-2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_4px_var(--color-accent-soft)]" />
+          <span className="text-[0.82rem] font-semibold tracking-[0.04em] text-[var(--color-ink-muted)]">
+            MOKARA
+          </span>
         </div>
-        <h1 className="auth-title">Create your account</h1>
-        <p className="auth-sub">
+        <h1 className="m-0 mb-[0.35rem] text-[1.5rem] font-bold tracking-[-0.02em]">
+          Create your account
+        </h1>
+        <p className="m-0 mb-6 text-[0.92rem] text-[var(--color-ink-muted)]">
           Pick a username. It&apos;s how teammates will invite you.
         </p>
 
-        <form onSubmit={onSubmit} className="auth-form">
-          <label className="auth-field">
-            <span className="auth-label">Username</span>
+        <form onSubmit={onSubmit} className="flex flex-col gap-[0.85rem] text-left">
+          <label className="flex flex-col gap-[0.35rem]">
+            <span className="text-[0.78rem] font-semibold tracking-[0.01em] text-[var(--color-ink-muted)]">
+              Username
+            </span>
             <input
               className="field"
               type="text"
@@ -79,14 +85,16 @@ export default function SignupPage() {
               placeholder="alice"
             />
             {username.length > 0 && !usernameValid && (
-              <span className="auth-hint">
+              <span className="text-[0.78rem] text-[var(--color-ink-faint)]">
                 3-20 chars, lowercase letters, digits, underscore.
               </span>
             )}
           </label>
 
-          <label className="auth-field">
-            <span className="auth-label">Display name (optional)</span>
+          <label className="flex flex-col gap-[0.35rem]">
+            <span className="text-[0.78rem] font-semibold tracking-[0.01em] text-[var(--color-ink-muted)]">
+              Display name (optional)
+            </span>
             <input
               className="field"
               type="text"
@@ -97,8 +105,10 @@ export default function SignupPage() {
             />
           </label>
 
-          <label className="auth-field">
-            <span className="auth-label">Password</span>
+          <label className="flex flex-col gap-[0.35rem]">
+            <span className="text-[0.78rem] font-semibold tracking-[0.01em] text-[var(--color-ink-muted)]">
+              Password
+            </span>
             <input
               className="field"
               type="password"
@@ -110,19 +120,35 @@ export default function SignupPage() {
               placeholder="At least 8 characters"
             />
             {password.length > 0 && !passwordValid && (
-              <span className="auth-hint">At least 8 characters.</span>
+              <span className="text-[0.78rem] text-[var(--color-ink-faint)]">
+                At least 8 characters.
+              </span>
             )}
           </label>
 
-          {error && <div className="alert">{error}</div>}
+          {error && (
+            <div className="mb-4 rounded-[var(--radius-btn)] border border-[var(--color-danger-border)] bg-[rgba(239,68,68,0.08)] px-4 py-[0.7rem] text-[0.88rem] text-[var(--color-danger-ink)]">
+              {error}
+            </div>
+          )}
 
-          <button type="submit" className="btn primary auth-submit" disabled={!canSubmit}>
+          <button
+            type="submit"
+            className="btn-base btn-primary mt-2 w-full"
+            disabled={!canSubmit}
+          >
             {loading ? "Creating…" : "Create account"}
           </button>
         </form>
 
-        <p className="auth-foot">
-          Already have an account? <Link href="/login">Sign in</Link>
+        <p className="m-0 mt-5 text-[0.88rem] text-[var(--color-ink-muted)]">
+          Already have an account?{" "}
+          <Link
+            href="/login"
+            className="font-semibold text-[var(--color-accent)] no-underline hover:underline"
+          >
+            Sign in
+          </Link>
         </p>
       </div>
     </main>

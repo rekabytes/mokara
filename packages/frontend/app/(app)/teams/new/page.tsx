@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { api, isApiError } from "@/lib/api";
+import { cn } from "@/lib/cn";
 
 export default function NewTeamPage() {
   const router = useRouter();
@@ -37,22 +38,24 @@ export default function NewTeamPage() {
   }
 
   return (
-    <main className="shell">
-      <nav className="topbar">
-        <Link href="/" className="brand">
-          <span className="logo-dot" />
-          <span className="brand-name">MOKARA</span>
-        </Link>
-      </nav>
-
-      <header className="hero">
-        <h1 className="title">Create a team</h1>
-        <p className="subtitle">Invite up to 2 teammates by username.</p>
+    <div className="flex flex-col gap-9">
+      <header className="mt-2 flex flex-col gap-2">
+        <h1 className="m-0 text-[clamp(1.6rem,4vw,2.1rem)] font-bold leading-[1.15] tracking-[-0.025em]">
+          Create a team
+        </h1>
+        <p className="m-0 text-[0.98rem] text-[var(--color-ink-muted)]">
+          Invite up to 2 teammates by username.
+        </p>
       </header>
 
-      <form onSubmit={onSubmit} className="card auth-form">
-        <label className="auth-field">
-          <span className="auth-label">Team name</span>
+      <form
+        onSubmit={onSubmit}
+        className="card flex max-w-[480px] flex-col gap-[0.85rem] p-7 text-left"
+      >
+        <label className="flex flex-col gap-[0.35rem]">
+          <span className="text-[0.78rem] font-semibold tracking-[0.01em] text-[var(--color-ink-muted)]">
+            Team name
+          </span>
           <input
             className="field"
             type="text"
@@ -65,21 +68,25 @@ export default function NewTeamPage() {
           />
         </label>
 
-        {error && <div className="alert">{error}</div>}
+        {error && (
+          <div className="mb-4 rounded-[var(--radius-btn)] border border-[var(--color-danger-border)] bg-[rgba(239,68,68,0.08)] px-4 py-[0.7rem] text-[0.88rem] text-[var(--color-danger-ink)]">
+            {error}
+          </div>
+        )}
 
-        <div className="auth-actions">
-          <Link href="/" className="btn ghost">
+        <div className="mt-2 flex justify-end gap-2">
+          <Link href="/dashboard" className="btn-base btn-ghost">
             Cancel
           </Link>
           <button
             type="submit"
-            className="btn primary"
+            className="btn-base btn-primary"
             disabled={loading || !name.trim()}
           >
             {loading ? "Creating…" : "Create team"}
           </button>
         </div>
       </form>
-    </main>
+    </div>
   );
 }

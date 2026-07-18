@@ -4,6 +4,8 @@ Basic task management web app. pnpm workspace monorepo: Go (Gin) backend, Prisma
 
 See [`docs/development/PRD-01.md`](docs/development/PRD-01.md) for the full spec.
 
+For the frontend design system (colors, spacing, components, layout patterns), see [`docs/design/system.md`](docs/design/system.md).
+
 ## Structure
 
 ```
@@ -52,7 +54,7 @@ cd packages/backend
 cp .env.example .env
 go mod tidy        # first run only
 go run .
-# -> http://localhost:8080  (try /health and /api/tasks)
+# -> http://localhost:4200  (try /health and /api/tasks)
 ```
 
 ### 4. Run the frontend (Next.js)
@@ -61,7 +63,7 @@ go run .
 cd packages/frontend
 cp .env.example .env
 pnpm dev
-# -> http://localhost:3000
+# -> http://localhost:4201
 ```
 
 ## API

@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED_PREFIXES = ["/", "/teams", "/invitations"];
+const PROTECTED_PREFIXES = ["/tasks", "/teams", "/dashboard", "/invitations"];
 const AUTH_PATHS = ["/login", "/signup"];
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const hasCookie = Boolean(req.cookies.get("mokara_token")?.value);
   const path = req.nextUrl.pathname;
 
@@ -21,7 +21,7 @@ export function middleware(req: NextRequest) {
 
   if (isAuthPath && hasCookie) {
     const url = req.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = "/tasks";
     return NextResponse.redirect(url);
   }
 

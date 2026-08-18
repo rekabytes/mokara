@@ -37,6 +37,9 @@ lerna-debug.log*
 *.key
 *.p12
 
+# ---------- Pi agent state (transient; committed AGENTS.md is permanent) ----------
+.pi/state.md
+
 # ---------- Node ----------
 node_modules/
 dist/

@@ -1,5 +1,6 @@
 packages:
   - "packages/frontend"
+  - "packages/backend"
   - "packages/db"
 
 # Disable pnpm v11's global virtual store. With it enabled, packages are

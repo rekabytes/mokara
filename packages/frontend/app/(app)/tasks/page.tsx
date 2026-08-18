@@ -31,19 +31,52 @@ const GROUPS: { id: GroupId; name: string }[] = [
   { id: "done", name: "Done" },
 ];
 
-const PRIORITY_GLYPH: Record<TaskPriority, string> = {
-  high: "!!!",
-  medium: "--!",
-  low: "---",
-};
-
 const PRIORITY_COLOR: Record<TaskPriority, string> = {
   high: "text-[var(--color-prio-high)] font-semibold",
   medium: "text-[var(--color-prio-medium)]",
   low: "text-[var(--color-ink-faint)]",
 };
 
+const PRIORITY_BAR_COLOR: Record<TaskPriority, string> = {
+  high: "bg-[var(--color-prio-high)]",
+  medium: "bg-[var(--color-prio-medium)]",
+  low: "bg-[var(--color-ink-faint)]",
+};
+
 const PRIORITY_RANK: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
+
+// Three ascending bars — fill count encodes priority (1/2/3), color encodes
+// level. Used as a small inline indicator alongside the priority label.
+function PriorityBars({ priority }: { priority: TaskPriority }) {
+  const filled = priority === "high" ? 3 : priority === "medium" ? 2 : 1;
+  const barColor = PRIORITY_BAR_COLOR[priority];
+  return (
+    <span
+      className="inline-flex items-end gap-[2px] align-middle"
+      role="img"
+      aria-label={`Priority: ${priority}`}
+    >
+      <span
+        className={cn(
+          "w-[3px] rounded-[1px] h-[5px]",
+          filled >= 1 ? barColor : "bg-[var(--color-border-soft)]",
+        )}
+      />
+      <span
+        className={cn(
+          "w-[3px] rounded-[1px] h-[7px]",
+          filled >= 2 ? barColor : "bg-[var(--color-border-soft)]",
+        )}
+      />
+      <span
+        className={cn(
+          "w-[3px] rounded-[1px] h-[10px]",
+          filled >= 3 ? barColor : "bg-[var(--color-border-soft)]",
+        )}
+      />
+    </span>
+  );
+}
 
 function isToday(iso: string): boolean {
   const d = new Date(iso);
@@ -218,10 +251,19 @@ export default function TasksPage() {
   }
 
   async function cyclePriority(t: Task) {
-    const order: TaskPriority[] = ["high", "medium", "low"];
+    const order: TaskPriority[] = ["low", "medium", "high"];
     const next = order[(order.indexOf(t.priority) + 1) % order.length];
     try {
       const updated = await api.updateTask(t.id, { priority: next });
+      setTasks((prev) => prev.map((x) => (x.id === t.id ? updated : x)));
+    } catch (e: unknown) {
+      setError(isApiError(e) ? e.message : "Failed to update task");
+    }
+  }
+
+  async function toggleFlag(t: Task) {
+    try {
+      const updated = await api.flagTask(t.id);
       setTasks((prev) => prev.map((x) => (x.id === t.id ? updated : x)));
     } catch (e: unknown) {
       setError(isApiError(e) ? e.message : "Failed to update task");
@@ -519,6 +561,7 @@ export default function TasksPage() {
                             setEditTitle={setEditTitle}
                             onToggle={() => toggleTask(t)}
                             onCyclePriority={() => cyclePriority(t)}
+                            onToggleFlag={() => toggleFlag(t)}
                             onStartEdit={() => startEdit(t)}
                             onCommitEdit={commitEdit}
                             onEditKey={onEditKey}
@@ -645,14 +688,14 @@ function NewTaskModal({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Task title"
-              className="w-full border-0 bg-transparent text-[1.05rem] font-medium text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-faint)] focus:bg-transparent focus:shadow-none"
+              className="w-full rounded-lg border-0 bg-transparent text-[1.05rem] font-medium text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-faint)] focus:bg-transparent focus:shadow-none"
             />
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Add description…"
               rows={3}
-              className="mt-1 w-full resize-none border-0 bg-transparent text-[0.9rem] text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-faint)]"
+              className="mt-1 w-full resize-none rounded-lg border-0 bg-transparent text-[0.9rem] text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-faint)]"
             />
           </div>
 
@@ -661,8 +704,13 @@ function NewTaskModal({
             <Dropdown
               trigger={(open) => (
                 <ChipShell open={open}>
-                  <StatusDot status={status} />
-                  <span>{STATUS_LABEL[status]}</span>
+                  <MinWidthChip
+                    icon={<StatusDot status="in_progress" />}
+                    longestLabel={STATUS_LABEL.in_progress}
+                  >
+                    <StatusDot status={status} />
+                    <span>{STATUS_LABEL[status]}</span>
+                  </MinWidthChip>
                   <ChevronIcon />
                 </ChipShell>
               )}
@@ -681,15 +729,13 @@ function NewTaskModal({
             <Dropdown
               trigger={(open) => (
                 <ChipShell open={open}>
-                  <span
-                    className={cn(
-                      "font-mono text-[0.72rem] tracking-[0.02em]",
-                      PRIORITY_COLOR[priority],
-                    )}
+                  <MinWidthChip
+                    icon={<PriorityBars priority="medium" />}
+                    longestLabel="Medium"
                   >
-                    {PRIORITY_GLYPH[priority]}
-                  </span>
-                  <span className="capitalize">{priority}</span>
+                    <PriorityBars priority={priority} />
+                    <span className="capitalize">{priority}</span>
+                  </MinWidthChip>
                   <ChevronIcon />
                 </ChipShell>
               )}
@@ -698,16 +744,7 @@ function NewTaskModal({
                 <MenuItem
                   key={p}
                   selected={p === priority}
-                  icon={
-                    <span
-                      className={cn(
-                        "font-mono text-[0.72rem] tracking-[0.02em]",
-                        PRIORITY_COLOR[p],
-                      )}
-                    >
-                      {PRIORITY_GLYPH[p]}
-                    </span>
-                  }
+                  icon={<PriorityBars priority={p} />}
                   onClick={() => setPriority(p)}
                 >
                   <span className="capitalize">{p}</span>
@@ -919,6 +956,34 @@ function ChevronIcon() {
   );
 }
 
+// Renders children inside a grid cell that's sized by an invisible copy of
+// the icon + longest label — so the chip width never shrinks below the
+// widest option, including the icon width.
+function MinWidthChip({
+  icon,
+  longestLabel,
+  children,
+}: {
+  icon: React.ReactNode;
+  longestLabel: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <span className="inline-grid items-center">
+      <span
+        aria-hidden
+        className="invisible pointer-events-none col-start-1 row-start-1 inline-flex items-center gap-1.5 whitespace-nowrap"
+      >
+        {icon}
+        <span>{longestLabel}</span>
+      </span>
+      <span className="col-start-1 row-start-1 inline-flex items-center gap-1.5 whitespace-nowrap">
+        {children}
+      </span>
+    </span>
+  );
+}
+
 function Dropdown({
   trigger,
   children,
@@ -1011,33 +1076,48 @@ function MenuItem({
       role="option"
       aria-selected={selected}
       onClick={onClick}
+      // 2-column grid: column 1 is text (1fr), column 2 is a fixed 18px
+      // slot reserved for the checkmark. Because every row always
+      // accounts for the checkmark column, the menu container's width is
+      // anchored to (longest text + checkmark) — selecting a shorter row
+      // doesn't shrink the menu.
+      //
+      // Hover background: a simple background-color change with a smooth
+      // transition. The checkmark is the only indicator for selected
+      // rows; the indigo tint appears only on hover of unselected rows.
+      // (Custom rgba used to dial the opacity lower than --color-accent-soft
+      //  so it reads as a subtle hover hint, not a strong selection mark.)
       className={cn(
-        "flex w-full items-center gap-2 px-3 py-[0.4rem] text-left text-[0.82rem] transition-colors duration-[120ms]",
+        "grid w-full cursor-pointer grid-cols-[1fr_18px] items-center gap-2 px-3 py-[0.4rem] text-left text-[0.82rem] transition-colors duration-200 ease-out",
         selected
-          ? "bg-[var(--color-surface-2)] text-[var(--color-ink)]"
-          : "text-[var(--color-ink)] hover:bg-[var(--color-surface-2)]",
+          ? "text-[var(--color-ink)]"
+          : "text-[var(--color-ink)] hover:bg-[rgba(99,102,241,0.06)]",
       )}
     >
-      {icon}
-      <span className="flex-1">{children}</span>
-      {selected && (
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          aria-hidden="true"
-          className="text-[var(--color-accent)]"
-        >
-          <path
-            d="M5 12.5l4.5 4.5L19 7"
-            stroke="currentColor"
-            strokeWidth="2.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      )}
+      <span className="flex items-center gap-2">
+        {icon}
+        <span>{children}</span>
+      </span>
+      <span className="flex items-center justify-center">
+        {selected && (
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+            className="text-[var(--color-accent)]"
+          >
+            <path
+              d="M5 12.5l4.5 4.5L19 7"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        )}
+      </span>
     </button>
   );
 }
@@ -1050,6 +1130,7 @@ function TaskRow({
   setEditTitle,
   onToggle,
   onCyclePriority,
+  onToggleFlag,
   onStartEdit,
   onCommitEdit,
   onEditKey,
@@ -1062,6 +1143,7 @@ function TaskRow({
   setEditTitle: (s: string) => void;
   onToggle: () => void;
   onCyclePriority: () => void;
+  onToggleFlag: () => void;
   onStartEdit: () => void;
   onCommitEdit: () => void;
   onEditKey: (e: KeyboardEvent<HTMLInputElement>) => void;
@@ -1095,15 +1177,15 @@ function TaskRow({
         </svg>
       </button>
 
-      <span
-        className={cn(
-          "w-[26px] shrink-0 select-none font-mono text-[0.74rem] tracking-[0.02em]",
-          PRIORITY_COLOR[task.priority],
-        )}
-        title={`Priority: ${task.priority}`}
+      <button
+        type="button"
+        onClick={onCyclePriority}
+        aria-label={`Priority: ${task.priority}. Click to cycle.`}
+        title={`Priority: ${task.priority} — click to cycle`}
+        className="cursor-pointer rounded-md px-1 py-0.5 -mx-1 transition-colors hover:bg-[rgba(99,102,241,0.06)]"
       >
-        {PRIORITY_GLYPH[task.priority]}
-      </span>
+        <PriorityBars priority={task.priority} />
+      </button>
 
       <span className="w-[58px] shrink-0 select-none font-mono text-[0.74rem] tracking-[0.02em] text-[var(--color-ink-faint)]">
         {shortId(task)}
@@ -1140,10 +1222,29 @@ function TaskRow({
         </span>
       )}
 
-      <div className="flex shrink-0 items-center gap-[1px] opacity-0 transition-opacity duration-[120ms] group-hover:opacity-100 focus-within:opacity-100">
-        <SmallIconButton label="Cycle priority" onClick={onCyclePriority}>
-          <FlagIcon />
+      {/* Flag: always visible when active (so the red badge persists),
+          otherwise hidden until row hover. No transition, no focus-within
+          linger — click should feel decisive and the icon disappears
+          immediately. */}
+      <div
+        className={cn(
+          "shrink-0",
+          task.flagged
+            ? "opacity-100"
+            : "opacity-0 group-hover:opacity-100",
+        )}
+      >
+        <SmallIconButton
+          label={task.flagged ? "Unflag" : "Flag for attention"}
+          onClick={onToggleFlag}
+          active={task.flagged}
+        >
+          <FlagIcon filled={task.flagged} />
         </SmallIconButton>
+      </div>
+
+      {/* Trash: always row-hover/focus-only. */}
+      <div className="flex shrink-0 items-center gap-[1px] opacity-0 transition-opacity duration-[120ms] group-hover:opacity-100 focus-within:opacity-100">
         <SmallIconButton label="Delete" onClick={onDelete} danger>
           <TrashIcon />
         </SmallIconButton>
@@ -1202,11 +1303,13 @@ function SmallIconButton({
   onClick,
   children,
   danger,
+  active,
 }: {
   label: string;
   onClick: () => void;
   children: React.ReactNode;
   danger?: boolean;
+  active?: boolean;
 }) {
   return (
     <button
@@ -1215,7 +1318,10 @@ function SmallIconButton({
       aria-label={label}
       className={cn(
         "grid size-6 cursor-pointer place-items-center rounded-md text-[var(--color-ink-faint)] hover:bg-white",
-        danger ? "hover:text-[var(--color-danger)]" : "hover:text-[var(--color-ink)]",
+        active &&
+          "border border-[var(--color-danger-border)] bg-[var(--color-danger-soft)] text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)]",
+        !active && danger && "hover:text-[var(--color-danger)]",
+        !active && !danger && "hover:text-[var(--color-ink)]",
       )}
     >
       {children}
@@ -1349,17 +1455,25 @@ function CalendarIcon() {
   );
 }
 
-function FlagIcon() {
+function FlagIcon({ filled = false }: { filled?: boolean }) {
   return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
+      {/* Pole */}
       <path
-        d="M5 21V4m0 0l8 3-8 3"
+        d="M5 21V4"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      {/* Pennant — filled when the task is flagged, outlined otherwise */}
+      <path
+        d="M5 4 L13 7 L19 7 L19 13 L13 13 L5 10 Z"
+        fill={filled ? "currentColor" : "none"}
         stroke="currentColor"
         strokeWidth="1.8"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <path d="M13 7h6v6h-6" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
     </svg>
   );
 }

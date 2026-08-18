@@ -12,6 +12,7 @@ export type Task = {
   priority: TaskPriority;
   start_date: string | null;
   due_date: string | null;
+  flagged: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -181,4 +182,5 @@ export const api = {
       body: JSON.stringify(data),
     }),
   deleteTask: (id: string) => req<void>(`/tasks/${id}`, { method: "DELETE" }),
+  flagTask: (id: string) => req<Task>(`/tasks/${id}/flag`, { method: "POST" }),
 };

@@ -2,26 +2,59 @@
 
 ## Facts
 
-- pnpm workspace monorepo: `@mokara/frontend` (Next 16.2.10), `@mokara/backend` (Hono 4.12), `@mokara/db` (Prisma 7.8).
-- Node ≥24, pnpm 11.13. Postgres 16 + Redis 7 via `docker-compose.yml`.
-- Backend on :4200, frontend on :4201. `NEXT_PUBLIC_API_BASE_URL` points to backend.
-- Auth: HS256 JWT in `mokara_token` httpOnly cookie (name shared with `proxy.ts` route guard). bcryptjs (cost 10); Go-format `$2a$` hashes are compatible.
+- pnpm workspace monorepo: `@mokara/frontend` (Next 16.2.10), `@mokara/backend` (Hono 4.12), `@mokara/db` (Prisma 7.8). Node ≥24, pnpm 11.13.
+- Postgres 16 + Redis 7 via `docker-compose.yml`. Backend :4200, frontend :4201. `NEXT_PUBLIC_API_BASE_URL` points to backend.
+- Auth: HS256 JWT in `mokara_token` httpOnly cookie (name shared with frontend `proxy.ts` route guard). bcryptjs (cost 10); Go-format `$2a$` hashes are compatible.
 - DB has trigger `enforce_max_team_members` (3-member cap, raises `team_full`) and partial unique index `team_invitations_team_pending_unique` — backend maps both to friendly 409s.
 - API error contract: `{ error: <code>, message: <text> }`. Zod errors go through `lib/validate.ts` wrapper to keep that shape (frontend `isApiError` requires both keys).
+- Schema additions: `Task.flagged Boolean @default(false)` (toggle via `POST /api/tasks/:id/flag`).
+- CI: `.github/workflows/ci.yml` runs on `push`/`pull_request` to `dev` only — `pnpm typecheck` + `pnpm lint` + `pnpm format`.
+- Prettier at root (`pnpm format` / `pnpm format:fix`), config in `.prettierrc`. ESLint 9 flat config in `packages/frontend/eslint.config.mjs` (frontend-only for now).
 
 ## Decisions
 
-- 2026-08-18: Replaced Go+Gin backend with Hono+TS. JSON shapes and cookie name unchanged so frontend stays untouched. Reason: shared TS stack, faster iteration, single language across the monorepo.
-- 2026-08-18: Skipped `ioredis` (in global reference). Reason: no caching use case yet; add when one appears.
-- 2026-08-18: Did not migrate `useSession` to jotai or replace `DateRangePicker` with `react-day-picker`. Reason: refactors, not dependency updates.
+- 2026-08-18: Replaced Go+Gin backend with Hono+TS. JSON shapes and cookie name unchanged so frontend stayed untouched. Reason: shared TS stack, faster iteration, single language.
+- 2026-08-18: Skipped `ioredis` despite global reference. Reason: no caching use case yet.
 - 2026-08-18: Combined root `dev` uses `pnpm -r --parallel --filter ... run dev` (not `&`). Reason: portable across platforms.
-- 2026-08-18: Added `tailwind-merge` to `cn()` helper. Reason: matches global Next.js reference; dedupes conflicting Tailwind utilities.
-- 2026-08-18: Added ESLint 9 flat config to frontend. Reason: matches global reference; was missing.
+- 2026-08-18: `cn()` helper uses `clsx` + `twMerge`. Reason: dedupes conflicting Tailwind utilities (matches global reference).
+- 2026-08-18: Priority cycling order is `low → medium → high → low` (clicking the priority bars in the task row). Reason: ascending intensity feels more natural than the default DB order.
+- 2026-08-18: Flag icon = "flag for attention" (toggle), not "cycle priority". Reason: flag metaphor reads correctly; cycle moved to priority badge click.
 
 ## Conventions
 
-- Response shape: snake_case JSON decoupled from Prisma's camelCase models via `lib/types.ts` mappers (`toUser`, `toTeam`, `toTask`, etc.).
+- Response shape: snake_case JSON decoupled from Prisma's camelCase models via `lib/types.ts` mappers (`toUser`, `toTeam`, `toTask`, `toInvitation`).
 - Workspace import: backend uses deep path `@mokara/db/prisma/generated/client` (db package has no `exports` field).
 - Cookie auth: `Secure` flag only in `ENV=production`. SameSite=Lax, Path=/, HttpOnly.
 - Postgres trigger / partial-index errors are matched on message string (`"team_full"`, `"team_invitations_team_pending_unique"`) — robust to adapter wrapping.
-- **Never run `pnpm dev` / `next dev` / any foreground server command here** — the user starts their own dev servers. Use typecheck, lint, test, build, migrate, seed for verification. Short curl probes against a server the user already started are fine.
+- Dropdown menu items: 2-column grid `grid-cols-[1fr_18px]` — text on the left + a fixed 18px slot reserved for the checkmark. Anchors container width to (longest text + checkmark) so the menu doesn't breathe when selection changes.
+- Toggle-style row actions (e.g. flag): no `transition-opacity` and no `focus-within` on the inactive branch — click should feel decisive and the icon disappears immediately rather than lingering while the button stays focused.
+- Selected state in dropdowns is shown by the checkmark only, not an extra bg tint. Unselected rows get a subtle `rgba(99,102,241,0.06)` indigo tint on hover via plain `transition-colors` (no pseudo-element tricks).
+
+## Things NOT to do again
+
+- **Don't run dev servers.** No `pnpm dev`, `next dev`, `tsx watch`, `go run`, foreground `docker compose up`, etc. The user starts their own. Use typecheck / lint / test / build / migrate / seed for verification. EADDRINUSE means a leftover from a previous session — `lsof -i :4200,4201` to find it; the user kills it.
+- **Don't over-engineer "simple" requests.** "Simple hover animation, just a background change" = `transition-colors` + `hover:bg-[color]`. Start there. Don't reach for pseudo-elements or bg-gradient size tricks unless the simple path fails.
+- **Don't use Tailwind pseudo-element slide-in tricks.** `before:content-['']` doesn't reliably compile the `content` property in Tailwind v4 — the pseudo-element never renders and the animation silently doesn't run. Use a CSS-only fallback (`transition-colors`, `bg-gradient-to-r` + size animation, etc.).
+- **In Tailwind v4, the arbitrary-value prefix for `background-size` is `size:`, not `length:`.** `bg-[length:0%_100%]` produces invalid CSS; `bg-[size:0%_100%]` is correct. Same goes for any arbitrary property — use the CSS property name (`size`, `position`, `repeat`, `image`, etc.).
+- **Don't assume design tokens have contrast against their parent.** Check the CSS variable values before pairing. `--color-surface-2` is `rgba(255,255,255,0.55)` — invisible on a `bg-white` container. For hover on white surfaces, use `--color-accent-soft` or a custom rgba with sufficient alpha.
+- **Don't jump to conclusions on UI feedback.** "The selection is changing" — read screenshots first, ask which concern (selection visual? selection state? container size?). The user is testing whether you'll fold under pressure or push back on a wrong assumption.
+- **Don't make speculative changes to adjacent code** when one targeted fix is asked for. If asked to fix the dropdown, don't also touch the chip / button / focus styles. Smaller diffs review better.
+- **Don't push to `main` (or any branch).** `git push` is in the ASK tier — wait for the user.
+
+## File map (cheat sheet)
+
+- `packages/backend/src/index.ts` — Hono app, route mounting, startup, shutdown handlers
+- `packages/backend/src/lib/validate.ts` — Zod wrapper that keeps `{ error, message }` shape
+- `packages/backend/src/lib/types.ts` — `toUser` / `toTeam` / `toTask` / `toInvitation` snake_case mappers
+- `packages/backend/src/lib/logger.ts` — tiny timestamp-free logger (`✓ Connected to database`, `[GET] /api/me → 200 (3ms)`)
+- `packages/backend/src/lib/jwt.ts` — `jose` HS256 sign/verify, `mokara_token` cookie helpers
+- `packages/backend/src/routes/{auth,teams,invitations,tasks}.ts` — all API routes
+- `packages/frontend/lib/api.ts` — typed client (`Task`, `Team`, `TeamInvitation`, `User`); `isApiError` requires `{ error, message, status }`
+- `packages/frontend/lib/cn.ts` — `clsx + twMerge`
+- `packages/frontend/app/(app)/tasks/page.tsx` — task list + new-task modal (~1400 lines, the bulk of the FE)
+- `packages/frontend/instrumentation.ts` — Next.js server-side health-check pings
+- `packages/db/prisma/schema.prisma` — `User`, `Team`, `TeamMember`, `TeamInvitation`, `Task`
+- `packages/db/prisma/migrations/` — apply with `pnpm db:migrate:deploy`, generate client with `pnpm db:generate`
+- `.github/workflows/ci.yml` — typecheck + lint + format on `dev` branch
+- `.prettierrc` / `.prettierignore` — Prettier config
+- `.pi/AGENTS.md` — this file

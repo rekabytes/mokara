@@ -1,0 +1,25 @@
+node_modules
+.next
+dist
+build
+.pnpm-store
+.turbo
+coverage
+
+# Prisma generated client
+packages/db/prisma/generated
+
+# Workspace build outputs
+packages/*/dist
+packages/*/build
+packages/*/.next
+
+# Logs
+*.log
+pnpm-debug.log*
+
+# Lockfile + env
+pnpm-lock.yaml
+.env
+.env.*
+!.env.example

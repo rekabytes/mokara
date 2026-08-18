@@ -64,13 +64,7 @@ export type ApiError = {
 };
 
 export function isApiError(e: unknown): e is ApiError {
-  return (
-    typeof e === "object" &&
-    e !== null &&
-    "error" in e &&
-    "message" in e &&
-    "status" in e
-  );
+  return typeof e === "object" && e !== null && "error" in e && "message" in e && "status" in e;
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -133,8 +127,7 @@ export const api = {
       members: TeamMember[];
       invitations: TeamInvitation[];
     }>(`/teams/${id}`),
-  leaveTeam: (id: string) =>
-    req<void>(`/teams/${id}/leave`, { method: "POST" }),
+  leaveTeam: (id: string) => req<void>(`/teams/${id}/leave`, { method: "POST" }),
   inviteToTeam: (id: string, data: { username: string }) =>
     req<{ invitation: TeamInvitation }>(`/teams/${id}/invitations`, {
       method: "POST",
@@ -145,7 +138,7 @@ export const api = {
   listInvitations: () => req<{ invitations: TeamInvitation[] }>("/invitations"),
   respondToInvitation: (
     id: string,
-    action: "accept" | "decline",
+    action: "accept" | "decline"
   ): Promise<{
     invitation_id: string;
     status: string;
@@ -158,9 +151,7 @@ export const api = {
 
   // ---- Tasks (team-scoped) ----
   listTeamTasks: (teamId: string, status?: string) =>
-    req<Task[]>(
-      `/teams/${teamId}/tasks${status ? `?status=${status}` : ""}`,
-    ),
+    req<Task[]>(`/teams/${teamId}/tasks${status ? `?status=${status}` : ""}`),
   createTeamTask: (
     teamId: string,
     data: {
@@ -170,7 +161,7 @@ export const api = {
       priority?: TaskPriority;
       start_date?: string;
       due_date?: string;
-    },
+    }
   ) =>
     req<Task>(`/teams/${teamId}/tasks`, {
       method: "POST",

@@ -7,9 +7,7 @@ export function proxy(req: NextRequest) {
   const hasCookie = Boolean(req.cookies.get("mokara_token")?.value);
   const path = req.nextUrl.pathname;
 
-  const isProtected = PROTECTED_PREFIXES.some(
-    (p) => path === p || path.startsWith(p + "/"),
-  );
+  const isProtected = PROTECTED_PREFIXES.some((p) => path === p || path.startsWith(p + "/"));
   const isAuthPath = AUTH_PATHS.includes(path);
 
   if (isProtected && !hasCookie) {

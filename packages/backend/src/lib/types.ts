@@ -2,7 +2,13 @@
 // Field names are snake_case to preserve the existing API contract — the
 // frontend's `Task`, `Team`, etc. types depend on this exact shape.
 
-import type { Task as PrismaTask, User as PrismaUser, Team as PrismaTeam, TeamMember as PrismaTeamMember, TeamInvitation as PrismaTeamInvitation } from "@mokara/db/prisma/generated/client";
+import type {
+  Task as PrismaTask,
+  User as PrismaUser,
+  Team as PrismaTeam,
+  TeamMember as PrismaTeamMember,
+  TeamInvitation as PrismaTeamInvitation,
+} from "@mokara/db/prisma/generated/client";
 
 export type UserResponse = {
   id: string;
@@ -56,7 +62,9 @@ export type TaskResponse = {
   updated_at: string;
 };
 
-export function toUser(u: Pick<PrismaUser, "id" | "username" | "displayName" | "createdAt">): UserResponse {
+export function toUser(
+  u: Pick<PrismaUser, "id" | "username" | "displayName" | "createdAt">
+): UserResponse {
   return {
     id: u.id,
     username: u.username,
@@ -75,7 +83,9 @@ export function toTeam(t: PrismaTeam): TeamResponse {
   };
 }
 
-export function toTeamMember(m: PrismaTeamMember & { user: Pick<PrismaUser, "username" | "displayName"> }): TeamMemberResponse {
+export function toTeamMember(
+  m: PrismaTeamMember & { user: Pick<PrismaUser, "username" | "displayName"> }
+): TeamMemberResponse {
   return {
     user_id: m.userId,
     username: m.user.username,
@@ -89,7 +99,7 @@ export function toInvitation(
   inv: PrismaTeamInvitation & {
     team?: Pick<PrismaTeam, "name">;
     inviter?: Pick<PrismaUser, "username">;
-  },
+  }
 ): TeamInvitationResponse {
   return {
     id: inv.id,

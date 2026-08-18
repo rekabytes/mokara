@@ -29,10 +29,7 @@ async function main() {
 
   app.onError((err, c) => {
     log.error(`unhandled ${c.req.method} ${c.req.path}`, err);
-    return c.json(
-      { error: "internal_error", message: "internal server error" },
-      500,
-    );
+    return c.json({ error: "internal_error", message: "internal server error" }, 500);
   });
 
   app.use("*", corsMiddleware);
@@ -54,12 +51,9 @@ async function main() {
   app.route("/api", api);
 
   // 3) Listen
-  const server = serve(
-    { fetch: app.fetch, port: env.PORT },
-    () => {
-      log.ok("Server running");
-    },
-  );
+  const server = serve({ fetch: app.fetch, port: env.PORT }, () => {
+    log.ok("Server running");
+  });
   server.on("error", (err) => {
     log.error(`failed to bind port ${env.PORT}`, err);
     process.exit(1);

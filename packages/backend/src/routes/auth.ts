@@ -28,16 +28,10 @@ authRoutes.post("/signup", validate("json", signUpSchema), async (c) => {
     setAuthCookie(c, token);
     return c.json({ user: toUser(u) }, 201);
   } catch (e) {
-    if (
-      e instanceof Prisma.PrismaClientKnownRequestError &&
-      e.code === "P2002"
-    ) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       const target = (e.meta?.target as string[] | undefined) ?? [];
       if (target.includes("users_username_key")) {
-        return c.json(
-          { error: "username_taken", message: "username already exists" },
-          409,
-        );
+        return c.json({ error: "username_taken", message: "username already exists" }, 409);
       }
     }
     throw e;
@@ -54,10 +48,7 @@ authRoutes.post("/login", validate("json", loginSchema), async (c) => {
 
   // Constant-ish response on any failure (don't leak whether the user exists).
   const fail = () =>
-    c.json(
-      { error: "invalid_credentials", message: "invalid username or password" },
-      401,
-    );
+    c.json({ error: "invalid_credentials", message: "invalid username or password" }, 401);
 
   if (!u) return fail();
   const ok = await verifyPassword(password, u.passwordHash);
@@ -84,10 +75,7 @@ export async function meHandler(c: Context<{ Variables: Vars }>) {
     select: { id: true, username: true, displayName: true, createdAt: true },
   });
   if (!u) {
-    return c.json(
-      { error: "lookup_failed", message: "user not found" },
-      500,
-    );
+    return c.json({ error: "lookup_failed", message: "user not found" }, 500);
   }
   return c.json({ user: toUser(u) });
 }

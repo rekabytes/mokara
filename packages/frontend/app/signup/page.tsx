@@ -79,9 +79,7 @@ export default function SignupPage() {
               minLength={3}
               maxLength={20}
               value={username}
-              onChange={(e) =>
-                setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))
-              }
+              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
               placeholder="alice"
             />
             {username.length > 0 && !usernameValid && (
@@ -132,11 +130,7 @@ export default function SignupPage() {
             </div>
           )}
 
-          <button
-            type="submit"
-            className="btn-base btn-primary mt-2 w-full"
-            disabled={!canSubmit}
-          >
+          <button type="submit" className="btn-base btn-primary mt-2 w-full" disabled={!canSubmit}>
             {loading ? "Creating…" : "Create account"}
           </button>
         </form>

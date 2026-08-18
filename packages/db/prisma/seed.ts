@@ -22,8 +22,7 @@ function slugify(name: string): string {
 
 // Pre-computed bcrypt cost 10 hash for the demo password "password123".
 // Generated with golang.org/x/crypto/bcrypt (matches the Go backend).
-const DEMO_PASSWORD_HASH =
-  "$2a$10$Fbuiz9jRNBBABRRIBu5DkeeC5A8uvucXoAf0dAaNy59glKeQnwo.u";
+const DEMO_PASSWORD_HASH = "$2a$10$Fbuiz9jRNBBABRRIBu5DkeeC5A8uvucXoAf0dAaNy59glKeQnwo.u";
 
 async function main() {
   const alice = await prisma.user.upsert({
@@ -118,7 +117,7 @@ async function main() {
   }
 
   console.log(
-    `Seeded users [alice, bob, charlie] (password: password123), team "Acme" with bob as member and charlie invited.`,
+    `Seeded users [alice, bob, charlie] (password: password123), team "Acme" with bob as member and charlie invited.`
   );
 }
 

@@ -38,7 +38,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className={cn("relative z-10 grid min-h-screen grid-cols-[260px_1fr]", "max-[800px]:grid-cols-1")}>
+    <div
+      className={cn(
+        "relative z-10 grid min-h-screen grid-cols-[260px_1fr]",
+        "max-[800px]:grid-cols-1"
+      )}
+    >
       <button
         type="button"
         aria-label="Toggle navigation"
@@ -53,7 +58,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         className={cn(
           "sticky top-0 self-start h-screen z-10 flex flex-col pt-5 pr-4 pb-5 pl-5 border-r border-[var(--color-border-soft)] glass-blur",
           "max-[800px]:fixed max-[800px]:top-0 max-[800px]:left-0 max-[800px]:w-[280px] max-[800px]:h-screen max-[800px]:-translate-x-full max-[800px]:transition-transform max-[800px]:duration-[250ms] max-[800px]:shadow-[var(--shadow-lift)]",
-          mobileNavOpen && "max-[800px]:translate-x-0",
+          mobileNavOpen && "max-[800px]:translate-x-0"
         )}
       >
         <div className="mb-3">
@@ -78,13 +83,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className={cn(
                   "flex items-center gap-[0.7rem] rounded-[10px] px-[0.7rem] py-[0.55rem] text-[0.92rem] font-medium text-[var(--color-ink-muted)] no-underline transition-colors duration-[160ms]",
                   "hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]",
-                  active && "bg-[var(--color-surface-solid)] text-[var(--color-ink)] shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_var(--color-border-soft)]",
+                  active &&
+                    "bg-[var(--color-surface-solid)] text-[var(--color-ink)] shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_var(--color-border-soft)]"
                 )}
               >
                 <span
                   className={cn(
                     "inline-flex shrink-0 text-[var(--color-ink-faint)]",
-                    active && "text-[var(--color-accent)]",
+                    active && "text-[var(--color-accent)]"
                   )}
                 >
                   {item.icon}
@@ -102,9 +108,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-[0.9rem] font-semibold">{handle}</span>
-              <span className="text-[0.76rem] text-[var(--color-ink-faint)]">
-                @{user.username}
-              </span>
+              <span className="text-[0.76rem] text-[var(--color-ink-faint)]">@{user.username}</span>
             </div>
           </div>
           <button
@@ -155,7 +159,12 @@ function TasksIcon() {
 function MenuIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path
+        d="M4 7h16M4 12h16M4 17h16"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

@@ -5,10 +5,7 @@ import { env } from "../env.ts";
 //   - { mode: "open" }      — no allow-list configured (echo any origin or "*")
 //   - { mode: "wildcard" }  — explicitly "*"
 //   - { mode: "list", list } — specific allow-list
-type Allowed =
-  | { mode: "open" }
-  | { mode: "wildcard" }
-  | { mode: "list"; list: string[] };
+type Allowed = { mode: "open" } | { mode: "wildcard" } | { mode: "list"; list: string[] };
 
 function parseAllowedOrigins(raw: string): Allowed {
   const parts = raw

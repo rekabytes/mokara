@@ -46,39 +46,39 @@ without provider credentials.
 
 ## 4. Core Features
 
-| #   | Feature                  | Description                                                                                |
-| --- | ------------------------ | ------------------------------------------------------------------------------------------ |
-| F1  | Sign up                  | Create account with `username`, `password`, optional `display_name`.                       |
-| F2  | Log in / log out         | Issue JWT cookie on success. Logout clears the cookie.                                     |
-| F3  | Current user             | `GET /api/me` returns the authenticated user.                                              |
-| F4  | Create team              | Authenticated user creates a team and is auto-added as `owner`.                            |
-| F5  | List my teams            | `GET /api/teams` returns teams the current user is a member of.                            |
-| F6  | View team detail         | `GET /api/teams/:id` returns team + members + open invitations (members only).             |
-| F7  | Invite by username       | Owner/member invites another existing user by username. 3-member cap is enforced.           |
-| F8  | List my pending invites  | `GET /api/invitations` returns invitations where `invitee_username = current`.            |
-| F9  | Accept / decline invite  | On accept, the invitee is added to `team_members` (respects cap).                          |
-| F10 | Leave team               | A non-owner member can leave. Owner cannot leave while other members exist.                |
-| F11 | Team-scoped tasks        | `GET/POST /api/teams/:id/tasks` (list / create). `PATCH/DELETE /api/tasks/:id` requires membership. |
-| F12 | Auto-expire invites      | Invitations expire 7 days after creation. Expired invites cannot be accepted.              |
+| #   | Feature                 | Description                                                                                         |
+| --- | ----------------------- | --------------------------------------------------------------------------------------------------- |
+| F1  | Sign up                 | Create account with `username`, `password`, optional `display_name`.                                |
+| F2  | Log in / log out        | Issue JWT cookie on success. Logout clears the cookie.                                              |
+| F3  | Current user            | `GET /api/me` returns the authenticated user.                                                       |
+| F4  | Create team             | Authenticated user creates a team and is auto-added as `owner`.                                     |
+| F5  | List my teams           | `GET /api/teams` returns teams the current user is a member of.                                     |
+| F6  | View team detail        | `GET /api/teams/:id` returns team + members + open invitations (members only).                      |
+| F7  | Invite by username      | Owner/member invites another existing user by username. 3-member cap is enforced.                   |
+| F8  | List my pending invites | `GET /api/invitations` returns invitations where `invitee_username = current`.                      |
+| F9  | Accept / decline invite | On accept, the invitee is added to `team_members` (respects cap).                                   |
+| F10 | Leave team              | A non-owner member can leave. Owner cannot leave while other members exist.                         |
+| F11 | Team-scoped tasks       | `GET/POST /api/teams/:id/tasks` (list / create). `PATCH/DELETE /api/tasks/:id` requires membership. |
+| F12 | Auto-expire invites     | Invitations expire 7 days after creation. Expired invites cannot be accepted.                       |
 
 ## 5. Tech Stack (additions / changes vs PRD-01)
 
-| Layer            | PRD-01                       | PRD-02                                                                                |
-| ---------------- | ---------------------------- | ------------------------------------------------------------------------------------- |
-| Auth             | —                            | `golang.org/x/crypto/bcrypt` (bundled with Go toolchain) + `github.com/golang-jwt/jwt/v5 v5.3.1` |
-| Session transport | —                          | `httpOnly`, `SameSite=Lax`, `Secure` (in prod) cookie named `mokara_token`             |
-| Schema           | 1 table (`tasks`)            | 5 tables: `users`, `teams`, `team_members`, `team_invitations`, `tasks` (now FK-bound) |
-| Migrations       | 1 init migration             | Adds `20260715_auth_and_teams` migration                                               |
-| Frontend         | `/` (task list)              | `/login`, `/signup`, `/`, `/teams`, `/teams/[id]`, `/invitations`                      |
+| Layer             | PRD-01            | PRD-02                                                                                           |
+| ----------------- | ----------------- | ------------------------------------------------------------------------------------------------ |
+| Auth              | —                 | `golang.org/x/crypto/bcrypt` (bundled with Go toolchain) + `github.com/golang-jwt/jwt/v5 v5.3.1` |
+| Session transport | —                 | `httpOnly`, `SameSite=Lax`, `Secure` (in prod) cookie named `mokara_token`                       |
+| Schema            | 1 table (`tasks`) | 5 tables: `users`, `teams`, `team_members`, `team_invitations`, `tasks` (now FK-bound)           |
+| Migrations        | 1 init migration  | Adds `20260715_auth_and_teams` migration                                                         |
+| Frontend          | `/` (task list)   | `/login`, `/signup`, `/`, `/teams`, `/teams/[id]`, `/invitations`                                |
 
 ### 5.1 Dependency versions (pinned)
 
 Picked from the reference stack in mem0 (project `hmanlab-prox`):
 
-| Package | Version | Why pinned |
-| --- | --- | --- |
-| `github.com/golang-jwt/jwt/v5` | **`v5.3.1`** | Matches the mem0 reference version exactly; v5 line is stable for HS256 + claims API we need. |
-| `golang.org/x/crypto` | toolchain-pinned (no separate version) | Ships with the Go toolchain listed in `packages/backend/go.mod` (`go 1.26.0`, toolchain `go1.26.5`); we only use `bcrypt`. |
+| Package                        | Version                                | Why pinned                                                                                                                 |
+| ------------------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `github.com/golang-jwt/jwt/v5` | **`v5.3.1`**                           | Matches the mem0 reference version exactly; v5 line is stable for HS256 + claims API we need.                              |
+| `golang.org/x/crypto`          | toolchain-pinned (no separate version) | Ships with the Go toolchain listed in `packages/backend/go.mod` (`go 1.26.0`, toolchain `go1.26.5`); we only use `bcrypt`. |
 
 Frontend and database packages have **no new dependencies** for PRD-02.
 
@@ -86,34 +86,34 @@ Frontend and database packages have **no new dependencies** for PRD-02.
 
 ### `users`
 
-| Column         | Type         | Constraints                  | Notes |
-| -------------- | ------------ | ---------------------------- | ----- |
-| `id`           | `uuid`       | PK, default `gen_random_uuid()` |  |
-| `username`     | `text`       | NOT NULL, UNIQUE (citext)    | Case-insensitive; 3–20 chars, `[a-z0-9_]+` |
-| `password_hash`| `text`       | NOT NULL                     | bcrypt cost ≥ 10 |
-| `display_name` | `text`       | nullable                     |  |
-| `created_at`   | `timestamptz`| NOT NULL, default `now()`    |  |
-| `updated_at`   | `timestamptz`| NOT NULL, default `now()`    |  |
+| Column          | Type          | Constraints                     | Notes                                      |
+| --------------- | ------------- | ------------------------------- | ------------------------------------------ |
+| `id`            | `uuid`        | PK, default `gen_random_uuid()` |                                            |
+| `username`      | `text`        | NOT NULL, UNIQUE (citext)       | Case-insensitive; 3–20 chars, `[a-z0-9_]+` |
+| `password_hash` | `text`        | NOT NULL                        | bcrypt cost ≥ 10                           |
+| `display_name`  | `text`        | nullable                        |                                            |
+| `created_at`    | `timestamptz` | NOT NULL, default `now()`       |                                            |
+| `updated_at`    | `timestamptz` | NOT NULL, default `now()`       |                                            |
 
 ### `teams`
 
-| Column       | Type         | Constraints                  | Notes |
-| ------------ | ------------ | ---------------------------- | ----- |
-| `id`         | `uuid`       | PK, default `gen_random_uuid()` |  |
-| `name`       | `text`       | NOT NULL                     | 1–50 chars |
-| `slug`       | `text`       | NOT NULL, UNIQUE             | Lowercase, hyphenated, derived from `name` |
-| `owner_id`   | `uuid`       | NOT NULL, FK → `users(id)`   | Original creator |
-| `created_at` | `timestamptz`| NOT NULL, default `now()`    |  |
-| `updated_at` | `timestamptz`| NOT NULL, default `now()`    |  |
+| Column       | Type          | Constraints                     | Notes                                      |
+| ------------ | ------------- | ------------------------------- | ------------------------------------------ |
+| `id`         | `uuid`        | PK, default `gen_random_uuid()` |                                            |
+| `name`       | `text`        | NOT NULL                        | 1–50 chars                                 |
+| `slug`       | `text`        | NOT NULL, UNIQUE                | Lowercase, hyphenated, derived from `name` |
+| `owner_id`   | `uuid`        | NOT NULL, FK → `users(id)`      | Original creator                           |
+| `created_at` | `timestamptz` | NOT NULL, default `now()`       |                                            |
+| `updated_at` | `timestamptz` | NOT NULL, default `now()`       |                                            |
 
 ### `team_members`
 
-| Column     | Type         | Constraints                                                  | Notes |
-| ---------- | ------------ | ------------------------------------------------------------ | ----- |
-| `team_id`  | `uuid`       | PK (composite with `user_id`), FK → `teams(id)` ON DELETE CASCADE |  |
-| `user_id`  | `uuid`       | PK (composite with `team_id`), FK → `users(id)`             |  |
-| `role`     | `text`       | NOT NULL, default `'member'`                                | `'owner'` \| `'member'` |
-| `joined_at`| `timestamptz`| NOT NULL, default `now()`                                   |  |
+| Column      | Type          | Constraints                                                       | Notes                   |
+| ----------- | ------------- | ----------------------------------------------------------------- | ----------------------- |
+| `team_id`   | `uuid`        | PK (composite with `user_id`), FK → `teams(id)` ON DELETE CASCADE |                         |
+| `user_id`   | `uuid`        | PK (composite with `team_id`), FK → `users(id)`                   |                         |
+| `role`      | `text`        | NOT NULL, default `'member'`                                      | `'owner'` \| `'member'` |
+| `joined_at` | `timestamptz` | NOT NULL, default `now()`                                         |                         |
 
 A `BEFORE INSERT` trigger enforces **max 3 members per team** (raises
 `team_full` SQLSTATE `P0001`). Application code checks the count first to
@@ -121,16 +121,16 @@ return a friendly 409.
 
 ### `team_invitations`
 
-| Column             | Type         | Constraints                                                       | Notes |
-| ------------------ | ------------ | ----------------------------------------------------------------- | ----- |
-| `id`               | `uuid`       | PK, default `gen_random_uuid()`                                   |  |
-| `team_id`          | `uuid`       | NOT NULL, FK → `teams(id)` ON DELETE CASCADE                       |  |
-| `inviter_id`       | `uuid`       | NOT NULL, FK → `users(id)`                                        |  |
-| `invitee_username` | `text`       | NOT NULL, FK → `users(username)` (citext)                          | Stored at send-time; resolved by username lookup |
-| `status`           | `text`       | NOT NULL, default `'pending'`                                     | `'pending'` \| `'accepted'` \| `'declined'` \| `'expired'` |
-| `created_at`       | `timestamptz`| NOT NULL, default `now()`                                         |  |
-| `expires_at`       | `timestamptz`| NOT NULL, default `now() + interval '7 days'`                     |  |
-| `responded_at`     | `timestamptz`| nullable                                                          | Set on accept / decline |
+| Column             | Type          | Constraints                                   | Notes                                                      |
+| ------------------ | ------------- | --------------------------------------------- | ---------------------------------------------------------- |
+| `id`               | `uuid`        | PK, default `gen_random_uuid()`               |                                                            |
+| `team_id`          | `uuid`        | NOT NULL, FK → `teams(id)` ON DELETE CASCADE  |                                                            |
+| `inviter_id`       | `uuid`        | NOT NULL, FK → `users(id)`                    |                                                            |
+| `invitee_username` | `text`        | NOT NULL, FK → `users(username)` (citext)     | Stored at send-time; resolved by username lookup           |
+| `status`           | `text`        | NOT NULL, default `'pending'`                 | `'pending'` \| `'accepted'` \| `'declined'` \| `'expired'` |
+| `created_at`       | `timestamptz` | NOT NULL, default `now()`                     |                                                            |
+| `expires_at`       | `timestamptz` | NOT NULL, default `now() + interval '7 days'` |                                                            |
+| `responded_at`     | `timestamptz` | nullable                                      | Set on accept / decline                                    |
 
 A `UNIQUE (team_id, invitee_username) WHERE status = 'pending'` index
 prevents duplicate open invites to the same user.
@@ -139,9 +139,9 @@ prevents duplicate open invites to the same user.
 
 Add one column:
 
-| Column    | Type   | Constraints                                                       |
-| --------- | ------ | ----------------------------------------------------------------- |
-| `team_id` | `uuid` | NOT NULL, FK → `teams(id)` ON DELETE CASCADE, indexed             |
+| Column    | Type   | Constraints                                           |
+| --------- | ------ | ----------------------------------------------------- |
+| `team_id` | `uuid` | NOT NULL, FK → `teams(id)` ON DELETE CASCADE, indexed |
 
 Existing `tasks` rows must be migrated: assign them to a default team (or
 delete on reset — see §10).
@@ -153,39 +153,39 @@ requires a valid `mokara_token` cookie. JSON only.
 
 ### Auth
 
-| Method | Path                  | Auth | Body / Response                                                |
-| ------ | --------------------- | ---- | -------------------------------------------------------------- |
-| POST   | `/api/auth/signup`    | no   | `{username, password, display_name?}` → `{user}` + sets cookie |
-| POST   | `/api/auth/login`     | no   | `{username, password}` → `{user}` + sets cookie                |
-| POST   | `/api/auth/logout`    | no   | clears cookie → 204                                            |
-| GET    | `/api/me`             | yes  | `{user}`                                                       |
+| Method | Path               | Auth | Body / Response                                                |
+| ------ | ------------------ | ---- | -------------------------------------------------------------- |
+| POST   | `/api/auth/signup` | no   | `{username, password, display_name?}` → `{user}` + sets cookie |
+| POST   | `/api/auth/login`  | no   | `{username, password}` → `{user}` + sets cookie                |
+| POST   | `/api/auth/logout` | no   | clears cookie → 204                                            |
+| GET    | `/api/me`          | yes  | `{user}`                                                       |
 
 ### Teams
 
-| Method | Path                          | Auth         | Notes |
-| ------ | ----------------------------- | ------------ | ----- |
-| POST   | `/api/teams`                  | yes          | `{name}` → `{team}` (creator becomes owner) |
-| GET    | `/api/teams`                  | yes          | List teams current user belongs to |
-| GET    | `/api/teams/:id`              | yes (member) | Team + members + open invitations |
-| POST   | `/api/teams/:id/leave`        | yes (member) | Owner can't leave if other members exist |
-| GET    | `/api/teams/:id/tasks`        | yes (member) | List tasks in team (supports `?status=`) |
-| POST   | `/api/teams/:id/tasks`        | yes (member) | Create task in team |
+| Method | Path                   | Auth         | Notes                                       |
+| ------ | ---------------------- | ------------ | ------------------------------------------- |
+| POST   | `/api/teams`           | yes          | `{name}` → `{team}` (creator becomes owner) |
+| GET    | `/api/teams`           | yes          | List teams current user belongs to          |
+| GET    | `/api/teams/:id`       | yes (member) | Team + members + open invitations           |
+| POST   | `/api/teams/:id/leave` | yes (member) | Owner can't leave if other members exist    |
+| GET    | `/api/teams/:id/tasks` | yes (member) | List tasks in team (supports `?status=`)    |
+| POST   | `/api/teams/:id/tasks` | yes (member) | Create task in team                         |
 
 ### Invitations
 
-| Method | Path                            | Auth                | Notes |
-| ------ | ------------------------------- | ------------------- | ----- |
-| POST   | `/api/teams/:id/invitations`    | yes (member)        | `{username}` → invitation. 409 `team_full` if 3 already |
-| GET    | `/api/invitations`              | yes                 | Pending invites for current user |
-| POST   | `/api/invitations/:id/respond`  | yes (invitee)       | `{action: "accept" \| "decline"}` |
+| Method | Path                           | Auth          | Notes                                                   |
+| ------ | ------------------------------ | ------------- | ------------------------------------------------------- |
+| POST   | `/api/teams/:id/invitations`   | yes (member)  | `{username}` → invitation. 409 `team_full` if 3 already |
+| GET    | `/api/invitations`             | yes           | Pending invites for current user                        |
+| POST   | `/api/invitations/:id/respond` | yes (invitee) | `{action: "accept" \| "decline"}`                       |
 
 ### Tasks (team-scoped)
 
-| Method | Path                  | Notes                                                                |
-| ------ | --------------------- | -------------------------------------------------------------------- |
-| GET    | `/api/tasks/:id`      | Must be a member of the task's team                                  |
-| PATCH  | `/api/tasks/:id`      | Same                                                                  |
-| DELETE | `/api/tasks/:id`      | Same                                                                  |
+| Method | Path             | Notes                               |
+| ------ | ---------------- | ----------------------------------- |
+| GET    | `/api/tasks/:id` | Must be a member of the task's team |
+| PATCH  | `/api/tasks/:id` | Same                                |
+| DELETE | `/api/tasks/:id` | Same                                |
 
 ### Error shape
 
@@ -213,16 +213,17 @@ Stable `error` codes for the frontend to switch on:
 
 ## 9. Frontend Routes
 
-| Path             | Access    | Purpose                                                                  |
-| ---------------- | --------- | ------------------------------------------------------------------------ |
-| `/login`         | public    | Sign-in form                                                             |
-| `/signup`        | public    | Sign-up form                                                             |
-| `/`              | protected | Team list + "Create team" CTA + pending-invitations badge                |
-| `/teams/new`     | protected | Create team                                                              |
-| `/teams/[id]`    | protected | Team detail: members, invitations, tasks                                 |
-| `/invitations`   | protected | List of pending invitations for current user (accept / decline)          |
+| Path           | Access    | Purpose                                                         |
+| -------------- | --------- | --------------------------------------------------------------- |
+| `/login`       | public    | Sign-in form                                                    |
+| `/signup`      | public    | Sign-up form                                                    |
+| `/`            | protected | Team list + "Create team" CTA + pending-invitations badge       |
+| `/teams/new`   | protected | Create team                                                     |
+| `/teams/[id]`  | protected | Team detail: members, invitations, tasks                        |
+| `/invitations` | protected | List of pending invitations for current user (accept / decline) |
 
 A Next.js `middleware.ts` redirects:
+
 - unauthenticated users hitting protected paths → `/login`
 - authenticated users hitting `/login` or `/signup` → `/`
 

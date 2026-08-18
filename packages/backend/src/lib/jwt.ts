@@ -6,7 +6,7 @@ export const TOKEN_LIFETIME_S = 7 * 24 * 60 * 60; // 7 days
 
 // Dev fallback only — auth fails closed when no secret is set in prod.
 const secret = new TextEncoder().encode(
-  env.AUTH_SECRET || "dev-only-insecure-secret-change-me-in-prod-32b!",
+  env.AUTH_SECRET || "dev-only-insecure-secret-change-me-in-prod-32b!"
 );
 
 export interface Claims {

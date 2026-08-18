@@ -30,8 +30,7 @@ const STATUS_PILL: Record<TaskStatus, string> = {
   in_progress: "bg-[var(--color-progress-soft)] text-[var(--color-progress)]",
 };
 
-const titleCase = (s: string) =>
-  s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+const titleCase = (s: string) => s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -173,9 +172,7 @@ export default function TeamDetailPage() {
 
   if (loading || !detail) {
     return (
-      <p className="py-8 text-center text-[var(--color-ink-faint)]">
-        {error ? error : "Loading…"}
-      </p>
+      <p className="py-8 text-center text-[var(--color-ink-faint)]">{error ? error : "Loading…"}</p>
     );
   }
 
@@ -200,7 +197,7 @@ export default function TeamDetailPage() {
                   "pill",
                   detail.role === "owner"
                     ? "bg-[var(--color-progress-soft)] text-[var(--color-progress)]"
-                    : "",
+                    : ""
                 )}
               >
                 {detail.role}
@@ -246,7 +243,7 @@ export default function TeamDetailPage() {
                     "pill",
                     m.role === "owner"
                       ? "bg-[var(--color-progress-soft)] text-[var(--color-progress)]"
-                      : "",
+                      : ""
                   )}
                 >
                   {m.role}
@@ -267,9 +264,7 @@ export default function TeamDetailPage() {
                   placeholder="@username"
                   value={inviteUsername}
                   onChange={(e) =>
-                    setInviteUsername(
-                      e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""),
-                    )
+                    setInviteUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))
                   }
                   maxLength={20}
                 />
@@ -365,7 +360,7 @@ export default function TeamDetailPage() {
                 className={cn(
                   "cursor-pointer rounded-full border-0 bg-transparent px-[0.95rem] py-[0.45rem] text-[0.85rem] font-medium text-[var(--color-ink-muted)] transition-colors duration-[180ms] hover:text-[var(--color-ink)]",
                   filter === f &&
-                    "bg-white text-[var(--color-ink)] shadow-[0_1px_3px_rgba(15,23,42,0.1)]",
+                    "bg-white text-[var(--color-ink)] shadow-[0_1px_3px_rgba(15,23,42,0.1)]"
                 )}
               >
                 {f === "all" ? "All" : titleCase(f)}
@@ -392,7 +387,7 @@ export default function TeamDetailPage() {
                       "card group flex items-start gap-[0.85rem] p-[1rem] py-[1.1rem]",
                       "transition-[transform,box-shadow,border-color] duration-[200ms]",
                       "hover:-translate-y-[2px] hover:shadow-[var(--shadow-lift)] hover:border-[var(--color-border-strong)]",
-                      done && "opacity-90",
+                      done && "opacity-90"
                     )}
                   >
                     <button
@@ -401,7 +396,7 @@ export default function TeamDetailPage() {
                       aria-pressed={done}
                       className={cn(
                         "grid size-6 shrink-0 cursor-pointer place-items-center rounded-full border-2 border-[var(--color-border-strong)] bg-transparent text-white transition-[background,border-color,transform] duration-[200ms] hover:scale-[1.08] hover:border-[var(--color-accent)]",
-                        done && "border-[var(--color-accent)] bg-[var(--color-accent)]",
+                        done && "border-[var(--color-accent)] bg-[var(--color-accent)]"
                       )}
                     >
                       <CheckIcon done={done} />
@@ -410,7 +405,7 @@ export default function TeamDetailPage() {
                       <span
                         className={cn(
                           "text-[0.98rem] font-semibold tracking-[-0.01em] break-words transition-[color,opacity] duration-[200ms]",
-                          done && "text-[var(--color-ink-faint)] line-through",
+                          done && "text-[var(--color-ink-faint)] line-through"
                         )}
                       >
                         {t.title}
@@ -419,7 +414,7 @@ export default function TeamDetailPage() {
                         <span
                           className={cn(
                             "text-[0.88rem] break-words text-[var(--color-ink-muted)]",
-                            done && "opacity-60",
+                            done && "opacity-60"
                           )}
                         >
                           {t.description}
@@ -433,7 +428,7 @@ export default function TeamDetailPage() {
                           <span
                             className={cn(
                               "block size-[7px] rounded-full",
-                              PRIORITY_DOT[t.priority] ?? PRIORITY_DOT.low,
+                              PRIORITY_DOT[t.priority] ?? PRIORITY_DOT.low
                             )}
                           />
                           {t.priority}

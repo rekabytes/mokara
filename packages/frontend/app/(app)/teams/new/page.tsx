@@ -4,7 +4,6 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, isApiError } from "@/lib/api";
-import { cn } from "@/lib/cn";
 
 export default function NewTeamPage() {
   const router = useRouter();
@@ -78,11 +77,7 @@ export default function NewTeamPage() {
           <Link href="/dashboard" className="btn-base btn-ghost">
             Cancel
           </Link>
-          <button
-            type="submit"
-            className="btn-base btn-primary"
-            disabled={loading || !name.trim()}
-          >
+          <button type="submit" className="btn-base btn-primary" disabled={loading || !name.trim()}>
             {loading ? "Creating…" : "Create team"}
           </button>
         </div>

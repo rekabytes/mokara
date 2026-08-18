@@ -12,6 +12,9 @@
     "typecheck:backend": "pnpm --filter @mokara/backend typecheck",
     "typecheck:db": "pnpm --filter @mokara/db typecheck",
     "typecheck": "pnpm typecheck:frontend && pnpm typecheck:backend && pnpm typecheck:db",
+    "lint": "pnpm -r --if-present run lint",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
     "db:migrate": "pnpm --filter @mokara/db migrate",
     "db:migrate:init": "pnpm --filter @mokara/db migrate:init",
     "db:migrate:deploy": "pnpm --filter @mokara/db migrate:deploy",
@@ -22,5 +25,8 @@
   "packageManager": "pnpm@11.13.0",
   "engines": {
     "node": ">=24"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6"
   }
 }

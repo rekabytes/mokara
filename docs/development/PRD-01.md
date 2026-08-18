@@ -32,27 +32,27 @@ The architecture is intentionally simple. PostgreSQL and Redis run in Docker; th
 
 ## 4. Core Features (Basic)
 
-| # | Feature | Description |
-|---|---------|-------------|
-| F1 | Create task | Add a task with title (required) + optional description, priority, due date. |
-| F2 | List tasks | View all tasks, sorted by created time (newest first). |
-| F3 | Filter tasks | Filter by status (`todo`, `in_progress`, `done`). |
-| F4 | Update task | Edit title, description, status, priority, due date. |
-| F5 | Toggle status | Quick action to mark a task done / not done. |
-| F6 | Delete task | Remove a task. |
+| #   | Feature       | Description                                                                  |
+| --- | ------------- | ---------------------------------------------------------------------------- |
+| F1  | Create task   | Add a task with title (required) + optional description, priority, due date. |
+| F2  | List tasks    | View all tasks, sorted by created time (newest first).                       |
+| F3  | Filter tasks  | Filter by status (`todo`, `in_progress`, `done`).                            |
+| F4  | Update task   | Edit title, description, status, priority, due date.                         |
+| F5  | Toggle status | Quick action to mark a task done / not done.                                 |
+| F6  | Delete task   | Remove a task.                                                               |
 
 ## 5. Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Monorepo | pnpm workspaces |
-| Frontend | Next.js (App Router) + TypeScript |
-| Backend | Go (HTTP API) |
-| API framework | Gin |
-| Database | PostgreSQL |
-| DB schema & migrations | Prisma 7 (Prisma Migrate + `prisma.config.ts`) |
-| Cache (provisioned, unused in v1) | Redis |
-| Infra (local) | Docker + Docker Compose |
+| Layer                             | Technology                                     |
+| --------------------------------- | ---------------------------------------------- |
+| Monorepo                          | pnpm workspaces                                |
+| Frontend                          | Next.js (App Router) + TypeScript              |
+| Backend                           | Go (HTTP API)                                  |
+| API framework                     | Gin                                            |
+| Database                          | PostgreSQL                                     |
+| DB schema & migrations            | Prisma 7 (Prisma Migrate + `prisma.config.ts`) |
+| Cache (provisioned, unused in v1) | Redis                                          |
+| Infra (local)                     | Docker + Docker Compose                        |
 
 ## 6. Project Structure
 
@@ -141,16 +141,16 @@ Single table for v1.
 
 ### `tasks`
 
-| Column | Type | Constraints | Notes |
-|--------|------|-------------|-------|
-| `id` | `uuid` | PK, default `gen_random_uuid()` | |
-| `title` | `text` | NOT NULL | Required |
-| `description` | `text` | nullable | |
-| `status` | `text` | NOT NULL, default `'todo'` | `todo` \| `in_progress` \| `done` |
-| `priority` | `text` | NOT NULL, default `'medium'` | `low` \| `medium` \| `high` |
-| `due_date` | `timestamptz` | nullable | |
-| `created_at` | `timestamptz` | NOT NULL, default `now()` | |
-| `updated_at` | `timestamptz` | NOT NULL, default `now()` | Backend sets `now()` on update |
+| Column        | Type          | Constraints                     | Notes                             |
+| ------------- | ------------- | ------------------------------- | --------------------------------- |
+| `id`          | `uuid`        | PK, default `gen_random_uuid()` |                                   |
+| `title`       | `text`        | NOT NULL                        | Required                          |
+| `description` | `text`        | nullable                        |                                   |
+| `status`      | `text`        | NOT NULL, default `'todo'`      | `todo` \| `in_progress` \| `done` |
+| `priority`    | `text`        | NOT NULL, default `'medium'`    | `low` \| `medium` \| `high`       |
+| `due_date`    | `timestamptz` | nullable                        |                                   |
+| `created_at`  | `timestamptz` | NOT NULL, default `now()`       |                                   |
+| `updated_at`  | `timestamptz` | NOT NULL, default `now()`       | Backend sets `now()` on update    |
 
 Schema and migrations are managed by **Prisma** in `packages/db/prisma/schema.prisma`.
 
@@ -158,13 +158,13 @@ Schema and migrations are managed by **Prisma** in `packages/db/prisma/schema.pr
 
 Base URL configured via frontend `.env` (e.g. `http://localhost:4200/api`).
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/tasks` | List tasks. Optional query: `?status=todo` |
-| `GET` | `/api/tasks/:id` | Get a single task |
-| `POST` | `/api/tasks` | Create a task |
-| `PATCH` | `/api/tasks/:id` | Update a task (partial) |
-| `DELETE` | `/api/tasks/:id` | Delete a task |
+| Method   | Path             | Description                                |
+| -------- | ---------------- | ------------------------------------------ |
+| `GET`    | `/api/tasks`     | List tasks. Optional query: `?status=todo` |
+| `GET`    | `/api/tasks/:id` | Get a single task                          |
+| `POST`   | `/api/tasks`     | Create a task                              |
+| `PATCH`  | `/api/tasks/:id` | Update a task (partial)                    |
+| `DELETE` | `/api/tasks/:id` | Delete a task                              |
 
 All responses are JSON. Standard HTTP status codes.
 

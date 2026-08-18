@@ -7,15 +7,12 @@ import type { Context } from "hono";
 // The frontend's `isApiError` checks for those two keys plus `status`.
 export function validate<T extends ZodSchema>(
   target: "json" | "query" | "param" | "form" | "header" | "cookie",
-  schema: T,
+  schema: T
 ) {
   return zValidator(target, schema, (result, c: Context) => {
     if (!result.success) {
       const first = result.error.issues[0];
-      return c.json(
-        { error: "invalid_input", message: first?.message ?? "invalid input" },
-        400,
-      );
+      return c.json({ error: "invalid_input", message: first?.message ?? "invalid input" }, 400);
     }
     return undefined;
   });

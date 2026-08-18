@@ -68,13 +68,13 @@ pnpm dev
 
 ## API
 
-| Method | Path              | Description                       |
-|--------|-------------------|-----------------------------------|
-| GET    | `/api/tasks`      | List tasks (`?status=todo`, etc.) |
-| GET    | `/api/tasks/:id`  | Get one task                      |
-| POST   | `/api/tasks`      | Create a task                     |
-| PATCH  | `/api/tasks/:id`  | Update a task (partial)           |
-| DELETE | `/api/tasks/:id`  | Delete a task                     |
+| Method | Path             | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| GET    | `/api/tasks`     | List tasks (`?status=todo`, etc.) |
+| GET    | `/api/tasks/:id` | Get one task                      |
+| POST   | `/api/tasks`     | Create a task                     |
+| PATCH  | `/api/tasks/:id` | Update a task (partial)           |
+| DELETE | `/api/tasks/:id` | Delete a task                     |
 
 ## Notes
 
@@ -83,5 +83,5 @@ pnpm dev
 - Package Dockerfiles use the repository root as their build context:
   - `docker build -f packages/backend/Dockerfile -t mokara-backend .`
   - `docker build -f packages/frontend/Dockerfile -t mokara-frontend .`
-  They are intentionally **not** wired into `docker-compose.yml`.
+    They are intentionally **not** wired into `docker-compose.yml`.
 - Per-package `.env` files are gitignored; only `.env.example` is committed.

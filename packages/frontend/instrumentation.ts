@@ -15,8 +15,7 @@ const PING_TIMEOUT_MS = 5_000;
 function getHealthUrl(): string {
   // NEXT_PUBLIC_API_BASE_URL is something like http://localhost:4200/api.
   // /health is served at the root, not under /api, so strip the suffix.
-  const base =
-    process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4200/api";
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4200/api";
   return base.replace(/\/api\/?$/, "") + "/health";
 }
 

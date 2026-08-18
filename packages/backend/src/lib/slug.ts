@@ -12,7 +12,7 @@ export function slugify(name: string): string {
 // Prisma-backed predicate.
 export async function ensureUniqueSlug(
   exists: (slug: string) => Promise<boolean>,
-  base: string,
+  base: string
 ): Promise<string> {
   let candidate = base;
   for (let i = 0; i < 50; i++) {

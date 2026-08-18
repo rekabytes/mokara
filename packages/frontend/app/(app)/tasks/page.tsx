@@ -1,10 +1,25 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, useRef, type FormEvent, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { createPortal } from "react-dom";
 import { DateRangePicker } from "./DateRangePicker";
 import { useRouter } from "next/navigation";
-import { api, isApiError, type Task, type TaskStatus, type TaskPriority, type TeamWithRole } from "@/lib/api";
+import {
+  api,
+  isApiError,
+  type Task,
+  type TaskStatus,
+  type TaskPriority,
+  type TeamWithRole,
+} from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { cn } from "@/lib/cn";
 
@@ -31,12 +46,6 @@ const GROUPS: { id: GroupId; name: string }[] = [
   { id: "done", name: "Done" },
 ];
 
-const PRIORITY_COLOR: Record<TaskPriority, string> = {
-  high: "text-[var(--color-prio-high)] font-semibold",
-  medium: "text-[var(--color-prio-medium)]",
-  low: "text-[var(--color-ink-faint)]",
-};
-
 const PRIORITY_BAR_COLOR: Record<TaskPriority, string> = {
   high: "bg-[var(--color-prio-high)]",
   medium: "bg-[var(--color-prio-medium)]",
@@ -59,19 +68,19 @@ function PriorityBars({ priority }: { priority: TaskPriority }) {
       <span
         className={cn(
           "w-[3px] rounded-[1px] h-[5px]",
-          filled >= 1 ? barColor : "bg-[var(--color-border-soft)]",
+          filled >= 1 ? barColor : "bg-[var(--color-border-soft)]"
         )}
       />
       <span
         className={cn(
           "w-[3px] rounded-[1px] h-[7px]",
-          filled >= 2 ? barColor : "bg-[var(--color-border-soft)]",
+          filled >= 2 ? barColor : "bg-[var(--color-border-soft)]"
         )}
       />
       <span
         className={cn(
           "w-[3px] rounded-[1px] h-[10px]",
-          filled >= 3 ? barColor : "bg-[var(--color-border-soft)]",
+          filled >= 3 ? barColor : "bg-[var(--color-border-soft)]"
         )}
       />
     </span>
@@ -339,7 +348,9 @@ export default function TasksPage() {
     }
     if (sort === "priority") {
       for (const k of Object.keys(buckets) as GroupId[]) {
-        buckets[k] = [...buckets[k]].sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]);
+        buckets[k] = [...buckets[k]].sort(
+          (a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
+        );
       }
     } else if (sort === "due") {
       for (const k of Object.keys(buckets) as GroupId[]) {
@@ -363,7 +374,7 @@ export default function TasksPage() {
   const totalTasks = tasks.length;
   const totalVisible = useMemo(
     () => Object.values(visibleByGroup).reduce((acc, list) => acc + list.length, 0),
-    [visibleByGroup],
+    [visibleByGroup]
   );
 
   if (bootError) {
@@ -415,7 +426,7 @@ export default function TasksPage() {
                   "cursor-pointer rounded-full px-3 py-[0.3rem] text-[0.82rem] font-medium transition-colors duration-[140ms]",
                   filter === f.id
                     ? "bg-white text-[var(--color-ink)] shadow-[0_1px_3px_rgba(15,23,42,0.1)]"
-                    : "text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]",
+                    : "text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
                 )}
               >
                 {f.label}
@@ -456,7 +467,12 @@ export default function TasksPage() {
               fill="none"
               aria-hidden="true"
             >
-              <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+              <path
+                d="M6 9l6 6 6-6"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+              />
             </svg>
           </div>
           <IconButton label="Layout">
@@ -480,11 +496,7 @@ export default function TasksPage() {
             <p className="m-0 mt-1 text-[0.88rem] text-[var(--color-ink-muted)]">
               Capture a thought, get it done.
             </p>
-            <button
-              type="button"
-              onClick={openModal}
-              className="btn-base btn-primary mt-[0.85rem]"
-            >
+            <button type="button" onClick={openModal} className="btn-base btn-primary mt-[0.85rem]">
               Create your first task
             </button>
           </div>
@@ -520,7 +532,7 @@ export default function TasksPage() {
                       <svg
                         className={cn(
                           "size-3 text-[var(--color-ink-faint)] transition-transform duration-[140ms]",
-                          isCollapsed && "-rotate-90",
+                          isCollapsed && "-rotate-90"
                         )}
                         width="12"
                         height="12"
@@ -528,12 +540,19 @@ export default function TasksPage() {
                         fill="none"
                         aria-hidden="true"
                       >
-                        <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                        <path
+                          d="M6 9l6 6 6-6"
+                          stroke="currentColor"
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                        />
                       </svg>
                       <span className="text-[0.85rem] font-semibold tracking-[-0.005em] text-[var(--color-ink)]">
                         {g.name}
                       </span>
-                      <span className="text-[0.82rem] text-[var(--color-ink-faint)]">{items.length}</span>
+                      <span className="text-[0.82rem] text-[var(--color-ink-faint)]">
+                        {items.length}
+                      </span>
                     </button>
                     {g.id === "todo" && (
                       <button
@@ -729,10 +748,7 @@ function NewTaskModal({
             <Dropdown
               trigger={(open) => (
                 <ChipShell open={open}>
-                  <MinWidthChip
-                    icon={<PriorityBars priority="medium" />}
-                    longestLabel="Medium"
-                  >
+                  <MinWidthChip icon={<PriorityBars priority="medium" />} longestLabel="Medium">
                     <PriorityBars priority={priority} />
                     <span className="capitalize">{priority}</span>
                   </MinWidthChip>
@@ -757,7 +773,9 @@ function NewTaskModal({
               trigger={(open, summary) => (
                 <ChipShell open={open}>
                   <CalendarIcon />
-                  <span className={dateRange.start || dateRange.end ? "text-[var(--color-ink)]" : ""}>
+                  <span
+                    className={dateRange.start || dateRange.end ? "text-[var(--color-ink)]" : ""}
+                  >
                     {summary}
                   </span>
                 </ChipShell>
@@ -806,81 +824,6 @@ function NewTaskModal({
   );
 }
 
-function ChipSelect<T extends string>({
-  icon,
-  value,
-  onChange,
-  options,
-  ariaLabel,
-}: {
-  icon: React.ReactNode;
-  value: T;
-  onChange: (v: T) => void;
-  options: { id: T; label: string }[];
-  ariaLabel: string;
-}) {
-  const current = options.find((o) => o.id === value);
-  return (
-    <label
-      className="relative flex cursor-pointer items-center gap-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-2.5 py-1 text-[0.78rem] font-medium text-[var(--color-ink-muted)] transition-colors duration-[140ms] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
-    >
-      {icon}
-      <span className="pointer-events-none">{current?.label}</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-        aria-label={ariaLabel}
-        className="absolute inset-0 w-full cursor-pointer appearance-none bg-transparent opacity-0"
-      >
-        {options.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <svg
-        className="pointer-events-none text-[var(--color-ink-faint)]"
-        width="9"
-        height="9"
-        viewBox="0 0 24 24"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-      </svg>
-    </label>
-  );
-}
-
-function ChipDate({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (s: string) => void;
-}) {
-  const label = value
-    ? new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" })
-    : "Due date";
-  return (
-    <label
-      className={cn(
-        "relative flex cursor-pointer items-center gap-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-2.5 py-1 text-[0.78rem] font-medium text-[var(--color-ink-muted)] transition-colors duration-[140ms] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]",
-        value && "text-[var(--color-ink)]",
-      )}
-    >
-      <CalendarIcon />
-      <span className="pointer-events-none">{label}</span>
-      <input
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="absolute inset-0 w-full cursor-pointer opacity-0"
-      />
-    </label>
-  );
-}
-
 function StatusDot({ status }: { status: TaskStatus }) {
   if (status === "done") {
     return (
@@ -902,7 +845,14 @@ function StatusDot({ status }: { status: TaskStatus }) {
     return (
       <span className="grid size-[14px] place-items-center text-[var(--color-warning)]">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" strokeDasharray="22 14" />
+          <circle
+            cx="12"
+            cy="12"
+            r="9"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeDasharray="22 14"
+          />
         </svg>
       </span>
     );
@@ -920,20 +870,14 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   done: "Done",
 };
 
-function ChipShell({
-  open = false,
-  children,
-}: {
-  open?: boolean;
-  children: React.ReactNode;
-}) {
+function ChipShell({ open = false, children }: { open?: boolean; children: React.ReactNode }) {
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.78rem] font-medium transition-colors duration-[140ms]",
         open
           ? "border-[var(--color-border-strong)] bg-white text-[var(--color-ink)] shadow-[0_1px_3px_rgba(15,23,42,0.1)]"
-          : "border-[var(--color-border-soft)] bg-[var(--color-surface)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]",
+          : "border-[var(--color-border-soft)] bg-[var(--color-surface)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
       )}
     >
       {children}
@@ -1028,16 +972,17 @@ function Dropdown({
     };
   }, [open, placeBelow]);
 
-  const menu = open && pos ? (
-    <div
-      data-dropdown-menu
-      role="listbox"
-      style={{ position: "fixed", top: pos.top, left: pos.left }}
-      className="z-[60] overflow-hidden rounded-lg border border-[var(--color-border-soft)] bg-white py-1 whitespace-nowrap shadow-[var(--shadow-lift)]"
-    >
-      {children}
-    </div>
-  ) : null;
+  const menu =
+    open && pos ? (
+      <div
+        data-dropdown-menu
+        role="listbox"
+        style={{ position: "fixed", top: pos.top, left: pos.left }}
+        className="z-[60] overflow-hidden rounded-lg border border-[var(--color-border-soft)] bg-white py-1 whitespace-nowrap shadow-[var(--shadow-lift)]"
+      >
+        {children}
+      </div>
+    ) : null;
 
   return (
     <>
@@ -1091,7 +1036,7 @@ function MenuItem({
         "grid w-full cursor-pointer grid-cols-[1fr_18px] items-center gap-2 px-3 py-[0.4rem] text-left text-[0.82rem] transition-colors duration-200 ease-out",
         selected
           ? "text-[var(--color-ink)]"
-          : "text-[var(--color-ink)] hover:bg-[rgba(99,102,241,0.06)]",
+          : "text-[var(--color-ink)] hover:bg-[rgba(99,102,241,0.06)]"
       )}
     >
       <span className="flex items-center gap-2">
@@ -1154,7 +1099,7 @@ function TaskRow({
       className={cn(
         "group mx-1 flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors duration-[120ms]",
         "hover:bg-[var(--color-surface-2)]",
-        isEditing && "bg-[var(--color-surface-2)]",
+        isEditing && "bg-[var(--color-surface-2)]"
       )}
     >
       <button
@@ -1163,7 +1108,7 @@ function TaskRow({
         aria-pressed={done}
         className={cn(
           "grid size-[15px] shrink-0 cursor-pointer place-items-center rounded-[3px] border-[1.5px] border-[var(--color-border-strong)] bg-transparent text-transparent transition-[background,border-color,transform,color] duration-[140ms] hover:border-[var(--color-accent)]",
-          done && "border-[var(--color-accent)] bg-[var(--color-accent)] text-white",
+          done && "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
         )}
       >
         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -1208,7 +1153,7 @@ function TaskRow({
             onClick={onStartEdit}
             className={cn(
               "block w-full cursor-text truncate text-left text-[0.92rem] font-medium tracking-[-0.005em] transition-colors duration-[140ms]",
-              done ? "text-[var(--color-ink-faint)] line-through" : "text-[var(--color-ink)]",
+              done ? "text-[var(--color-ink-faint)] line-through" : "text-[var(--color-ink)]"
             )}
           >
             {task.title}
@@ -1229,9 +1174,7 @@ function TaskRow({
       <div
         className={cn(
           "shrink-0",
-          task.flagged
-            ? "opacity-100"
-            : "opacity-0 group-hover:opacity-100",
+          task.flagged ? "opacity-100" : "opacity-0 group-hover:opacity-100"
         )}
       >
         <SmallIconButton
@@ -1274,7 +1217,14 @@ function StatusGlyph({ status }: { status: TaskStatus }) {
     return (
       <span className="grid size-[14px] shrink-0 place-items-center text-[var(--color-warning)]">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" strokeDasharray="22 14" />
+          <circle
+            cx="12"
+            cy="12"
+            r="9"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeDasharray="22 14"
+          />
         </svg>
       </span>
     );
@@ -1321,7 +1271,7 @@ function SmallIconButton({
         active &&
           "border border-[var(--color-danger-border)] bg-[var(--color-danger-soft)] text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)]",
         !active && danger && "hover:text-[var(--color-danger)]",
-        !active && !danger && "hover:text-[var(--color-ink)]",
+        !active && !danger && "hover:text-[var(--color-ink)]"
       )}
     >
       {children}
@@ -1403,7 +1353,12 @@ function PlusSmallIcon() {
 function CloseSmallIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+      <path
+        d="M6 6l12 12M18 6L6 18"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -1450,7 +1405,12 @@ function CalendarIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <rect x="3.5" y="5" width="17" height="15" rx="2" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M3.5 10h17M8 3v4M16 3v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path
+        d="M3.5 10h17M8 3v4M16 3v4"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -1459,12 +1419,7 @@ function FlagIcon({ filled = false }: { filled?: boolean }) {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
       {/* Pole */}
-      <path
-        d="M5 21V4"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+      <path d="M5 21V4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
       {/* Pennant — filled when the task is flagged, outlined otherwise */}
       <path
         d="M5 4 L13 7 L19 7 L19 13 L13 13 L5 10 Z"

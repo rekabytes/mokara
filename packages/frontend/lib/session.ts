@@ -4,9 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { api, type User, isApiError } from "./api";
 
 type SessionState =
-  | { status: "loading" }
-  | { status: "anonymous" }
-  | { status: "authed"; user: User };
+  { status: "loading" } | { status: "anonymous" } | { status: "authed"; user: User };
 
 export function useSession(): SessionState & {
   refresh: () => Promise<void>;

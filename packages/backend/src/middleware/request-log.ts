@@ -12,10 +12,7 @@ export async function requestLogger(c: Context, next: Next) {
   const status = c.res.status;
   const ms = Date.now() - start;
 
-  const color =
-    status >= 500 ? "\x1b[31m" : status >= 400 ? "\x1b[33m" : "\x1b[32m";
+  const color = status >= 500 ? "\x1b[31m" : status >= 400 ? "\x1b[33m" : "\x1b[32m";
   const reset = "\x1b[0m";
-  console.log(
-    `[${c.req.method}] ${path} → ${color}${status}${reset} (${log.duration(ms)})`,
-  );
+  console.log(`[${c.req.method}] ${path} → ${color}${status}${reset} (${log.duration(ms)})`);
 }

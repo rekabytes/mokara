@@ -8,8 +8,18 @@ type DateRange = { start: string | null; end: string | null };
 
 const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
 const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 function toIso(d: Date): string {
@@ -30,7 +40,11 @@ function startOfDay(d: Date): Date {
 }
 
 function isSameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
 }
 
 function formatShort(d: Date): string {
@@ -153,10 +167,6 @@ export function DateRangePicker({
     }
   }
 
-  function clear() {
-    onChange({ start: null, end: null });
-  }
-
   function setToday() {
     onChange({ start: toIso(today), end: toIso(today) });
   }
@@ -174,75 +184,81 @@ export function DateRangePicker({
 
   const month1 = baseMonth;
 
-  const panel = open && pos ? (
-    <div
-      data-date-range-menu
-      role="dialog"
-      aria-label="Pick date range"
-      style={{ position: "fixed", top: pos.top, left: pos.left }}
-      className="z-[60] w-[300px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-white shadow-[var(--shadow-lift)]"
-    >
-      {/* Header: month navigation */}
-      <div className="flex items-center justify-between border-b border-[var(--color-border-soft)] px-3 py-2">
-        <button
-          type="button"
-          onClick={() => setBaseMonth((m) => addMonths(m, -1))}
-          aria-label="Previous month"
-          className="grid size-6 cursor-pointer place-items-center rounded-md text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
-        >
-          <ChevronIcon direction="left" />
-        </button>
-        <div className="text-[0.82rem] font-semibold text-[var(--color-ink)]">
-          {formatMonthYear(month1)}
+  const panel =
+    open && pos ? (
+      <div
+        data-date-range-menu
+        role="dialog"
+        aria-label="Pick date range"
+        style={{ position: "fixed", top: pos.top, left: pos.left }}
+        className="z-[60] w-[300px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-white shadow-[var(--shadow-lift)]"
+      >
+        {/* Header: month navigation */}
+        <div className="flex items-center justify-between border-b border-[var(--color-border-soft)] px-3 py-2">
+          <button
+            type="button"
+            onClick={() => setBaseMonth((m) => addMonths(m, -1))}
+            aria-label="Previous month"
+            className="grid size-6 cursor-pointer place-items-center rounded-md text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+          >
+            <ChevronIcon direction="left" />
+          </button>
+          <div className="text-[0.82rem] font-semibold text-[var(--color-ink)]">
+            {formatMonthYear(month1)}
+          </div>
+          <button
+            type="button"
+            onClick={() => setBaseMonth((m) => addMonths(m, 1))}
+            aria-label="Next month"
+            className="grid size-6 cursor-pointer place-items-center rounded-md text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+          >
+            <ChevronIcon direction="right" />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => setBaseMonth((m) => addMonths(m, 1))}
-          aria-label="Next month"
-          className="grid size-6 cursor-pointer place-items-center rounded-md text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
-        >
-          <ChevronIcon direction="right" />
-        </button>
-      </div>
 
-      {/* Single month */}
-      <div className="px-3 pt-2">
-        <MonthGrid
-          monthDate={month1}
-          today={today}
-          rangeStart={orderedRange?.s ?? null}
-          rangeEnd={orderedRange?.e ?? null}
-          selectedStart={start}
-          selectedEnd={end}
-          preview={preview}
-          hover={hover}
-          onHoverDate={(iso) => setHover(iso)}
-          onPickDay={onPickDay}
-          inRange={inRange}
-        />
-      </div>
-
-      {/* Footer: presets + actions */}
-      <div className="flex items-center justify-between border-t border-[var(--color-border-soft)] px-3 py-2">
-        <div className="flex items-center gap-0.5">
-          <button type="button" onClick={setNoDate} className={footerBtn}>No date</button>
-          <button type="button" onClick={setToday} className={footerBtn}>Today</button>
-          <button type="button" onClick={setNextWeek} className={footerBtn}>+7 days</button>
+        {/* Single month */}
+        <div className="px-3 pt-2">
+          <MonthGrid
+            monthDate={month1}
+            today={today}
+            rangeStart={orderedRange?.s ?? null}
+            rangeEnd={orderedRange?.e ?? null}
+            selectedStart={start}
+            selectedEnd={end}
+            preview={preview}
+            onHoverDate={(iso) => setHover(iso)}
+            onPickDay={onPickDay}
+            inRange={inRange}
+          />
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          disabled={!value.start || !value.end}
-          className={cn(
-            "rounded-md bg-[var(--color-accent)] px-2.5 py-1 text-[0.78rem] font-semibold text-white",
-            (!value.start || !value.end) && "cursor-not-allowed opacity-45",
-          )}
-        >
-          Apply
-        </button>
+
+        {/* Footer: presets + actions */}
+        <div className="flex items-center justify-between border-t border-[var(--color-border-soft)] px-3 py-2">
+          <div className="flex items-center gap-0.5">
+            <button type="button" onClick={setNoDate} className={footerBtn}>
+              No date
+            </button>
+            <button type="button" onClick={setToday} className={footerBtn}>
+              Today
+            </button>
+            <button type="button" onClick={setNextWeek} className={footerBtn}>
+              +7 days
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            disabled={!value.start || !value.end}
+            className={cn(
+              "rounded-md bg-[var(--color-accent)] px-2.5 py-1 text-[0.78rem] font-semibold text-white",
+              (!value.start || !value.end) && "cursor-not-allowed opacity-45"
+            )}
+          >
+            Apply
+          </button>
+        </div>
       </div>
-    </div>
-  ) : null;
+    ) : null;
 
   return (
     <>
@@ -275,7 +291,6 @@ function MonthGrid({
   selectedStart,
   selectedEnd,
   preview,
-  hover,
   onHoverDate,
   onPickDay,
   inRange,
@@ -287,7 +302,6 @@ function MonthGrid({
   selectedStart: Date | null;
   selectedEnd: Date | null;
   preview: Date | null;
-  hover: string | null;
   onHoverDate: (iso: string | null) => void;
   onPickDay: (d: Date) => void;
   inRange: (d: Date) => boolean;
@@ -326,11 +340,20 @@ function MonthGrid({
               onMouseLeave={() => onHoverDate(null)}
               className={cn(
                 "relative h-8 cursor-pointer text-[0.78rem] transition-colors duration-[120ms]",
-                (isStart || isEnd) && "rounded-full bg-[var(--color-accent)] font-semibold text-white",
-                isRange && !(isStart || isEnd) && "bg-[var(--color-accent-soft)] text-[var(--color-ink)]",
-                isPreview && !(isStart || isEnd || isRange) && "bg-[var(--color-accent-soft)] text-[var(--color-ink)]",
-                !isRange && !isStart && !isEnd && !isPreview && "hover:bg-[var(--color-surface-2)] text-[var(--color-ink)]",
-                isToday && !(isStart || isEnd) && "font-semibold text-[var(--color-accent)]",
+                (isStart || isEnd) &&
+                  "rounded-full bg-[var(--color-accent)] font-semibold text-white",
+                isRange &&
+                  !(isStart || isEnd) &&
+                  "bg-[var(--color-accent-soft)] text-[var(--color-ink)]",
+                isPreview &&
+                  !(isStart || isEnd || isRange) &&
+                  "bg-[var(--color-accent-soft)] text-[var(--color-ink)]",
+                !isRange &&
+                  !isStart &&
+                  !isEnd &&
+                  !isPreview &&
+                  "hover:bg-[var(--color-surface-2)] text-[var(--color-ink)]",
+                isToday && !(isStart || isEnd) && "font-semibold text-[var(--color-accent)]"
               )}
             >
               {d.getDate()}

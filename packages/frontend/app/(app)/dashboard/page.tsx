@@ -85,7 +85,7 @@ export default function DashboardPage() {
         hint: "as owner",
       },
     ],
-    [teams, invites.length],
+    [teams, invites.length]
   );
 
   if (session.status !== "authed" || loading) {
@@ -194,10 +194,7 @@ export default function DashboardPage() {
             <p className="m-0 text-[0.9rem] text-[var(--color-ink-muted)]">
               Create your first team and invite up to two teammates.
             </p>
-            <Link
-              href="/teams/new"
-              className="btn-base btn-primary mt-[0.85rem] inline-flex"
-            >
+            <Link href="/teams/new" className="btn-base btn-primary mt-[0.85rem] inline-flex">
               Create a team
             </Link>
           </div>
@@ -210,21 +207,19 @@ export default function DashboardPage() {
                   className={cn(
                     "card flex items-center justify-between px-[1.1rem] py-[0.95rem] text-inherit no-underline",
                     "transition-[transform,box-shadow,border-color] duration-[200ms]",
-                    "hover:-translate-y-[2px] hover:shadow-[var(--shadow-lift)] hover:border-[var(--color-border-strong)]",
+                    "hover:-translate-y-[2px] hover:shadow-[var(--shadow-lift)] hover:border-[var(--color-border-strong)]"
                   )}
                 >
                   <div className="flex flex-col gap-[0.15rem]">
                     <span className="text-[1rem] font-semibold">{t.name}</span>
-                    <span className="text-[0.82rem] text-[var(--color-ink-faint)]">
-                      @{t.slug}
-                    </span>
+                    <span className="text-[0.82rem] text-[var(--color-ink-faint)]">@{t.slug}</span>
                   </div>
                   <span
                     className={cn(
                       "pill",
                       t.role === "owner"
                         ? "bg-[var(--color-progress-soft)] text-[var(--color-progress)]"
-                        : "",
+                        : ""
                     )}
                   >
                     {t.role}
@@ -242,12 +237,7 @@ export default function DashboardPage() {
 function PlusIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M12 5v14M5 12h14"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
     </svg>
   );
 }

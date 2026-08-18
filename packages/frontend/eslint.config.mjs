@@ -8,12 +8,7 @@ import prettierConfig from "eslint-config-prettier";
 /** @type {import("eslint").Linter.Config[]} */
 export default [
   {
-    ignores: [
-      "node_modules/**",
-      ".next/**",
-      "next-env.d.ts",
-      "tsconfig.tsbuildinfo",
-    ],
+    ignores: ["node_modules/**", ".next/**", "next-env.d.ts", "tsconfig.tsbuildinfo"],
   },
   {
     files: ["**/*.{ts,tsx,js,jsx,mjs}"],

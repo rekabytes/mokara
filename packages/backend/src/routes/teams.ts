@@ -16,13 +16,10 @@ teamRoutes.post("/", validate("json", createTeamSchema), async (c) => {
   const userId = c.get("userId");
   const { name } = c.req.valid("json");
 
-  const slug = await ensureUniqueSlug(
-    async (s) => {
-      const found = await prisma.team.findUnique({ where: { slug: s }, select: { id: true } });
-      return Boolean(found);
-    },
-    slugify(name),
-  );
+  const slug = await ensureUniqueSlug(async (s) => {
+    const found = await prisma.team.findUnique({ where: { slug: s }, select: { id: true } });
+    return Boolean(found);
+  }, slugify(name));
 
   const team = await prisma.$transaction(async (tx) => {
     const t = await tx.team.create({
@@ -100,10 +97,7 @@ teamRoutes.post("/:id/leave", async (c) => {
 
   const role = await getTeamRole(userId, teamId);
   if (!role) {
-    return c.json(
-      { error: "not_member", message: "you are not a member of this team" },
-      403,
-    );
+    return c.json({ error: "not_member", message: "you are not a member of this team" }, 403);
   }
 
   if (role === "owner") {
@@ -116,7 +110,7 @@ teamRoutes.post("/:id/leave", async (c) => {
           error: "owner_must_transfer",
           message: "owner cannot leave while other members exist",
         },
-        409,
+        409
       );
     }
   }
@@ -127,77 +121,55 @@ teamRoutes.post("/:id/leave", async (c) => {
   return c.body(null, 204);
 });
 
-teamRoutes.post(
-  "/:id/invitations",
-  validate("json", inviteSchema),
-  async (c) => {
-    const userId = c.get("userId");
-    const username = c.get("username");
-    const teamId = c.req.param("id")!;
-    const { username: inviteeUsername } = c.req.valid("json");
+teamRoutes.post("/:id/invitations", validate("json", inviteSchema), async (c) => {
+  const userId = c.get("userId");
+  const username = c.get("username");
+  const teamId = c.req.param("id")!;
+  const { username: inviteeUsername } = c.req.valid("json");
 
-    const role = await getTeamRole(userId, teamId);
-    if (!role) {
-      return c.json(
-        { error: "forbidden", message: "not a member of this team" },
-        403,
-      );
-    }
-    if (inviteeUsername === username) {
-      return c.json(
-        { error: "cannot_invite_self", message: "cannot invite yourself" },
-        400,
-      );
-    }
+  const role = await getTeamRole(userId, teamId);
+  if (!role) {
+    return c.json({ error: "forbidden", message: "not a member of this team" }, 403);
+  }
+  if (inviteeUsername === username) {
+    return c.json({ error: "cannot_invite_self", message: "cannot invite yourself" }, 400);
+  }
 
-    const invitee = await prisma.user.findUnique({
-      where: { username: inviteeUsername },
-      select: { id: true },
+  const invitee = await prisma.user.findUnique({
+    where: { username: inviteeUsername },
+    select: { id: true },
+  });
+  if (!invitee) {
+    return c.json({ error: "user_not_found", message: "no user with that username" }, 404);
+  }
+
+  const alreadyMember = await prisma.teamMember.count({
+    where: { teamId, userId: invitee.id },
+  });
+  if (alreadyMember > 0) {
+    return c.json({ error: "already_member", message: "user is already a member" }, 409);
+  }
+
+  const memberCount = await prisma.teamMember.count({ where: { teamId } });
+  if (memberCount >= MAX_TEAM_MEMBERS) {
+    return c.json({ error: "team_full", message: "team already has 3 members" }, 409);
+  }
+
+  try {
+    const inv = await prisma.teamInvitation.create({
+      data: { teamId, inviterId: userId, inviteeUsername },
     });
-    if (!invitee) {
-      return c.json(
-        { error: "user_not_found", message: "no user with that username" },
-        404,
-      );
-    }
-
-    const alreadyMember = await prisma.teamMember.count({
-      where: { teamId, userId: invitee.id },
-    });
-    if (alreadyMember > 0) {
-      return c.json(
-        { error: "already_member", message: "user is already a member" },
-        409,
-      );
-    }
-
-    const memberCount = await prisma.teamMember.count({ where: { teamId } });
-    if (memberCount >= MAX_TEAM_MEMBERS) {
-      return c.json(
-        { error: "team_full", message: "team already has 3 members" },
-        409,
-      );
-    }
-
-    try {
-      const inv = await prisma.teamInvitation.create({
-        data: { teamId, inviterId: userId, inviteeUsername },
-      });
-      return c.json({ invitation: toInvitation(inv) }, 201);
-    } catch (e) {
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === "P2002"
-      ) {
-        const target = (e.meta?.target as string[] | undefined) ?? [];
-        if (target.includes("team_invitations_team_pending_unique")) {
-          return c.json(
-            { error: "already_invited", message: "user already has a pending invitation" },
-            409,
-          );
-        }
+    return c.json({ invitation: toInvitation(inv) }, 201);
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      const target = (e.meta?.target as string[] | undefined) ?? [];
+      if (target.includes("team_invitations_team_pending_unique")) {
+        return c.json(
+          { error: "already_invited", message: "user already has a pending invitation" },
+          409
+        );
       }
-      throw e;
     }
-  },
-);
+    throw e;
+  }
+});

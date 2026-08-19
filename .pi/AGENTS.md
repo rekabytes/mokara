@@ -19,6 +19,7 @@
 - 2026-08-18: `cn()` helper uses `clsx` + `twMerge`. Reason: dedupes conflicting Tailwind utilities (matches global reference).
 - 2026-08-18: Priority cycling order is `low → medium → high → low` (clicking the priority bars in the task row). Reason: ascending intensity feels more natural than the default DB order.
 - 2026-08-18: Flag icon = "flag for attention" (toggle), not "cycle priority". Reason: flag metaphor reads correctly; cycle moved to priority badge click.
+- 2026-08-21: Backend dev = `tsx watch --exclude "**/prisma/generated/**" src/index.ts`. Reason: `prisma generate` (runs on every `pnpm typecheck`/`db:generate`) rewrote the generated client inside tsx's watch graph → live backend restarted "randomly" → EADDRINUSE race vs graceful shutdown. `index.ts` also retries bind 5×300ms on EADDRINUSE and calls `closeIdleConnections`/`closeAllConnections` on shutdown so the socket frees before the next child binds.
 
 ## Conventions
 

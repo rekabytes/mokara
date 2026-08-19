@@ -1,4 +1,4 @@
-import { serve } from "@hono/node-server";
+import { serve, type ServerType } from "@hono/node-server";
 import { Hono } from "hono";
 import { corsMiddleware } from "./middleware/cors.ts";
 import { requestLogger } from "./middleware/request-log.ts";
@@ -10,6 +10,12 @@ import { taskRoutes } from "./routes/tasks.ts";
 import { env } from "./env.ts";
 import { connectDB, disconnectDB } from "./db.ts";
 import { log } from "./lib/logger.ts";
+
+// Dev-time restart hardening: tsx watch spawns the next child before the old
+// one has fully drained, so a brief EADDRINUSE window is expected on restarts
+// (and on `prisma generate` touching the watched client pre-exclude flag).
+const BIND_RETRIES = 5;
+const BIND_RETRY_MS = 300;
 
 async function main() {
   // Warn before we even try the DB — only if it actually matters.
@@ -50,19 +56,35 @@ async function main() {
   api.route("/", authed);
   app.route("/api", api);
 
-  // 3) Listen
-  const server = serve({ fetch: app.fetch, port: env.PORT }, () => {
-    log.ok("Server running");
-  });
-  server.on("error", (err) => {
-    log.error(`failed to bind port ${env.PORT}`, err);
-    process.exit(1);
-  });
+  // 3) Listen — retry briefly on EADDRINUSE so a restart race with the
+  //  previous (still-draining) process doesn't kill the new one.
+  let server: ServerType | null = null;
+  const startServer = (attempt: number): void => {
+    const next = serve({ fetch: app.fetch, port: env.PORT }, () => {
+      log.ok("Server running");
+    });
+    next.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE" && attempt < BIND_RETRIES) {
+        log.warn(`port ${env.PORT} busy — retry ${attempt}/${BIND_RETRIES} in ${BIND_RETRY_MS}ms`);
+        setTimeout(() => startServer(attempt + 1), BIND_RETRY_MS);
+        return;
+      }
+      log.error(`failed to bind port ${env.PORT}`, err);
+      process.exit(1);
+    });
+    server = next;
+  };
+  startServer(1);
 
-  // 4) Graceful shutdown
+  // 4) Graceful shutdown — drop idle and live connections immediately so the
+  //  listening socket frees before tsx watch's next child tries to bind.
   const shutdown = async (signal: string) => {
     log.warn(`${signal} received, stopping...`);
-    server.close();
+    const s = server;
+    s?.close();
+    // Narrowed: the Http2 variant of ServerType lacks closeAllConnections.
+    if (s && "closeIdleConnections" in s) s.closeIdleConnections();
+    if (s && "closeAllConnections" in s) s.closeAllConnections();
     await disconnectDB();
     log.ok("Stopped");
     process.exit(0);

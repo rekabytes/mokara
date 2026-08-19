@@ -9,10 +9,16 @@
 - API error contract: `{ error: <code>, message: <text> }`. Zod errors go through `lib/validate.ts` wrapper to keep that shape (frontend `isApiError` requires both keys).
 - Schema additions: `Task.flagged Boolean @default(false)` (toggle via `POST /api/tasks/:id/flag`).
 - CI: `.github/workflows/ci.yml` runs on `push`/`pull_request` to `dev` only — `pnpm typecheck` + `pnpm lint` + `pnpm format`.
-- Prettier at root (`pnpm format` / `pnpm format:fix`), config in `.prettierrc`. ESLint 9 flat config in `packages/frontend/eslint.config.mjs` (frontend-only for now).
+- Prettier at root (`pnpm format` / `pnpm format:fix`), config in `.prettierrc`. `.pi/` excluded via `.prettierignore`. ESLint 9 flat config in `packages/frontend/eslint.config.mjs` (frontend-only for now).
+- PRD-03 (comments + realtime) lives in `docs/development/PRD-03.md`; phases: 1 comments REST+UI (done, uncommitted), 2 SSE infra, 3 live wiring, 4 → PRD-04 notifications.
+- `comments` table: `task_id` (FK, cascade), `author_id`, `body` (1–2000 chars), index `(task_id, created_at)`.
 
 ## Decisions
 
+- 2026-08-21: Realtime = **SSE** (`hono/streaming` `streamSSE`) + Redis pub/sub (`ioredis`), NOT WebSocket. Reason: all push use cases (live comments, notifications) are one-way; SSE is plain HTTP so cookie auth/CORS work unchanged; `EventSource` gives auto-reconnect free. One multiplexed `GET /api/events` channel, `{topic, event, data}` envelope, `user:<id>` topic reserved for notifications (PRD-04).
+- 2026-08-21: Comments = REST CRUD with optimistic UI (temp-id insert, rollback on error); live updates arrive via SSE in phase 3 — REST stays source of truth, refetch-on-reconnect is the recovery path.
+- 2026-08-21: No TanStack Query for comments — kept the existing plain-state pattern; revisit if a third live resource appears.
+- 2026-08-21: Drawer body restructured to flex column; comments list is the drawer's **only** scroll region (title/description/chips stay fixed). Author-only edit/delete, hard delete with inline confirm, oldest-first, no pagination (3-member teams).
 - 2026-08-18: Replaced Go+Gin backend with Hono+TS. JSON shapes and cookie name unchanged so frontend stayed untouched. Reason: shared TS stack, faster iteration, single language.
 - 2026-08-18: Skipped `ioredis` despite global reference. Reason: no caching use case yet.
 - 2026-08-18: Combined root `dev` uses `pnpm -r --parallel --filter ... run dev` (not `&`). Reason: portable across platforms.
@@ -23,7 +29,9 @@
 
 ## Conventions
 
-- Response shape: snake_case JSON decoupled from Prisma's camelCase models via `lib/types.ts` mappers (`toUser`, `toTeam`, `toTask`, `toInvitation`).
+- Response shape: snake_case JSON decoupled from Prisma's camelCase models via `lib/types.ts` mappers (`toUser`, `toTeam`, `toTask`, `toInvitation`, `toComment`).
+- PRD-03 endpoints wrap payloads: `{ comments: [...] }` / `{ comment: {...} }` (older task/team endpoints return bare objects/arrays — don't "fix" either side).
+- `routes/comments.ts`: list/create under `/tasks/:id/comments`, edit/delete under `/comments/:id`; all need team membership, PATCH/DELETE additionally author-only.
 - Workspace import: backend uses deep path `@mokara/db/prisma/generated/client` (db package has no `exports` field).
 - Cookie auth: `Secure` flag only in `ENV=production`. SameSite=Lax, Path=/, HttpOnly.
 - Postgres trigger / partial-index errors are matched on message string (`"team_full"`, `"team_invitations_team_pending_unique"`) — robust to adapter wrapping.
@@ -51,7 +59,7 @@
 - `packages/backend/src/lib/types.ts` — `toUser` / `toTeam` / `toTask` / `toInvitation` snake_case mappers
 - `packages/backend/src/lib/logger.ts` — tiny timestamp-free logger (`✓ Connected to database`, `[GET] /api/me → 200 (3ms)`)
 - `packages/backend/src/lib/jwt.ts` — `jose` HS256 sign/verify, `mokara_token` cookie helpers
-- `packages/backend/src/routes/{auth,teams,invitations,tasks}.ts` — all API routes
+- `packages/backend/src/routes/{auth,teams,invitations,tasks,comments}.ts` — all API routes
 - `packages/frontend/lib/api.ts` — typed client (`Task`, `Team`, `TeamInvitation`, `User`); `isApiError` requires `{ error, message, status }`
 - `packages/frontend/lib/cn.ts` — `clsx + twMerge`
 - `packages/frontend/app/(app)/tasks/page.tsx` — task list + new-task modal (~1400 lines, the bulk of the FE)

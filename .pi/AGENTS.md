@@ -41,6 +41,8 @@
 - **Don't jump to conclusions on UI feedback.** "The selection is changing" — read screenshots first, ask which concern (selection visual? selection state? container size?). The user is testing whether you'll fold under pressure or push back on a wrong assumption.
 - **Don't make speculative changes to adjacent code** when one targeted fix is asked for. If asked to fix the dropdown, don't also touch the chip / button / focus styles. Smaller diffs review better.
 - **Don't push to `main` (or any branch).** `git push` is in the ASK tier — wait for the user.
+- **Don't reach for `h-screen` to "lock to viewport" when the page lives inside a padded container.** `h-screen` (= 100dvh) inside `<main className="... pt-X pb-Y">` overflows by `X+Y` — the body scrolls and content below the fold gets clipped. Compute the page's height against the actual available viewport: `h-[calc(100dvh-Xrem)]` (and add a responsive variant if the parent's padding changes at a breakpoint).
+- **Don't put `box-shadow` + `border-radius` on a child of an `overflow-hidden` wrapper.** The wrapper clips the child's shadow and rounded corners can look squashed at the clip edge — the panel reads as pasted on with hard edges. Move the visual look (bg/border/radius/shadow) onto the wrapper itself; an element's *own* shadow isn't clipped by its own overflow.
 
 ## File map (cheat sheet)
 

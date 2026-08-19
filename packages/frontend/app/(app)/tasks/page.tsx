@@ -423,10 +423,12 @@ export default function TasksPage() {
   }
 
   return (
-    // h-screen + overflow-hidden locks the page to viewport so the user
-    // never has to scroll the page itself. Scroll lives inside the task
-    // list (when many tasks) — not in the drawer, not on the page.
-    <div className="flex h-screen flex-col overflow-hidden">
+    // The page lives inside AppShell's <main>, which adds pt-4 + pb-16
+    // (pt-[4rem] on small screens) — so lock to viewport MINUS that
+    // padding instead of raw h-screen, otherwise the body scrolls and
+    // the drawer's bottom lands below the fold. Scroll lives inside the
+    // task list (when many tasks) — not in the drawer, not on the page.
+    <div className="flex h-[calc(100dvh-5rem)] max-[800px]:h-[calc(100dvh-8rem)] flex-col overflow-hidden">
       {/* Top bar: breadcrumb + actions */}
       <div className="flex items-center justify-between border-b border-[var(--color-border-soft)] py-1">
         <div className="flex items-center gap-[0.4rem] text-[0.92rem] font-semibold">
@@ -533,7 +535,7 @@ export default function TasksPage() {
           bounded max-h and scrolls internally. No page-level scroll, no
           drawer scroll. */}
       <div className="@container flex min-h-0 flex-1 items-start overflow-hidden">
-        <div className="card flex min-h-0 max-h-[calc(100dvh-7rem)] flex-1 min-w-0 flex-col overflow-hidden">
+        <div className="card flex min-h-0 max-h-[calc(100dvh-12rem)] max-[800px]:max-h-[calc(100dvh-15rem)] flex-1 min-w-0 flex-col overflow-hidden">
           {/* Inner scrollable surface — only the task area scrolls. */}
           <div className="flex-1 overflow-y-auto p-1.5">
             {totalTasks === 0 ? (
@@ -646,14 +648,17 @@ export default function TasksPage() {
 
         {selectedTask && (
           // Animating wrapper: width transitions 0 → min(40cqw,640px) which
-          // squeezes the task list smoothly; margin-right animates with it so
+          // squeezes the task list smoothly; margin-left animates with it so
           // the 16px gutter collapses on close (no jump at unmount).
           // overflow-hidden clips the fixed-width card inside, revealing it
-          // from the right edge like a sliding sidebar panel.
+          // from the right edge like a sliding sidebar panel. The `card`
+          // look lives HERE (not on the aside) — an element's own shadow
+          // isn't clipped by its overflow, so the rounded corners + soft
+          // shadow survive the clip.
           <div
             className={cn(
-              "shrink-0 self-stretch overflow-hidden transition-[width,margin] duration-[220ms] ease-out",
-              drawerOpen ? "mr-4 w-[min(40cqw,640px)]" : "mr-0 w-0"
+              "card shrink-0 self-stretch overflow-hidden transition-[width,margin] duration-[220ms] ease-out",
+              drawerOpen ? "ml-4 w-[min(40cqw,640px)]" : "ml-0 w-0"
             )}
           >
             <TaskDetailDrawer
@@ -1615,8 +1620,9 @@ function TaskDetailDrawer({
       // edge, so as the wrapper's width animates 0 → full the card slides
       // in from the right instead of squishing. Body is flex-1 +
       // overflow-hidden + line-clamped title/description — the drawer
-      // never scrolls, regardless of task count.
-      className="card ml-auto flex h-full w-[min(40cqw,640px)] shrink-0 flex-col overflow-hidden"
+      // never scrolls, regardless of task count. Visual card look (bg,
+      // border, radius, shadow) comes from the wrapper.
+      className="ml-auto flex h-full w-[min(40cqw,640px)] shrink-0 flex-col overflow-hidden"
     >
       {/* Top bar */}
       <div className="flex items-center justify-between border-b border-[var(--color-border-soft)] px-4 py-2.5">

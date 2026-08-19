@@ -57,6 +57,16 @@ export type TeamInvitation = {
   responded_at: string | null;
 };
 
+export type Comment = {
+  id: string;
+  task_id: string;
+  author_id: string;
+  author: User;
+  body: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ApiError = {
   error: string;
   message: string;
@@ -174,4 +184,18 @@ export const api = {
     }),
   deleteTask: (id: string) => req<void>(`/tasks/${id}`, { method: "DELETE" }),
   flagTask: (id: string) => req<Task>(`/tasks/${id}/flag`, { method: "POST" }),
+
+  // ---- Comments ----
+  listComments: (taskId: string) => req<{ comments: Comment[] }>(`/tasks/${taskId}/comments`),
+  createComment: (taskId: string, body: string) =>
+    req<{ comment: Comment }>(`/tasks/${taskId}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    }),
+  updateComment: (id: string, body: string) =>
+    req<{ comment: Comment }>(`/comments/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ body }),
+    }),
+  deleteComment: (id: string) => req<void>(`/comments/${id}`, { method: "DELETE" }),
 };

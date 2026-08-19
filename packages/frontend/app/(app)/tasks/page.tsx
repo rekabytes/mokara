@@ -19,6 +19,8 @@ import {
   type TaskStatus,
   type TaskPriority,
   type TeamWithRole,
+  type Comment,
+  type User,
 } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { cn } from "@/lib/cn";
@@ -663,6 +665,7 @@ export default function TasksPage() {
           >
             <TaskDetailDrawer
               task={selectedTask}
+              currentUser={session.status === "authed" ? session.user : null}
               onClose={closeDrawer}
               onUpdate={(patch) => updateTaskField(selectedTask.id, patch)}
               onToggleFlag={() => toggleFlag(selectedTask)}
@@ -1525,12 +1528,14 @@ type DrawerPatch = {
 
 function TaskDetailDrawer({
   task,
+  currentUser,
   onClose,
   onUpdate,
   onToggleFlag,
   onDelete,
 }: {
   task: Task;
+  currentUser: User | null;
   onClose: () => void;
   onUpdate: (patch: DrawerPatch) => void;
   onToggleFlag: () => void;
@@ -1643,10 +1648,10 @@ function TaskDetailDrawer({
         </button>
       </div>
 
-      {/* Body — flex-1 fills drawer minus top bar + footer; overflow-hidden
-          (no scroll). Title/description are line-clamped so they can't
-          push the body taller than its allocation. */}
-      <div className="flex-1 overflow-hidden px-5 py-4">
+      {/* Body — flex column: fixed title/description/chips up top, comments
+          section takes the remaining height (its list is the drawer's only
+          scroll region). Title/description stay line-clamped. */}
+      <div className="flex flex-1 flex-col overflow-hidden px-5 py-4">
         {/* Title — double-click to rename inline */}
         {titleEditing ? (
           <input
@@ -1761,6 +1766,9 @@ function TaskDetailDrawer({
             <span>{task.flagged ? "Flagged" : "Flag"}</span>
           </button>
         </div>
+
+        {/* Comments — fills remaining drawer height (PRD-03 Phase 1) */}
+        <CommentsSection taskId={task.id} currentUser={currentUser} />
       </div>
 
       {/* Footer */}
@@ -1841,5 +1849,389 @@ function DescriptionField({ value, onSave }: { value: string; onSave: (text: str
     >
       {value || "Add description…"}
     </div>
+  );
+}
+
+// ============================================================================
+// Comments (PRD-03). Phase 1 is REST-only; Phase 3 layers live SSE updates
+// onto CommentsSection without changing its public surface.
+// ============================================================================
+
+const AVATAR_COLORS = [
+  "bg-indigo-100 text-indigo-700",
+  "bg-emerald-100 text-emerald-700",
+  "bg-amber-100 text-amber-700",
+  "bg-rose-100 text-rose-700",
+  "bg-sky-100 text-sky-700",
+  "bg-violet-100 text-violet-700",
+];
+
+function avatarClass(username: string): string {
+  let h = 0;
+  for (let i = 0; i < username.length; i++) h = (h * 31 + username.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+function timeAgo(iso: string, now: number): string {
+  const mins = Math.floor(Math.max(0, now - Date.parse(iso)) / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return formatDate(iso);
+}
+
+function wasEdited(c: Comment): boolean {
+  return Math.abs(Date.parse(c.updated_at) - Date.parse(c.created_at)) > 1000;
+}
+
+function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser: User | null }) {
+  const [comments, setComments] = useState<Comment[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Keep relative timestamps honest without refetching.
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!actionError) return;
+    const id = setTimeout(() => setActionError(null), 4_000);
+    return () => clearTimeout(id);
+  }, [actionError]);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await api.listComments(taskId);
+      setComments(res.comments);
+      setLoadFailed(false);
+    } catch {
+      setLoadFailed(true);
+    }
+  }, [taskId]);
+
+  useEffect(() => {
+    setComments(null);
+    load();
+  }, [load]);
+
+  // Keep the newest comment in view as the list grows.
+  const count = comments?.length ?? 0;
+  useEffect(() => {
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [count]);
+
+  async function submit(body: string) {
+    if (!currentUser) return;
+    const iso = new Date().toISOString();
+    // Optimistic insert — feels instant; reconciled (or rolled back) when the
+    // request settles.
+    const temp: Comment = {
+      id: `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      task_id: taskId,
+      author_id: currentUser.id,
+      author: currentUser,
+      body,
+      created_at: iso,
+      updated_at: iso,
+    };
+    setComments((cs) => [...(cs ?? []), temp]);
+    try {
+      const { comment } = await api.createComment(taskId, body);
+      setComments((cs) => (cs ?? []).map((c) => (c.id === temp.id ? comment : c)));
+    } catch (e) {
+      setComments((cs) => (cs ?? []).filter((c) => c.id !== temp.id));
+      setActionError(isApiError(e) ? e.message : "Failed to post comment");
+    }
+  }
+
+  async function saveEdit(id: string, prevBody: string, body: string) {
+    setComments((cs) => (cs ?? []).map((c) => (c.id === id ? { ...c, body } : c)));
+    try {
+      const { comment } = await api.updateComment(id, body);
+      setComments((cs) => (cs ?? []).map((c) => (c.id === id ? comment : c)));
+    } catch (e) {
+      setComments((cs) => (cs ?? []).map((c) => (c.id === id ? { ...c, body: prevBody } : c)));
+      setActionError(isApiError(e) ? e.message : "Failed to save comment");
+    }
+  }
+
+  async function remove(id: string) {
+    const prev = comments ?? [];
+    setComments(prev.filter((c) => c.id !== id));
+    try {
+      await api.deleteComment(id);
+    } catch (e) {
+      setComments(prev);
+      setActionError(isApiError(e) ? e.message : "Failed to delete comment");
+    }
+  }
+
+  return (
+    <section className="mt-5 flex min-h-0 flex-1 flex-col" aria-label="Comments">
+      <div className="flex items-center gap-2">
+        <h3 className="text-[0.74rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-muted)]">
+          Comments
+        </h3>
+        {count > 0 && (
+          <span className="rounded-full bg-[var(--color-surface-2)] px-1.5 py-px text-[0.68rem] font-medium text-[var(--color-ink-faint)]">
+            {count}
+          </span>
+        )}
+      </div>
+
+      {/* The drawer's only scroll region — the discussion can grow without
+          bound while title/description/chips stay fixed above. */}
+      <div ref={listRef} className="mt-2 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+        {loadFailed && comments === null ? (
+          <p className="text-[0.8rem] text-[var(--color-ink-faint)]">
+            Couldn&apos;t load comments.{" "}
+            <button
+              type="button"
+              onClick={load}
+              className="cursor-pointer text-[var(--color-accent)] underline"
+            >
+              Retry
+            </button>
+          </p>
+        ) : comments !== null && comments.length === 0 ? (
+          <p className="text-[0.8rem] text-[var(--color-ink-faint)]">
+            No comments yet. Start the conversation.
+          </p>
+        ) : (
+          (comments ?? []).map((c) => (
+            <CommentRow
+              key={c.id}
+              comment={c}
+              now={now}
+              isOwn={currentUser?.id === c.author_id}
+              onSave={(body) => saveEdit(c.id, c.body, body)}
+              onDelete={() => remove(c.id)}
+            />
+          ))
+        )}
+      </div>
+
+      {actionError && (
+        <p className="mt-1.5 text-[0.74rem] text-[var(--color-danger)]">{actionError}</p>
+      )}
+
+      {currentUser && <CommentComposer onSubmit={submit} />}
+    </section>
+  );
+}
+
+function CommentComposer({ onSubmit }: { onSubmit: (body: string) => void }) {
+  const [draft, setDraft] = useState("");
+
+  function submit() {
+    const body = draft.trim();
+    if (!body) return;
+    onSubmit(body);
+    setDraft("");
+  }
+
+  return (
+    <div className="mt-2.5 border-t border-[var(--color-border-soft)] pt-2.5">
+      <textarea
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            submit();
+          }
+        }}
+        rows={2}
+        placeholder="Add a comment…"
+        className="w-full resize-none rounded-md border border-[var(--color-border-soft)] bg-white px-2.5 py-2 text-[0.85rem] leading-[1.5] text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-faint)] focus:border-[var(--color-accent)]"
+      />
+      <div className="mt-1.5 flex items-center justify-between">
+        <span className="text-[0.7rem] text-[var(--color-ink-faint)]">
+          <kbd className="rounded border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-1 font-mono text-[0.66rem]">
+            ⌘
+          </kbd>
+          +Enter to post
+        </span>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!draft.trim()}
+          className="cursor-pointer rounded-full bg-[var(--color-accent)] px-3 py-1 text-[0.76rem] font-medium text-white disabled:cursor-default disabled:opacity-40"
+        >
+          Comment
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CommentRow({
+  comment,
+  now,
+  isOwn,
+  onSave,
+  onDelete,
+}: {
+  comment: Comment;
+  now: number;
+  isOwn: boolean;
+  onSave: (body: string) => void;
+  onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(comment.body);
+  const [confirming, setConfirming] = useState(false);
+
+  const name = comment.author.display_name || comment.author.username;
+  const initial = name.trim().charAt(0).toUpperCase() || "?";
+
+  function startEdit() {
+    setDraft(comment.body);
+    setEditing(true);
+  }
+
+  function commitEdit() {
+    const body = draft.trim();
+    setEditing(false);
+    if (body && body !== comment.body) onSave(body);
+    else setDraft(comment.body);
+  }
+
+  return (
+    <article className="group flex gap-2.5">
+      <span
+        aria-hidden
+        className={cn(
+          "mt-0.5 grid size-6 shrink-0 place-items-center rounded-full text-[0.68rem] font-semibold",
+          avatarClass(comment.author.username)
+        )}
+      >
+        {initial}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <span className="truncate text-[0.8rem] font-medium text-[var(--color-ink)]">{name}</span>
+          <span className="shrink-0 text-[0.7rem] text-[var(--color-ink-faint)]">
+            {timeAgo(comment.created_at, now)}
+            {wasEdited(comment) && " (edited)"}
+          </span>
+          {/* Own-comment actions — revealed on hover, no fade (decisive). */}
+          {isOwn && !editing && (
+            <span className="ml-auto flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
+              {confirming ? (
+                <span className="flex items-center gap-1 text-[0.7rem] text-[var(--color-danger)]">
+                  Delete?
+                  <button
+                    type="button"
+                    onClick={onDelete}
+                    className="cursor-pointer font-medium underline"
+                  >
+                    Yes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirming(false)}
+                    className="cursor-pointer text-[var(--color-ink-muted)] underline"
+                  >
+                    No
+                  </button>
+                </span>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Edit comment"
+                    onClick={startEdit}
+                    className="grid size-5 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+                  >
+                    <PencilIcon />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Delete comment"
+                    onClick={() => setConfirming(true)}
+                    className="grid size-5 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)]"
+                  >
+                    <TrashIcon />
+                  </button>
+                </>
+              )}
+            </span>
+          )}
+        </div>
+
+        {editing ? (
+          <div className="mt-1">
+            <textarea
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setDraft(comment.body);
+                  setEditing(false);
+                } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  commitEdit();
+                }
+              }}
+              rows={2}
+              className="w-full resize-none rounded-md border border-[var(--color-border-soft)] bg-white px-2 py-1.5 text-[0.83rem] leading-[1.5] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+            />
+            <div className="mt-1 flex gap-2">
+              <button
+                type="button"
+                onClick={commitEdit}
+                disabled={!draft.trim()}
+                className="cursor-pointer rounded-full bg-[var(--color-accent)] px-2.5 py-0.5 text-[0.72rem] font-medium text-white disabled:cursor-default disabled:opacity-40"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDraft(comment.body);
+                  setEditing(false);
+                }}
+                className="cursor-pointer rounded-full px-2.5 py-0.5 text-[0.72rem] font-medium text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-2)]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-0.5 whitespace-pre-wrap break-words text-[0.83rem] leading-[1.5] text-[var(--color-ink)]">
+            {comment.body}
+          </p>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+    </svg>
   );
 }

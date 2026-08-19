@@ -62,6 +62,7 @@ export type Comment = {
   task_id: string;
   author_id: string;
   author: User;
+  parent_id: string | null;
   body: string;
   created_at: string;
   updated_at: string;
@@ -187,10 +188,10 @@ export const api = {
 
   // ---- Comments ----
   listComments: (taskId: string) => req<{ comments: Comment[] }>(`/tasks/${taskId}/comments`),
-  createComment: (taskId: string, body: string) =>
+  createComment: (taskId: string, body: string, parentId?: string) =>
     req<{ comment: Comment }>(`/tasks/${taskId}/comments`, {
       method: "POST",
-      body: JSON.stringify({ body }),
+      body: JSON.stringify({ body, ...(parentId ? { parent_id: parentId } : {}) }),
     }),
   updateComment: (id: string, body: string) =>
     req<{ comment: Comment }>(`/comments/${id}`, {

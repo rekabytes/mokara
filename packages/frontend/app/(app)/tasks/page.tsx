@@ -1892,6 +1892,7 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
   const [loadFailed, setLoadFailed] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [replyTo, setReplyTo] = useState<Comment | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   // Keep relative timestamps honest without refetching.
@@ -1928,8 +1929,9 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
     if (el) el.scrollTop = el.scrollHeight;
   }, [count]);
 
-  async function submit(body: string) {
+  async function submit(body: string, parentId?: string) {
     if (!currentUser) return;
+    setReplyTo(null);
     const iso = new Date().toISOString();
     // Optimistic insert — feels instant; reconciled (or rolled back) when the
     // request settles.
@@ -1938,13 +1940,14 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
       task_id: taskId,
       author_id: currentUser.id,
       author: currentUser,
+      parent_id: parentId ?? null,
       body,
       created_at: iso,
       updated_at: iso,
     };
     setComments((cs) => [...(cs ?? []), temp]);
     try {
-      const { comment } = await api.createComment(taskId, body);
+      const { comment } = await api.createComment(taskId, body, parentId);
       setComments((cs) => (cs ?? []).map((c) => (c.id === temp.id ? comment : c)));
     } catch (e) {
       setComments((cs) => (cs ?? []).filter((c) => c.id !== temp.id));
@@ -1965,7 +1968,9 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
 
   async function remove(id: string) {
     const prev = comments ?? [];
-    setComments(prev.filter((c) => c.id !== id));
+    setReplyTo((r) => (r && (r.id === id || r.parent_id === id) ? null : r));
+    // Mirror the DB cascade locally: deleting a comment drops its replies.
+    setComments(prev.filter((c) => c.id !== id && c.parent_id !== id));
     try {
       await api.deleteComment(id);
     } catch (e) {
@@ -1973,6 +1978,21 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
       setActionError(isApiError(e) ? e.message : "Failed to delete comment");
     }
   }
+
+  // One level of threading: roots in arrival order, replies grouped under
+  // their parent (the backend already flattens replies-to-replies to roots).
+  const threads = useMemo(() => {
+    const cs = comments ?? [];
+    const roots = cs.filter((c) => c.parent_id === null);
+    const repliesByParent = new Map<string, Comment[]>();
+    for (const c of cs) {
+      if (!c.parent_id) continue;
+      const arr = repliesByParent.get(c.parent_id);
+      if (arr) arr.push(c);
+      else repliesByParent.set(c.parent_id, [c]);
+    }
+    return { roots, repliesByParent };
+  }, [comments]);
 
   return (
     <section className="mt-5 flex min-h-0 flex-1 flex-col" aria-label="Comments">
@@ -2006,16 +2026,37 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
             No comments yet. Start the conversation.
           </p>
         ) : (
-          (comments ?? []).map((c) => (
-            <CommentRow
-              key={c.id}
-              comment={c}
-              now={now}
-              isOwn={currentUser?.id === c.author_id}
-              onSave={(body) => saveEdit(c.id, c.body, body)}
-              onDelete={() => remove(c.id)}
-            />
-          ))
+          threads.roots.map((c) => {
+            const replies = threads.repliesByParent.get(c.id) ?? [];
+            return (
+              <div key={c.id}>
+                <CommentRow
+                  comment={c}
+                  now={now}
+                  isOwn={currentUser?.id === c.author_id}
+                  onSave={(body) => saveEdit(c.id, c.body, body)}
+                  onDelete={() => remove(c.id)}
+                  onReply={() => setReplyTo(c)}
+                />
+                {replies.length > 0 && (
+                  <div className="ml-3 mt-3 space-y-3 border-l border-[var(--color-border-soft)] pl-3.5">
+                    {replies.map((r) => (
+                      <CommentRow
+                        key={r.id}
+                        comment={r}
+                        now={now}
+                        isOwn={currentUser?.id === r.author_id}
+                        replyToUsername={c.author.username}
+                        onSave={(body) => saveEdit(r.id, r.body, body)}
+                        onDelete={() => remove(r.id)}
+                        onReply={() => setReplyTo(r)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -2023,34 +2064,91 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
         <p className="mt-1.5 text-[0.74rem] text-[var(--color-danger)]">{actionError}</p>
       )}
 
-      {currentUser && <CommentComposer onSubmit={submit} />}
+      {currentUser && (
+        <CommentComposer
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
+          onSubmit={submit}
+        />
+      )}
     </section>
   );
 }
 
-function CommentComposer({ onSubmit }: { onSubmit: (body: string) => void }) {
+function CommentComposer({
+  replyTo,
+  onCancelReply,
+  onSubmit,
+}: {
+  replyTo: Comment | null;
+  onCancelReply: () => void;
+  onSubmit: (body: string, parentId?: string) => void;
+}) {
   const [draft, setDraft] = useState("");
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // Entering reply mode: prefill the @mention and park the caret after it so
+  // the user immediately sees who they're answering.
+  useEffect(() => {
+    if (!replyTo) return;
+    const mention = `@${replyTo.author.username} `;
+    setDraft(mention);
+    requestAnimationFrame(() => {
+      const el = taRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(mention.length, mention.length);
+    });
+  }, [replyTo]);
 
   function submit() {
     const body = draft.trim();
     if (!body) return;
-    onSubmit(body);
+    // Threading is one level deep — replying to a reply targets the root.
+    onSubmit(body, replyTo ? (replyTo.parent_id ?? replyTo.id) : undefined);
+    setDraft("");
+  }
+
+  function cancelReply() {
+    onCancelReply();
     setDraft("");
   }
 
   return (
     <div className="mt-2.5 border-t border-[var(--color-border-soft)] pt-2.5">
+      {replyTo && (
+        <div className="mb-1.5 flex items-center justify-between rounded-md bg-[var(--color-surface)] px-2.5 py-1.5">
+          <span className="truncate text-[0.72rem] text-[var(--color-ink-muted)]">
+            Replying to{" "}
+            <span className="font-medium text-[var(--color-accent)]">
+              @{replyTo.author.username}
+            </span>
+          </span>
+          <button
+            type="button"
+            aria-label="Cancel reply"
+            onClick={cancelReply}
+            className="grid size-5 shrink-0 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+          >
+            <CloseSmallIcon />
+          </button>
+        </div>
+      )}
       <textarea
+        ref={taRef}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
             submit();
+          } else if (e.key === "Escape" && replyTo) {
+            e.preventDefault();
+            cancelReply();
           }
         }}
         rows={2}
-        placeholder="Add a comment…"
+        placeholder={replyTo ? `Reply to @${replyTo.author.username}…` : "Add a comment…"}
         className="w-full resize-none rounded-md border border-[var(--color-border-soft)] bg-white px-2.5 py-2 text-[0.85rem] leading-[1.5] text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-faint)] focus:border-[var(--color-accent)]"
       />
       <div className="mt-1.5 flex items-center justify-between">
@@ -2077,14 +2175,18 @@ function CommentRow({
   comment,
   now,
   isOwn,
+  replyToUsername,
   onSave,
   onDelete,
+  onReply,
 }: {
   comment: Comment;
   now: number;
   isOwn: boolean;
+  replyToUsername?: string;
   onSave: (body: string) => void;
   onDelete: () => void;
+  onReply: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(comment.body);
@@ -2123,8 +2225,9 @@ function CommentRow({
             {timeAgo(comment.created_at, now)}
             {wasEdited(comment) && " (edited)"}
           </span>
-          {/* Own-comment actions — revealed on hover, no fade (decisive). */}
-          {isOwn && !editing && (
+          {/* Row actions — revealed on hover, no fade (decisive). Reply is
+              for everyone; edit/delete only on own comments. */}
+          {!editing && (
             <span className="ml-auto flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
               {confirming ? (
                 <span className="flex items-center gap-1 text-[0.7rem] text-[var(--color-danger)]">
@@ -2148,20 +2251,32 @@ function CommentRow({
                 <>
                   <button
                     type="button"
-                    aria-label="Edit comment"
-                    onClick={startEdit}
+                    aria-label="Reply to comment"
+                    onClick={onReply}
                     className="grid size-5 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
                   >
-                    <PencilIcon />
+                    <ReplyIcon />
                   </button>
-                  <button
-                    type="button"
-                    aria-label="Delete comment"
-                    onClick={() => setConfirming(true)}
-                    className="grid size-5 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)]"
-                  >
-                    <TrashIcon />
-                  </button>
+                  {isOwn && (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="Edit comment"
+                        onClick={startEdit}
+                        className="grid size-5 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+                      >
+                        <PencilIcon />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Delete comment"
+                        onClick={() => setConfirming(true)}
+                        className="grid size-5 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)]"
+                      >
+                        <TrashIcon />
+                      </button>
+                    </>
+                  )}
                 </>
               )}
             </span>
@@ -2209,12 +2324,41 @@ function CommentRow({
             </div>
           </div>
         ) : (
-          <p className="mt-0.5 whitespace-pre-wrap break-words text-[0.83rem] leading-[1.5] text-[var(--color-ink)]">
-            {comment.body}
-          </p>
+          <>
+            {/* Linkage chip — makes the reply's parent explicit, not just
+                implied by indentation. */}
+            {replyToUsername && (
+              <p className="mt-0.5 text-[0.7rem] text-[var(--color-ink-faint)]">
+                ↳ replying to{" "}
+                <span className="font-medium text-[var(--color-accent)]">@{replyToUsername}</span>
+              </p>
+            )}
+            <p className="mt-0.5 whitespace-pre-wrap break-words text-[0.83rem] leading-[1.5] text-[var(--color-ink)]">
+              {comment.body}
+            </p>
+          </>
         )}
       </div>
     </article>
+  );
+}
+
+function ReplyIcon() {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <polyline points="9 17 4 12 9 7" />
+      <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+    </svg>
   );
 }
 

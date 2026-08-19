@@ -64,3 +64,12 @@ export const updateTaskSchema = z
     due_date: isoDate,
   })
   .strict();
+
+// Shared by create and update — a PATCH without a new body is meaningless.
+export const commentSchema = z.object({
+  body: z
+    .string()
+    .trim()
+    .min(1, "comment body is required")
+    .max(2000, "comment body must be 2000 characters or fewer"),
+});

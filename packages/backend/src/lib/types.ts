@@ -8,6 +8,7 @@ import type {
   Team as PrismaTeam,
   TeamMember as PrismaTeamMember,
   TeamInvitation as PrismaTeamInvitation,
+  Comment as PrismaComment,
 } from "@mokara/db/prisma/generated/client";
 
 export type UserResponse = {
@@ -62,6 +63,16 @@ export type TaskResponse = {
   updated_at: string;
 };
 
+export type CommentResponse = {
+  id: string;
+  task_id: string;
+  author_id: string;
+  author: UserResponse;
+  body: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export function toUser(
   u: Pick<PrismaUser, "id" | "username" | "displayName" | "createdAt">
 ): UserResponse {
@@ -112,6 +123,22 @@ export function toInvitation(
     created_at: inv.createdAt.toISOString(),
     expires_at: inv.expiresAt.toISOString(),
     responded_at: inv.respondedAt ? inv.respondedAt.toISOString() : null,
+  };
+}
+
+export function toComment(
+  c: PrismaComment & {
+    author: Pick<PrismaUser, "id" | "username" | "displayName" | "createdAt">;
+  }
+): CommentResponse {
+  return {
+    id: c.id,
+    task_id: c.taskId,
+    author_id: c.authorId,
+    author: toUser(c.author),
+    body: c.body,
+    created_at: c.createdAt.toISOString(),
+    updated_at: c.updatedAt.toISOString(),
   };
 }
 

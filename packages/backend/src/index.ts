@@ -7,6 +7,7 @@ import { authRoutes, meHandler } from "./routes/auth.ts";
 import { teamRoutes } from "./routes/teams.ts";
 import { invitationRoutes } from "./routes/invitations.ts";
 import { taskRoutes } from "./routes/tasks.ts";
+import { commentRoutes } from "./routes/comments.ts";
 import { env } from "./env.ts";
 import { connectDB, disconnectDB } from "./db.ts";
 import { log } from "./lib/logger.ts";
@@ -52,6 +53,7 @@ async function main() {
   authed.route("/teams", teamRoutes);
   authed.route("/invitations", invitationRoutes);
   authed.route("/", taskRoutes);
+  authed.route("/", commentRoutes);
 
   api.route("/", authed);
   app.route("/api", api);

@@ -65,11 +65,21 @@ export const updateTaskSchema = z
   })
   .strict();
 
-// Shared by create and update — a PATCH without a new body is meaningless.
+// Body rules shared by create and update — a PATCH without a new body is
+// meaningless.
+const commentBody = z
+  .string()
+  .trim()
+  .min(1, "comment body is required")
+  .max(2000, "comment body must be 2000 characters or fewer");
+
+export const createCommentSchema = z.object({
+  body: commentBody,
+  // Optional reply target; must be a comment on the same task (checked in the
+  // route). Replies to replies are flattened to the thread root there too.
+  parent_id: z.uuid().optional(),
+});
+
 export const commentSchema = z.object({
-  body: z
-    .string()
-    .trim()
-    .min(1, "comment body is required")
-    .max(2000, "comment body must be 2000 characters or fewer"),
+  body: commentBody,
 });

@@ -68,6 +68,7 @@ export type CommentResponse = {
   task_id: string;
   author_id: string;
   author: UserResponse;
+  parent_id: string | null;
   body: string;
   created_at: string;
   updated_at: string;
@@ -136,6 +137,7 @@ export function toComment(
     task_id: c.taskId,
     author_id: c.authorId,
     author: toUser(c.author),
+    parent_id: c.parentId,
     body: c.body,
     created_at: c.createdAt.toISOString(),
     updated_at: c.updatedAt.toISOString(),

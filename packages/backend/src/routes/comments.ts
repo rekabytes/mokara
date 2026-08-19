@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { prisma } from "../db.ts";
-import { commentSchema } from "../lib/validation.ts";
+import { commentSchema, createCommentSchema } from "../lib/validation.ts";
 import { validate } from "../lib/validate.ts";
 import { getTeamRole } from "../lib/team-membership.ts";
 import { toComment } from "../lib/types.ts";
@@ -40,7 +40,7 @@ commentRoutes.get("/tasks/:id/comments", async (c) => {
   return c.json({ comments: comments.map(toComment) });
 });
 
-commentRoutes.post("/tasks/:id/comments", validate("json", commentSchema), async (c) => {
+commentRoutes.post("/tasks/:id/comments", validate("json", createCommentSchema), async (c) => {
   const userId = c.get("userId");
   const taskId = c.req.param("id")!;
 
@@ -58,8 +58,26 @@ commentRoutes.post("/tasks/:id/comments", validate("json", commentSchema), async
   }
 
   const input = c.req.valid("json");
+
+  // Reply target must exist on THIS task. Threading is one level deep: a
+  // reply to a reply attaches to the thread root instead.
+  let parentId = input.parent_id ?? null;
+  if (parentId) {
+    const parent = await prisma.comment.findUnique({
+      where: { id: parentId },
+      select: { taskId: true, parentId: true },
+    });
+    if (!parent || parent.taskId !== taskId) {
+      return c.json(
+        { error: "invalid_input", message: "parent comment not found on this task" },
+        400
+      );
+    }
+    if (parent.parentId) parentId = parent.parentId;
+  }
+
   const comment = await prisma.comment.create({
-    data: { taskId, authorId: userId, body: input.body },
+    data: { taskId, authorId: userId, parentId, body: input.body },
     include: authorInclude,
   });
   return c.json({ comment: toComment(comment) }, 201);

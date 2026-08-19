@@ -27,6 +27,10 @@ type Filter = "active" | "today" | "week" | "done";
 type Sort = "manual" | "priority" | "due";
 type GroupId = "todo" | "in_progress" | "done";
 
+// Duration of the drawer slide-in / list-squeeze transition (ms). Kept in
+// sync with the `duration-[220ms]` classes on the drawer wrapper below.
+const DRAWER_ANIM_MS = 220;
+
 const FILTERS: { id: Filter; label: string }[] = [
   { id: "active", label: "Active" },
   { id: "today", label: "Today" },
@@ -145,8 +149,13 @@ export default function TasksPage() {
   const [creating, setCreating] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  // Drives the drawer slide-in/squeeze animation. `selectedTaskId` owns the
+  // data; `drawerOpen` owns the visual state. On close we flip drawerOpen
+  // first, then clear selectedTaskId after the transition so the drawer
+  // stays mounted while it animates out.
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (session.status !== "authed") return;
@@ -283,44 +292,68 @@ export default function TasksPage() {
     try {
       await api.deleteTask(id);
       setTasks((prev) => prev.filter((x) => x.id !== id));
+      // selectedTask is derived from `tasks`, so the drawer would unmount
+      // instantly mid-animation — close it synchronously instead.
+      if (selectedTaskId === id) {
+        if (drawerCloseTimer.current) {
+          clearTimeout(drawerCloseTimer.current);
+          drawerCloseTimer.current = null;
+        }
+        setDrawerOpen(false);
+        setSelectedTaskId(null);
+      }
     } catch (e: unknown) {
       setError(isApiError(e) ? e.message : "Failed to delete task");
     }
   }
 
-  function startEdit(t: Task) {
-    setEditingId(t.id);
-    setEditTitle(t.title);
-  }
-
-  async function commitEdit() {
-    if (!editingId) return;
-    const title = editTitle.trim();
-    const id = editingId;
-    setEditingId(null);
-    if (!title) {
-      removeTask(id);
-      return;
-    }
-    const original = tasks.find((x) => x.id === id);
-    if (original && original.title === title) return;
+  // Generic field updater for the TaskDetailDrawer. Typed against the
+  // narrower `DrawerPatch` (mirrors the backend's updateTaskSchema) since
+  // `api.updateTask` is typed as Partial<Task> but the backend validator
+  // accepts `description: null` for clearing it, which Partial<Task>
+  // rejects. Flag toggling goes through api.flagTask directly since the
+  // PATCH schema is `.strict()` and rejects unknown keys.
+  async function updateTaskField(id: string, patch: DrawerPatch) {
     try {
-      const updated = await api.updateTask(id, { title });
+      // Cast: api.updateTask is typed Partial<Task> but the backend validator
+      // accepts `description: null` to clear it. The runtime behavior is fine.
+      const updated = await api.updateTask(id, patch as Parameters<typeof api.updateTask>[1]);
       setTasks((prev) => prev.map((x) => (x.id === id ? updated : x)));
     } catch (e: unknown) {
-      setError(isApiError(e) ? e.message : "Failed to rename task");
+      setError(isApiError(e) ? e.message : "Failed to update task");
     }
   }
 
-  function onEditKey(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      commitEdit();
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      setEditingId(null);
+  function openTask(id: string) {
+    // Re-open that raced a pending close — cancel the unmount.
+    if (drawerCloseTimer.current) {
+      clearTimeout(drawerCloseTimer.current);
+      drawerCloseTimer.current = null;
     }
+    const wasVisible = Boolean(selectedTaskId);
+    setSelectedTaskId(id);
+    if (wasVisible) {
+      // Drawer already on screen (open or mid-close): just swap the task.
+      setDrawerOpen(true);
+      return;
+    }
+    // Fresh open: mount at width 0 first, then flip to open on the next
+    // frame so the width/translate transition actually runs.
+    requestAnimationFrame(() => requestAnimationFrame(() => setDrawerOpen(true)));
   }
+
+  function closeDrawer() {
+    setDrawerOpen(false);
+    drawerCloseTimer.current = setTimeout(() => {
+      setSelectedTaskId(null);
+      drawerCloseTimer.current = null;
+    }, DRAWER_ANIM_MS);
+  }
+
+  const selectedTask = useMemo(
+    () => (selectedTaskId ? (tasks.find((t) => t.id === selectedTaskId) ?? null) : null),
+    [selectedTaskId, tasks]
+  );
 
   function toggleGroup(g: GroupId) {
     setCollapsed((prev) => {
@@ -390,7 +423,10 @@ export default function TasksPage() {
   }
 
   return (
-    <div className="flex flex-col">
+    // h-screen + overflow-hidden locks the page to viewport so the user
+    // never has to scroll the page itself. Scroll lives inside the task
+    // list (when many tasks) — not in the drawer, not on the page.
+    <div className="flex h-screen flex-col overflow-hidden">
       {/* Top bar: breadcrumb + actions */}
       <div className="flex items-center justify-between border-b border-[var(--color-border-soft)] py-1">
         <div className="flex items-center gap-[0.4rem] text-[0.92rem] font-semibold">
@@ -487,112 +523,146 @@ export default function TasksPage() {
         </div>
       )}
 
-      {/* Tasks card */}
-      <div className="card overflow-hidden p-1.5">
-        {totalTasks === 0 ? (
-          <div className="flex flex-col items-center px-6 py-14 text-center">
-            <div className="relative mx-auto mb-3 block size-12 rounded-full bg-[var(--color-accent-soft)] before:absolute before:inset-[18px] before:rounded-full before:border-2 before:border-[var(--color-accent)] before:content-['']" />
-            <p className="m-0 text-[0.95rem] font-semibold">No tasks yet</p>
-            <p className="m-0 mt-1 text-[0.88rem] text-[var(--color-ink-muted)]">
-              Capture a thought, get it done.
-            </p>
-            <button type="button" onClick={openModal} className="btn-base btn-primary mt-[0.85rem]">
-              Create your first task
-            </button>
-          </div>
-        ) : totalVisible === 0 ? (
-          <div className="flex flex-col items-center px-6 py-12 text-center">
-            <p className="m-0 text-[0.95rem] font-semibold">
-              {filter === "done"
-                ? "Nothing finished yet"
-                : filter === "today"
-                  ? "Nothing due today"
-                  : filter === "week"
-                    ? "Nothing due this week"
-                    : "No open tasks"}
-            </p>
-            <p className="m-0 mt-1 text-[0.88rem] text-[var(--color-ink-muted)]">
-              Try a different filter or add a new one.
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col">
-            {visibleGroups.map((g) => {
-              const items = visibleByGroup[g.id];
-              const isCollapsed = collapsed.has(g.id);
-              if (items.length === 0) return null;
-              return (
-                <div key={g.id} className="flex flex-col">
-                  <div className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-[var(--color-surface-2)]">
-                    <button
-                      type="button"
-                      onClick={() => toggleGroup(g.id)}
-                      className="flex cursor-pointer items-center gap-1.5"
-                    >
-                      <svg
-                        className={cn(
-                          "size-3 text-[var(--color-ink-faint)] transition-transform duration-[140ms]",
-                          isCollapsed && "-rotate-90"
+      {/* Tasks list + task-detail drawer share a horizontal row. The row is
+          a size container (`@container`) so the drawer's `cqw` width
+          resolves against the row — not the animating drawer wrapper.
+          items-start keeps the task card at its natural (capped) height
+          while the drawer wrapper self-stretches to the row bottom.
+          Page is locked to viewport (see <div> above); the row fills the
+          remaining height with flex-1 + min-h-0. The task card has a
+          bounded max-h and scrolls internally. No page-level scroll, no
+          drawer scroll. */}
+      <div className="@container flex min-h-0 flex-1 items-start overflow-hidden">
+        <div className="card flex min-h-0 max-h-[calc(100dvh-7rem)] flex-1 min-w-0 flex-col overflow-hidden">
+          {/* Inner scrollable surface — only the task area scrolls. */}
+          <div className="flex-1 overflow-y-auto p-1.5">
+            {totalTasks === 0 ? (
+              <div className="flex flex-col items-center px-6 py-14 text-center">
+                <div className="relative mx-auto mb-3 block size-12 rounded-full bg-[var(--color-accent-soft)] before:absolute before:inset-[18px] before:rounded-full before:border-2 before:border-[var(--color-accent)] before:content-['']" />
+                <p className="m-0 text-[0.95rem] font-semibold">No tasks yet</p>
+                <p className="m-0 mt-1 text-[0.88rem] text-[var(--color-ink-muted)]">
+                  Capture a thought, get it done.
+                </p>
+                <button
+                  type="button"
+                  onClick={openModal}
+                  className="btn-base btn-primary mt-[0.85rem]"
+                >
+                  Create your first task
+                </button>
+              </div>
+            ) : totalVisible === 0 ? (
+              <div className="flex flex-col items-center px-6 py-12 text-center">
+                <p className="m-0 text-[0.95rem] font-semibold">
+                  {filter === "done"
+                    ? "Nothing finished yet"
+                    : filter === "today"
+                      ? "Nothing due today"
+                      : filter === "week"
+                        ? "Nothing due this week"
+                        : "No open tasks"}
+                </p>
+                <p className="m-0 mt-1 text-[0.88rem] text-[var(--color-ink-muted)]">
+                  Try a different filter or add a new one.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col">
+                {visibleGroups.map((g) => {
+                  const items = visibleByGroup[g.id];
+                  const isCollapsed = collapsed.has(g.id);
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={g.id} className="flex flex-col">
+                      <div className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-[var(--color-surface-2)]">
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(g.id)}
+                          className="flex cursor-pointer items-center gap-1.5"
+                        >
+                          <svg
+                            className={cn(
+                              "size-3 text-[var(--color-ink-faint)] transition-transform duration-[140ms]",
+                              isCollapsed && "-rotate-90"
+                            )}
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M6 9l6 6 6-6"
+                              stroke="currentColor"
+                              strokeWidth="2.2"
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                          <span className="text-[0.85rem] font-semibold tracking-[-0.005em] text-[var(--color-ink)]">
+                            {g.name}
+                          </span>
+                          <span className="text-[0.82rem] text-[var(--color-ink-faint)]">
+                            {items.length}
+                          </span>
+                        </button>
+                        {g.id === "todo" && (
+                          <button
+                            type="button"
+                            onClick={openModal}
+                            aria-label="New task"
+                            className="grid size-5 cursor-pointer place-items-center text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]"
+                          >
+                            <PlusSmallIcon />
+                          </button>
                         )}
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        aria-hidden="true"
-                      >
-                        <path
-                          d="M6 9l6 6 6-6"
-                          stroke="currentColor"
-                          strokeWidth="2.2"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      <span className="text-[0.85rem] font-semibold tracking-[-0.005em] text-[var(--color-ink)]">
-                        {g.name}
-                      </span>
-                      <span className="text-[0.82rem] text-[var(--color-ink-faint)]">
-                        {items.length}
-                      </span>
-                    </button>
-                    {g.id === "todo" && (
-                      <button
-                        type="button"
-                        onClick={openModal}
-                        aria-label="New task"
-                        className="grid size-5 cursor-pointer place-items-center text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]"
-                      >
-                        <PlusSmallIcon />
-                      </button>
-                    )}
-                  </div>
+                      </div>
 
-                  {!isCollapsed && (
-                    <ul className="m-0 flex list-none flex-col p-0">
-                      {items.map((t) => {
-                        const done = t.status === "done";
-                        return (
-                          <TaskRow
-                            key={t.id}
-                            task={t}
-                            done={done}
-                            isEditing={editingId === t.id}
-                            editTitle={editTitle}
-                            setEditTitle={setEditTitle}
-                            onToggle={() => toggleTask(t)}
-                            onCyclePriority={() => cyclePriority(t)}
-                            onToggleFlag={() => toggleFlag(t)}
-                            onStartEdit={() => startEdit(t)}
-                            onCommitEdit={commitEdit}
-                            onEditKey={onEditKey}
-                            onDelete={() => removeTask(t.id)}
-                          />
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
+                      {!isCollapsed && (
+                        <ul className="m-0 flex list-none flex-col p-0">
+                          {items.map((t) => {
+                            const done = t.status === "done";
+                            return (
+                              <TaskRow
+                                key={t.id}
+                                task={t}
+                                done={done}
+                                onOpen={() => openTask(t.id)}
+                                onToggle={() => toggleTask(t)}
+                                onCyclePriority={() => cyclePriority(t)}
+                                onToggleFlag={() => toggleFlag(t)}
+                                onDelete={() => removeTask(t.id)}
+                              />
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {selectedTask && (
+          // Animating wrapper: width transitions 0 → min(40cqw,640px) which
+          // squeezes the task list smoothly; margin-right animates with it so
+          // the 16px gutter collapses on close (no jump at unmount).
+          // overflow-hidden clips the fixed-width card inside, revealing it
+          // from the right edge like a sliding sidebar panel.
+          <div
+            className={cn(
+              "shrink-0 self-stretch overflow-hidden transition-[width,margin] duration-[220ms] ease-out",
+              drawerOpen ? "mr-4 w-[min(40cqw,640px)]" : "mr-0 w-0"
+            )}
+          >
+            <TaskDetailDrawer
+              task={selectedTask}
+              onClose={closeDrawer}
+              onUpdate={(patch) => updateTaskField(selectedTask.id, patch)}
+              onToggleFlag={() => toggleFlag(selectedTask)}
+              onDelete={() => removeTask(selectedTask.id)}
+            />
           </div>
         )}
       </div>
@@ -1070,40 +1140,33 @@ function MenuItem({
 function TaskRow({
   task,
   done,
-  isEditing,
-  editTitle,
-  setEditTitle,
+  onOpen,
   onToggle,
   onCyclePriority,
   onToggleFlag,
-  onStartEdit,
-  onCommitEdit,
-  onEditKey,
   onDelete,
 }: {
   task: Task;
   done: boolean;
-  isEditing: boolean;
-  editTitle: string;
-  setEditTitle: (s: string) => void;
+  onOpen: () => void;
   onToggle: () => void;
   onCyclePriority: () => void;
   onToggleFlag: () => void;
-  onStartEdit: () => void;
-  onCommitEdit: () => void;
-  onEditKey: (e: KeyboardEvent<HTMLInputElement>) => void;
   onDelete: () => void;
 }) {
   return (
     <li
+      onClick={onOpen}
       className={cn(
-        "group mx-1 flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors duration-[120ms]",
-        "hover:bg-[var(--color-surface-2)]",
-        isEditing && "bg-[var(--color-surface-2)]"
+        "group mx-1 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors duration-[120ms] hover:bg-[var(--color-surface-2)]"
       )}
     >
+      {/* Checkbox — own click handler, stopPropagation so it doesn't open the drawer */}
       <button
-        onClick={onToggle}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
         aria-label={done ? "Mark as not done" : "Mark as done"}
         aria-pressed={done}
         className={cn(
@@ -1122,9 +1185,13 @@ function TaskRow({
         </svg>
       </button>
 
+      {/* Priority — own click handler, stopPropagation */}
       <button
         type="button"
-        onClick={onCyclePriority}
+        onClick={(e) => {
+          e.stopPropagation();
+          onCyclePriority();
+        }}
         aria-label={`Priority: ${task.priority}. Click to cycle.`}
         title={`Priority: ${task.priority} — click to cycle`}
         className="cursor-pointer rounded-md px-1 py-0.5 -mx-1 transition-colors hover:bg-[rgba(99,102,241,0.06)]"
@@ -1138,40 +1205,29 @@ function TaskRow({
 
       <StatusGlyph status={task.status} />
 
+      {/* Title is now a static span — clicking the row opens the drawer */}
       <div className="min-w-0 flex-1">
-        {isEditing ? (
-          <input
-            autoFocus
-            value={editTitle}
-            onChange={(e) => setEditTitle(e.target.value)}
-            onBlur={onCommitEdit}
-            onKeyDown={onEditKey}
-            className="w-full border-0 bg-transparent text-[0.92rem] font-medium text-[var(--color-ink)] outline-none"
-          />
-        ) : (
-          <button
-            onClick={onStartEdit}
-            className={cn(
-              "block w-full cursor-text truncate text-left text-[0.92rem] font-medium tracking-[-0.005em] transition-colors duration-[140ms]",
-              done ? "text-[var(--color-ink-faint)] line-through" : "text-[var(--color-ink)]"
-            )}
-          >
-            {task.title}
-          </button>
-        )}
+        <span
+          className={cn(
+            "block w-full truncate text-[0.92rem] font-medium tracking-[-0.005em] transition-colors duration-[140ms]",
+            done ? "text-[var(--color-ink-faint)] line-through" : "text-[var(--color-ink)]"
+          )}
+        >
+          {task.title}
+        </span>
       </div>
 
-      {task.due_date && !isEditing && (
+      {task.due_date && (
         <span className="shrink-0 font-mono text-[0.74rem] text-[var(--color-ink-faint)]">
           {formatDate(task.due_date)}
         </span>
       )}
 
       {/* Flag: always visible when active (so the red badge persists),
-          otherwise hidden until row hover. No transition, no focus-within
-          linger — click should feel decisive and the icon disappears
-          immediately. */}
+          otherwise hidden until row hover. The wrapper stops click
+          propagation so toggling the flag doesn't open the drawer. */}
       <div
+        onClick={(e) => e.stopPropagation()}
         className={cn(
           "shrink-0",
           task.flagged ? "opacity-100" : "opacity-0 group-hover:opacity-100"
@@ -1187,7 +1243,10 @@ function TaskRow({
       </div>
 
       {/* Trash: always row-hover/focus-only. */}
-      <div className="flex shrink-0 items-center gap-[1px] opacity-0 transition-opacity duration-[120ms] group-hover:opacity-100 focus-within:opacity-100">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="flex shrink-0 items-center gap-[1px] opacity-0 transition-opacity duration-[120ms] group-hover:opacity-100 focus-within:opacity-100"
+      >
         <SmallIconButton label="Delete" onClick={onDelete} danger>
           <TrashIcon />
         </SmallIconButton>
@@ -1444,5 +1503,337 @@ function TrashIcon() {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+// PATCH-safe patch shape — mirrors the backend's updateTaskSchema keys.
+// `flagged` is intentionally excluded (PATCH is .strict()); the flag chip
+// in the drawer goes through `onToggleFlag` -> POST /tasks/:id/flag instead.
+type DrawerPatch = {
+  title?: string;
+  description?: string | null;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  start_date?: string;
+  due_date?: string;
+};
+
+function TaskDetailDrawer({
+  task,
+  onClose,
+  onUpdate,
+  onToggleFlag,
+  onDelete,
+}: {
+  task: Task;
+  onClose: () => void;
+  onUpdate: (patch: DrawerPatch) => void;
+  onToggleFlag: () => void;
+  onDelete: () => void;
+}) {
+  // ---- Title rename (double-click in drawer) ----
+  const [titleEditing, setTitleEditing] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(task.title);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync local draft with the upstream task when it changes — but only when
+  // the input isn't focused, so the user's in-progress typing isn't clobbered.
+  useEffect(() => {
+    if (!titleEditing) setTitleDraft(task.title);
+  }, [task.title, titleEditing]);
+
+  // ---- Date range — mirrored from task so DateRangePicker stays a
+  //      controlled component, and persisted via PATCH on every change. ----
+  const [dateRange, setDateRange] = useState<{ start: string | null; end: string | null }>({
+    start: task.start_date ?? null,
+    end: task.due_date ?? null,
+  });
+  useEffect(() => {
+    setDateRange({ start: task.start_date ?? null, end: task.due_date ?? null });
+  }, [task.start_date, task.due_date]);
+
+  // ---- Global ESC closes the drawer, but only when no input/textarea is
+  //      focused — inputs handle their own ESC semantics locally. ----
+  useEffect(() => {
+    function onKey(e: globalThis.KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      const active = document.activeElement;
+      if (
+        active &&
+        (active.tagName === "INPUT" ||
+          active.tagName === "TEXTAREA" ||
+          (active as HTMLElement).isContentEditable)
+      ) {
+        return;
+      }
+      onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  function startRename() {
+    setTitleDraft(task.title);
+    setTitleEditing(true);
+    requestAnimationFrame(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    });
+  }
+
+  function commitRename() {
+    setTitleEditing(false);
+    const t = titleDraft.trim();
+    if (!t || t === task.title) {
+      setTitleDraft(task.title);
+      return;
+    }
+    onUpdate({ title: t });
+  }
+
+  function cancelRename() {
+    setTitleDraft(task.title);
+    setTitleEditing(false);
+  }
+
+  function onTitleKey(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitRename();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelRename();
+    }
+  }
+
+  return (
+    <aside
+      role="complementary"
+      aria-label="Task detail"
+      // Fixed width in container units (resolves against the row, not the
+      // animating wrapper) + ml-auto pins the card to the wrapper's right
+      // edge, so as the wrapper's width animates 0 → full the card slides
+      // in from the right instead of squishing. Body is flex-1 +
+      // overflow-hidden + line-clamped title/description — the drawer
+      // never scrolls, regardless of task count.
+      className="card ml-auto flex h-full w-[min(40cqw,640px)] shrink-0 flex-col overflow-hidden"
+    >
+      {/* Top bar */}
+      <div className="flex items-center justify-between border-b border-[var(--color-border-soft)] px-4 py-2.5">
+        <div className="flex items-center gap-2 text-[0.85rem]">
+          <span className="block size-2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_4px_var(--color-accent-soft)]" />
+          <span className="text-[var(--color-ink-muted)]">Task</span>
+          <span className="font-mono text-[0.76rem] tracking-[0.02em] text-[var(--color-ink-faint)]">
+            {shortId(task)}
+          </span>
+        </div>
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
+          className="grid size-6 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+        >
+          <CloseSmallIcon />
+        </button>
+      </div>
+
+      {/* Body — flex-1 fills drawer minus top bar + footer; overflow-hidden
+          (no scroll). Title/description are line-clamped so they can't
+          push the body taller than its allocation. */}
+      <div className="flex-1 overflow-hidden px-5 py-4">
+        {/* Title — double-click to rename inline */}
+        {titleEditing ? (
+          <input
+            ref={titleInputRef}
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={onTitleKey}
+            className="block w-full rounded-md border border-[var(--color-border-soft)] bg-white px-2 py-1.5 text-[1.3rem] font-semibold tracking-[-0.012em] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+          />
+        ) : (
+          <h2
+            onDoubleClick={startRename}
+            title="Double-click to rename"
+            className={cn(
+              "cursor-text rounded-md px-1 py-0.5 -mx-1 text-[1.3rem] font-semibold tracking-[-0.012em] transition-colors duration-150 hover:bg-[var(--color-surface-2)] line-clamp-2",
+              task.status === "done"
+                ? "text-[var(--color-ink-faint)] line-through"
+                : "text-[var(--color-ink)]"
+            )}
+          >
+            {task.title}
+          </h2>
+        )}
+
+        {/* Description — click to edit */}
+        <DescriptionField
+          value={task.description ?? ""}
+          onSave={(text) => {
+            const trimmed = text.trim();
+            if (trimmed === (task.description ?? "")) return;
+            onUpdate({ description: trimmed || null });
+          }}
+        />
+
+        {/* Chip row: status / priority / date / flag */}
+        <div className="mt-5 flex flex-wrap items-center gap-1.5">
+          <Dropdown
+            trigger={(open) => (
+              <ChipShell open={open}>
+                <StatusGlyph status={task.status} />
+                <span>{STATUS_LABEL[task.status]}</span>
+                <ChevronIcon />
+              </ChipShell>
+            )}
+          >
+            {(["todo", "in_progress", "done"] as TaskStatus[]).map((s) => (
+              <MenuItem
+                key={s}
+                selected={s === task.status}
+                icon={<StatusGlyph status={s} />}
+                onClick={() => onUpdate({ status: s })}
+              >
+                {STATUS_LABEL[s]}
+              </MenuItem>
+            ))}
+          </Dropdown>
+
+          <Dropdown
+            trigger={(open) => (
+              <ChipShell open={open}>
+                <PriorityBars priority={task.priority} />
+                <span className="capitalize">{task.priority}</span>
+                <ChevronIcon />
+              </ChipShell>
+            )}
+          >
+            {(["low", "medium", "high"] as TaskPriority[]).map((p) => (
+              <MenuItem
+                key={p}
+                selected={p === task.priority}
+                icon={<PriorityBars priority={p} />}
+                onClick={() => onUpdate({ priority: p })}
+              >
+                <span className="capitalize">{p}</span>
+              </MenuItem>
+            ))}
+          </Dropdown>
+
+          <DateRangePicker
+            value={dateRange}
+            onChange={(r) => {
+              setDateRange(r);
+              onUpdate({
+                start_date: r.start ?? undefined,
+                due_date: r.end ?? undefined,
+              });
+            }}
+            trigger={(open, summary) => (
+              <ChipShell open={open}>
+                <CalendarIcon />
+                <span>{summary}</span>
+                <ChevronIcon />
+              </ChipShell>
+            )}
+          />
+
+          {/* Flag chip — uses onToggleFlag (POST /tasks/:id/flag), since
+                PATCH /tasks/:id is .strict() and rejects `flagged`. */}
+          <button
+            type="button"
+            onClick={onToggleFlag}
+            aria-pressed={task.flagged}
+            className={cn(
+              "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.78rem] font-medium transition-colors duration-150",
+              task.flagged
+                ? "border-[var(--color-danger-border)] bg-[var(--color-danger-soft)] text-[var(--color-danger)]"
+                : "border-[var(--color-border-soft)] bg-[var(--color-surface)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+            )}
+          >
+            <FlagIcon filled={task.flagged} />
+            <span>{task.flagged ? "Flagged" : "Flag"}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between border-t border-[var(--color-border-soft)] px-5 py-3">
+        <span className="text-[0.74rem] text-[var(--color-ink-faint)]">
+          Press{" "}
+          <kbd className="rounded border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-1 font-mono text-[0.7rem]">
+            Esc
+          </kbd>{" "}
+          to close
+        </span>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-transparent px-2.5 py-1 text-[0.78rem] font-medium text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)]"
+        >
+          <TrashIcon />
+          Delete
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+function DescriptionField({ value, onSave }: { value: string; onSave: (text: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  // Mirror external value into local draft when not editing.
+  useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [value, editing]);
+
+  function startEdit() {
+    setDraft(value);
+    setEditing(true);
+  }
+
+  function commit() {
+    setEditing(false);
+    if (draft !== value) onSave(draft);
+    else setDraft(value);
+  }
+
+  if (editing) {
+    return (
+      <textarea
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            setDraft(value);
+            setEditing(false);
+          } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            commit();
+          }
+        }}
+        rows={3}
+        placeholder="Add description…"
+        className="mt-3 w-full resize-none rounded-md border border-[var(--color-border-soft)] bg-white px-2.5 py-2 text-[0.92rem] leading-[1.5] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+      />
+    );
+  }
+
+  return (
+    <div
+      onClick={startEdit}
+      // line-clamp-3 keeps a long description from pushing the compact
+      // drawer taller than its content-allocated height (no internal scroll).
+      className={cn(
+        "mt-3 min-h-[2.25rem] cursor-text rounded-md px-2.5 py-1.5 -mx-2 text-[0.92rem] leading-[1.5] transition-colors duration-150 hover:bg-[var(--color-surface-2)] line-clamp-3",
+        value ? "text-[var(--color-ink)]" : "text-[var(--color-ink-faint)]"
+      )}
+    >
+      {value || "Add description…"}
+    </div>
   );
 }

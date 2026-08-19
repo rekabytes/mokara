@@ -21,6 +21,7 @@ model User {
   memberships       TeamMember[]
   invitationsSent   TeamInvitation[]  @relation("Inviter")
   invitationsTarget TeamInvitation[]  @relation("Invitee")
+  comments          Comment[]
 
   @@map("users")
 }
@@ -87,9 +88,25 @@ model Task {
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team     Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  comments Comment[]
 
   @@index([teamId, status])
   @@index([status])
   @@map("tasks")
+}
+
+model Comment {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId    String   @map("task_id") @db.Uuid
+  authorId  String   @map("author_id") @db.Uuid
+  body      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id])
+
+  @@index([taskId, createdAt])
+  @@map("comments")
 }

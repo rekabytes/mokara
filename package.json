@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev:frontend": "pnpm --filter @mokara/frontend dev",
-    "dev:backend": "pnpm --filter @mokara/backend dev",
-    "dev": "pnpm -r --parallel --filter @mokara/backend --filter @mokara/frontend run dev",
+    "dev:frontend": "pnpm db:bootstrap && pnpm --filter @mokara/frontend dev",
+    "dev:backend": "pnpm db:bootstrap && pnpm --filter @mokara/backend dev",
+    "dev": "pnpm db:bootstrap && pnpm -r --parallel --filter @mokara/backend --filter @mokara/frontend run dev",
     "build:frontend": "pnpm --filter @mokara/frontend build",
     "build:backend": "pnpm --filter @mokara/backend build",
     "typecheck:frontend": "pnpm --filter @mokara/frontend typecheck",
@@ -20,6 +20,7 @@
     "db:migrate:deploy": "pnpm --filter @mokara/db migrate:deploy",
     "db:migrate:reset": "pnpm --filter @mokara/db migrate:reset",
     "db:generate": "pnpm --filter @mokara/db generate",
+    "db:bootstrap": "pnpm --filter @mokara/db bootstrap",
     "db:seed": "pnpm --filter @mokara/db seed"
   },
   "packageManager": "pnpm@11.13.0",

@@ -15,6 +15,7 @@
 
 ## Decisions
 
+- 2026-08-21: `pnpm dev` / `dev:backend` / `dev:frontend` chain `pnpm db:bootstrap` first (`prisma migrate deploy && prisma generate`). Reason: fresh checkouts / schema changes no longer need a manual `db:migrate:deploy` + `db:generate` before booting the servers. Note: helper script is `bootstrap` (NOT `setup`) because pnpm 11 reserves `pnpm setup` for its installer helper.
 - 2026-08-21: Realtime = **SSE** (`hono/streaming` `streamSSE`) + Redis pub/sub (`ioredis`), NOT WebSocket. Reason: all push use cases (live comments, notifications) are one-way; SSE is plain HTTP so cookie auth/CORS work unchanged; `EventSource` gives auto-reconnect free. One multiplexed `GET /api/events` channel, `{topic, event, data}` envelope, `user:<id>` topic reserved for notifications (PRD-04).
 - 2026-08-21: Comments = REST CRUD with optimistic UI (temp-id insert, rollback on error); live updates arrive via SSE in phase 3 — REST stays source of truth, refetch-on-reconnect is the recovery path.
 - 2026-08-21: No TanStack Query for comments — kept the existing plain-state pattern; revisit if a third live resource appears.

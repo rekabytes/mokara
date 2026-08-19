@@ -31,7 +31,7 @@
 
 - Response shape: snake_case JSON decoupled from Prisma's camelCase models via `lib/types.ts` mappers (`toUser`, `toTeam`, `toTask`, `toInvitation`, `toComment`).
 - PRD-03 endpoints wrap payloads: `{ comments: [...] }` / `{ comment: {...} }` (older task/team endpoints return bare objects/arrays — don't "fix" either side).
-- `routes/comments.ts`: list/create under `/tasks/:id/comments`, edit/delete under `/comments/:id`; all need team membership, PATCH/DELETE additionally author-only.
+- `routes/comments.ts`: list/create under `/tasks/:id/comments`, edit/delete under `/comments/:id`; all need team membership, PATCH/DELETE additionally author-only. Replies: `parent_id` (1 level — replies to replies flatten to root, enforced backend); delete cascades to replies.
 - Workspace import: backend uses deep path `@mokara/db/prisma/generated/client` (db package has no `exports` field).
 - Cookie auth: `Secure` flag only in `ENV=production`. SameSite=Lax, Path=/, HttpOnly.
 - Postgres trigger / partial-index errors are matched on message string (`"team_full"`, `"team_invitations_team_pending_unique"`) — robust to adapter wrapping.

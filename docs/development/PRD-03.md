@@ -56,16 +56,17 @@ Decision trail (why this shape):
 
 ## 4. Core Features
 
-| #   | Feature              | Description                                                                                                             |
-| --- | -------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| F1  | List comments        | Drawer shows all comments for the open task, oldest first, with author + relative timestamp.                            |
-| F2  | Add comment          | Composer pinned to the bottom of the comments section. Optimistic insert on submit.                                     |
-| F3  | Edit own comment     | Author-only inline edit (same composer pattern). `updated_at` bumps; no edit history.                                   |
-| F4  | Delete own comment   | Author-only hard delete with inline confirm.                                                                            |
-| F5  | Live new comments    | Another member's comment appears in an open drawer within ~1s via SSE.                                                  |
-| F6  | Live edit/delete     | Edits and deletes by others propagate live (body updates / row removal).                                                |
-| F7  | SSE channel          | `GET /api/events` — one multiplexed connection, topic-addressed JSON events, heartbeat keep-alive.                      |
-| F8  | Graceful degradation | If SSE drops: auto-reconnect (`EventSource`), then REST refetch to resync. UI shows nothing special on transient blips. |
+| #   | Feature              | Description                                                                                                                                                  |
+| --- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| F1  | List comments        | Drawer shows all comments for the open task, oldest first, with author + relative timestamp.                                                                 |
+| F2  | Add comment          | Composer pinned to the bottom of the comments section. Optimistic insert on submit.                                                                          |
+| F3  | Edit own comment     | Author-only inline edit (same composer pattern). `updated_at` bumps; no edit history.                                                                        |
+| F4  | Delete own comment   | Author-only hard delete with inline confirm.                                                                                                                 |
+| F5  | Live new comments    | Another member's comment appears in an open drawer within ~1s via SSE.                                                                                       |
+| F6  | Live edit/delete     | Edits and deletes by others propagate live (body updates / row removal).                                                                                     |
+| F7  | SSE channel          | `GET /api/events` — one multiplexed connection, topic-addressed JSON events, heartbeat keep-alive.                                                           |
+| F8  | Graceful degradation | If SSE drops: auto-reconnect (`EventSource`), then REST refetch to resync. UI shows nothing special on transient blips.                                      |
+| F9  | Threaded replies     | Reply to any comment (one level deep): rendered under the parent with a `↳ replying to @user` chip; composer enters reply mode with an `@username ` prefill. |
 
 ## 5. Tech Stack (additions vs PRD-02)
 
@@ -85,14 +86,15 @@ Decision trail (why this shape):
 
 ### `comments` (new table)
 
-| Column       | Type          | Constraints                                  | Notes                                  |
-| ------------ | ------------- | -------------------------------------------- | -------------------------------------- |
-| `id`         | `uuid`        | PK, default `gen_random_uuid()`              |                                        |
-| `task_id`    | `uuid`        | NOT NULL, FK → `tasks(id)` ON DELETE CASCADE | Deleting a task deletes its comments.  |
-| `author_id`  | `uuid`        | NOT NULL, FK → `users(id)`                   | Kept even if author later leaves team. |
-| `body`       | `text`        | NOT NULL                                     | 1–2000 chars after trim.               |
-| `created_at` | `timestamptz` | NOT NULL, default `now()`                    |                                        |
-| `updated_at` | `timestamptz` | NOT NULL, default `now()`                    | Bumped on edit.                        |
+| Column       | Type          | Constraints                                                   | Notes                                     |
+| ------------ | ------------- | ------------------------------------------------------------- | ----------------------------------------- |
+| `id`         | `uuid`        | PK, default `gen_random_uuid()`                               |                                           |
+| `task_id`    | `uuid`        | NOT NULL, FK → `tasks(id)` ON DELETE CASCADE                  | Deleting a task deletes its comments.     |
+| `author_id`  | `uuid`        | NOT NULL, FK → `users(id)`                                    | Kept even if author later leaves team.    |
+| `parent_id`  | `uuid`        | nullable, self-FK → `comments(id)` ON DELETE CASCADE, indexed | Reply target; delete cascades to replies. |
+| `body`       | `text`        | NOT NULL                                                      | 1–2000 chars after trim.                  |
+| `created_at` | `timestamptz` | NOT NULL, default `now()`                                     |                                           |
+| `updated_at` | `timestamptz` | NOT NULL, default `now()`                                     | Bumped on edit.                           |
 
 Indexes: `@@index([task_id, created_at])` — the only query pattern is
 "comments for this task, chronological".
@@ -111,12 +113,12 @@ All require the `mokara_token` cookie. All enforce **membership in the
 task's team** via the existing `getTeamRole()` helper
 (`lib/team-membership.ts`).
 
-| Method | Path                      | Who         | Body / Result                         |
-| ------ | ------------------------- | ----------- | ------------------------------------- |
-| GET    | `/api/tasks/:id/comments` | team member | `{ comments: [...] }` oldest → newest |
-| POST   | `/api/tasks/:id/comments` | team member | `{ body }` → `201 { comment }`        |
-| PATCH  | `/api/comments/:id`       | author only | `{ body }` → `{ comment }`            |
-| DELETE | `/api/comments/:id`       | author only | `204`                                 |
+| Method | Path                      | Who         | Body / Result                                                                                                               |
+| ------ | ------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/tasks/:id/comments` | team member | `{ comments: [...] }` oldest → newest (flat; replies carry `parent_id`)                                                     |
+| POST   | `/api/tasks/:id/comments` | team member | `{ body, parent_id? }` → `201 { comment }`. Parent must be on the same task; replies to replies flatten to the thread root. |
+| PATCH  | `/api/comments/:id`       | author only | `{ body }` → `{ comment }`                                                                                                  |
+| DELETE | `/api/comments/:id`       | author only | `204`                                                                                                                       |
 
 Validation via the existing Zod wrapper (`lib/validate.ts`):
 `body` = string, `.trim()`, `.min(1)`, `.max(2000)`.
@@ -135,6 +137,7 @@ snake_case via a new `toComment()` mapper in `lib/types.ts`:
   "task_id": "…",
   "author_id": "…",
   "author": { "id": "…", "username": "alice", "display_name": "Alice" },
+  "parent_id": null,
   "body": "Ship it 🚀",
   "created_at": "2026-08-21T10:00:00.000Z",
   "updated_at": "2026-08-21T10:00:00.000Z"
@@ -332,17 +335,19 @@ UI.
    read). Flip to newest-first later if it feels wrong; it's one `orderBy`.
 2. **No edit window** — authors can edit/delete forever. Slack-style expiry
    rejected for simplicity.
-3. **2000-char body cap** — arbitrary but sane; no rich text, plain text
+3. **Replies are one level deep** — a reply to a reply attaches to the thread
+   root (backend enforces). Deleting a comment cascades to its replies.
+4. **2000-char body cap** — arbitrary but sane; no rich text, plain text
    with preserved newlines.
-4. **No pagination** — teams cap at 3 members; even heavy usage stays in
+5. **No pagination** — teams cap at 3 members; even heavy usage stays in
    "fetch all" territory. Add cursor pagination if any task crosses ~200
    comments.
-5. **Comment author who left the team** — comment stays, author still
+6. **Comment author who left the team** — comment stays, author still
    renders (join by id), but they can no longer edit/delete (membership
    check fails). Acceptable.
-6. **SSE cookie auth assumes same-site origins** (§9.3). Valid today
+7. **SSE cookie auth assumes same-site origins** (§9.3). Valid today
    (localhost) and in the expected prod layout; ticket fallback documented,
    not built.
-7. **Events are at-most-once in practice** (Redis pub/sub drops messages for
+8. **Events are at-most-once in practice** (Redis pub/sub drops messages for
    disconnected subscribers). That's fine: reconnect-triggered refetch is the
    correctness mechanism; SSE only needs to be _fast_, not _reliable_.

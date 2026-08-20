@@ -74,6 +74,29 @@ export type CommentResponse = {
   updated_at: string;
 };
 
+export type AnalyticsSeriesItem = {
+  date: string;
+  created: number;
+  in_progress: number;
+  completed: number;
+  canceled: number;
+  created_avg: number;
+  in_progress_avg: number;
+  completed_avg: number;
+  canceled_avg: number;
+};
+
+export type AnalyticsResponse = {
+  range: number;
+  series: AnalyticsSeriesItem[];
+  totals: {
+    open: number;
+    in_progress: number;
+    completed: number;
+    canceled: number;
+  };
+};
+
 export function toUser(
   u: Pick<PrismaUser, "id" | "username" | "displayName" | "createdAt">
 ): UserResponse {
@@ -142,6 +165,12 @@ export function toComment(
     created_at: c.createdAt.toISOString(),
     updated_at: c.updatedAt.toISOString(),
   };
+}
+
+export function toAnalytics(
+  a: Omit<AnalyticsResponse, "series"> & { series: AnalyticsSeriesItem[] }
+): AnalyticsResponse {
+  return a;
 }
 
 export function toTask(t: PrismaTask): TaskResponse {

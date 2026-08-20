@@ -28,6 +28,7 @@ const STATUS_PILL: Record<TaskStatus, string> = {
   done: "bg-[var(--color-success-soft)] text-[var(--color-success)]",
   todo: "bg-[var(--color-warning-soft)] text-[var(--color-warning)]",
   in_progress: "bg-[var(--color-progress-soft)] text-[var(--color-progress)]",
+  canceled: "bg-[var(--color-danger-soft)] text-[var(--color-danger)]",
 };
 
 const titleCase = (s: string) => s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());

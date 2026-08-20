@@ -56,6 +56,17 @@ taskRoutes.post("/teams/:id/tasks", validate("json", createTaskSchema), async (c
       dueDate: input.due_date ? new Date(input.due_date) : null,
     },
   });
+  // Activity log: seed the creation event in the same transaction so the
+  // event never outlives (or precedes) the task.
+  await prisma.taskEvent.create({
+    data: {
+      teamId,
+      taskId: task.id,
+      actorId: userId,
+      fromStatus: null,
+      toStatus: task.status,
+    },
+  });
   return c.json(toTask(task), 201);
 });
 
@@ -81,7 +92,7 @@ taskRoutes.patch("/tasks/:id", validate("json", updateTaskSchema), async (c) => 
 
   const existing = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { teamId: true },
+    select: { teamId: true, status: true },
   });
   if (!existing) {
     return c.json({ error: "not_found", message: "task not found" }, 404);
@@ -106,6 +117,21 @@ taskRoutes.patch("/tasks/:id", validate("json", updateTaskSchema), async (c) => 
   }
 
   const task = await prisma.task.update({ where: { id: taskId }, data });
+
+  // Record the transition in the activity log only when the status actually
+  // changes; this keeps the analytics series honest (one event per move).
+  if (patch.status !== undefined && patch.status !== existing.status) {
+    await prisma.taskEvent.create({
+      data: {
+        teamId: existing.teamId,
+        taskId,
+        actorId: userId,
+        fromStatus: existing.status,
+        toStatus: patch.status,
+      },
+    });
+  }
+
   return c.json(toTask(task));
 });
 

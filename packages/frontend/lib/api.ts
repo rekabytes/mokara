@@ -1,6 +1,6 @@
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4200/api";
 
-export type TaskStatus = "todo" | "in_progress" | "done";
+export type TaskStatus = "todo" | "in_progress" | "done" | "canceled";
 export type TaskPriority = "low" | "medium" | "high";
 
 export type Task = {

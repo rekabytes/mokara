@@ -35,7 +35,7 @@ export const respondSchema = z.object({
   action: z.enum(["accept", "decline"]),
 });
 
-export const taskStatusSchema = z.enum(["todo", "in_progress", "done"]);
+export const taskStatusSchema = z.enum(["todo", "in_progress", "done", "canceled"]);
 export const taskPrioritySchema = z.enum(["low", "medium", "high"]);
 
 // Accept RFC3339 datetime strings (with offset) or null/undefined.

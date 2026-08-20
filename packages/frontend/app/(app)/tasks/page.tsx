@@ -27,7 +27,7 @@ import { cn } from "@/lib/cn";
 
 type Filter = "active" | "today" | "week" | "done";
 type Sort = "manual" | "priority" | "due";
-type GroupId = "todo" | "in_progress" | "done";
+type GroupId = "todo" | "in_progress" | "done" | "canceled";
 
 // Duration of the drawer slide-in / list-squeeze transition (ms). Kept in
 // sync with the `duration-[220ms]` classes on the drawer wrapper below.
@@ -50,6 +50,7 @@ const GROUPS: { id: GroupId; name: string }[] = [
   { id: "todo", name: "Todo" },
   { id: "in_progress", name: "In Progress" },
   { id: "done", name: "Done" },
+  { id: "canceled", name: "Canceled" },
 ];
 
 const PRIORITY_BAR_COLOR: Record<TaskPriority, string> = {
@@ -367,10 +368,10 @@ export default function TasksPage() {
   }
 
   const visibleByGroup = useMemo(() => {
-    const buckets: Record<GroupId, Task[]> = { todo: [], in_progress: [], done: [] };
+    const buckets: Record<GroupId, Task[]> = { todo: [], in_progress: [], done: [], canceled: [] };
     let filtered = tasks;
     if (filter === "active") {
-      filtered = filtered.filter((t) => t.status !== "done");
+      filtered = filtered.filter((t) => t.status !== "done" && t.status !== "canceled");
     } else if (filter === "today") {
       filtered = filtered.filter((t) => t.due_date && isToday(t.due_date));
     } else if (filter === "week") {
@@ -812,7 +813,7 @@ function NewTaskModal({
                 </ChipShell>
               )}
             >
-              {(["todo", "in_progress", "done"] as TaskStatus[]).map((s) => (
+              {(["todo", "in_progress", "done", "canceled"] as TaskStatus[]).map((s) => (
                 <MenuItem
                   key={s}
                   selected={s === status}
@@ -946,6 +947,7 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   todo: "Todo",
   in_progress: "In Progress",
   done: "Done",
+  canceled: "Canceled",
 };
 
 function ChipShell({ open = false, children }: { open?: boolean; children: React.ReactNode }) {
@@ -1275,6 +1277,21 @@ function StatusGlyph({ status }: { status: TaskStatus }) {
             strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+    );
+  }
+  if (status === "canceled") {
+    return (
+      <span className="grid size-[14px] shrink-0 place-items-center text-[var(--color-danger)]">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+          <path
+            d="M8.5 8.5l7 7M15.5 8.5l-7 7"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
           />
         </svg>
       </span>
@@ -1698,7 +1715,7 @@ function TaskDetailDrawer({
               </ChipShell>
             )}
           >
-            {(["todo", "in_progress", "done"] as TaskStatus[]).map((s) => (
+            {(["todo", "in_progress", "done", "canceled"] as TaskStatus[]).map((s) => (
               <MenuItem
                 key={s}
                 selected={s === task.status}

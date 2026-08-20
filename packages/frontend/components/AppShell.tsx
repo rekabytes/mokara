@@ -35,6 +35,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const navItems: { href: string; label: string; icon: React.ReactNode }[] = [
     { href: "/tasks", label: "Tasks", icon: <TasksIcon /> },
+    { href: "/analytics", label: "Analytics", icon: <AnalyticsIcon /> },
   ];
 
   return (
@@ -152,6 +153,26 @@ function TasksIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  );
+}
+
+function AnalyticsIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 19V5" />
+      <path d="M4 19h16" />
+      <path d="M8 15l3-4 3 2 4-6" />
     </svg>
   );
 }

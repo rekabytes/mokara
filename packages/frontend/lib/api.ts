@@ -68,6 +68,31 @@ export type Comment = {
   updated_at: string;
 };
 
+export type AnalyticsSeriesItem = {
+  date: string;
+  created: number;
+  in_progress: number;
+  completed: number;
+  canceled: number;
+  created_avg: number;
+  in_progress_avg: number;
+  completed_avg: number;
+  canceled_avg: number;
+};
+
+export type AnalyticsTotals = {
+  open: number;
+  in_progress: number;
+  completed: number;
+  canceled: number;
+};
+
+export type Analytics = {
+  range: number;
+  series: AnalyticsSeriesItem[];
+  totals: AnalyticsTotals;
+};
+
 export type ApiError = {
   error: string;
   message: string;
@@ -199,4 +224,8 @@ export const api = {
       body: JSON.stringify({ body }),
     }),
   deleteComment: (id: string) => req<void>(`/comments/${id}`, { method: "DELETE" }),
+
+  // ---- Analytics ----
+  getAnalytics: (teamId: string, range: 7 | 30 | 90) =>
+    req<Analytics>(`/teams/${teamId}/analytics?range=${range}`),
 };

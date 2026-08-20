@@ -111,10 +111,13 @@ Indexes: `@@index([team_id, created_at])` (the analytics query),
 - `PATCH /tasks/:id` where `status` actually changes → event `(old → new)`
   (the frontend quick-toggle goes through this same PATCH)
 
-**Backfill** (same migration, best-effort, documented as approximate):
+**Backfill** (best-effort, documented as approximate; shipped as two
+migrations — the second added after the first release omitted
+in-progress and that series rendered flat):
 
 - every existing task → `(null → todo)` at `created_at`
 - tasks currently `done` → `(todo → done)` at `updated_at`
+- tasks currently `in_progress` → `(todo → in_progress)` at `updated_at`
 - tasks currently `canceled`… none exist pre-migration; nothing to do
 
 ### Event volume sanity
@@ -262,8 +265,8 @@ before the next begins.
    mode deferred (v2 idea).
 2. **Canceled tasks on the tasks page** — own collapsed group below Done;
    excluded from `active`/`today`/`week` filters.
-3. **Backfill is approximate** — done tasks get a synthesized transition at
-   `updated_at`; pre-migration in-progress history is unknowable. Accepted.
+3. **Backfill is approximate** — done and in-progress tasks get synthesized
+   transitions at `updated_at`; exact pre-log history is unknowable. Accepted.
 4. **Notifications renumbered to PRD-05.**
 5. **Progress bar stays** (it's the Linear-vibe piece; not a stat card).
 6. **Smoothing = monotone** (recharts) over the averaged points — no

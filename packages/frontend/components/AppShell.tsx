@@ -135,7 +135,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      <main className="w-full px-[clamp(1.5rem,4vw,3rem)] pt-4 pb-16 max-[800px]:pt-[4rem]">
+      <main className="w-full min-w-0 px-[clamp(1.5rem,4vw,3rem)] pt-4 pb-16 max-[800px]:pt-[4rem]">
         {children}
       </main>
     </div>

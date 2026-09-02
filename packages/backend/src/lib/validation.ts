@@ -50,7 +50,6 @@ export const createTaskSchema = z.object({
   description: z.string().optional(),
   status: taskStatusSchema.optional(),
   priority: taskPrioritySchema.optional(),
-  start_date: isoDate,
   due_date: isoDate,
 });
 
@@ -60,7 +59,6 @@ export const updateTaskSchema = z
     description: z.string().nullable().optional(),
     status: taskStatusSchema.optional(),
     priority: taskPrioritySchema.optional(),
-    start_date: isoDate,
     due_date: isoDate,
   })
   .strict();

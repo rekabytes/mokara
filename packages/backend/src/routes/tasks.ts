@@ -52,7 +52,6 @@ taskRoutes.post("/teams/:id/tasks", validate("json", createTaskSchema), async (c
       description: input.description ?? null,
       status: input.status ?? "todo",
       priority: input.priority ?? "medium",
-      startDate: input.start_date ? new Date(input.start_date) : null,
       dueDate: input.due_date ? new Date(input.due_date) : null,
     },
   });
@@ -92,7 +91,7 @@ taskRoutes.patch("/tasks/:id", validate("json", updateTaskSchema), async (c) => 
 
   const existing = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { teamId: true, status: true },
+    select: { teamId: true, status: true, dueDate: true },
   });
   if (!existing) {
     return c.json({ error: "not_found", message: "task not found" }, 404);
@@ -109,9 +108,6 @@ taskRoutes.patch("/tasks/:id", validate("json", updateTaskSchema), async (c) => 
   if (patch.description !== undefined) data.description = patch.description;
   if (patch.status !== undefined) data.status = patch.status;
   if (patch.priority !== undefined) data.priority = patch.priority;
-  if (patch.start_date !== undefined) {
-    data.startDate = patch.start_date ? new Date(patch.start_date) : null;
-  }
   if (patch.due_date !== undefined) {
     data.dueDate = patch.due_date ? new Date(patch.due_date) : null;
   }
@@ -130,6 +126,19 @@ taskRoutes.patch("/tasks/:id", validate("json", updateTaskSchema), async (c) => 
         toStatus: patch.status,
       },
     });
+  }
+
+  // Due-date history: log only real changes (set, cleared, or moved) so the
+  // progress analytics can show deadline revisions like "extra time added".
+  if (patch.due_date !== undefined) {
+    const newDue = patch.due_date ? new Date(patch.due_date) : null;
+    const oldTs = existing.dueDate?.getTime() ?? null;
+    const newTs = newDue?.getTime() ?? null;
+    if (oldTs !== newTs) {
+      await prisma.taskDueChange.create({
+        data: { taskId, fromDue: existing.dueDate, toDue: newDue, actorId: userId },
+      });
+    }
   }
 
   return c.json(toTask(task));

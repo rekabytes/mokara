@@ -56,7 +56,6 @@ export type TaskResponse = {
   description: string;
   status: string;
   priority: string;
-  start_date: string | null;
   due_date: string | null;
   flagged: boolean;
   created_at: string;
@@ -80,10 +79,6 @@ export type AnalyticsSeriesItem = {
   in_progress: number;
   completed: number;
   canceled: number;
-  created_avg: number;
-  in_progress_avg: number;
-  completed_avg: number;
-  canceled_avg: number;
 };
 
 export type AnalyticsResponse = {
@@ -181,7 +176,6 @@ export function toTask(t: PrismaTask): TaskResponse {
     description: t.description ?? "",
     status: t.status,
     priority: t.priority,
-    start_date: t.startDate ? t.startDate.toISOString() : null,
     due_date: t.dueDate ? t.dueDate.toISOString() : null,
     flagged: t.flagged,
     created_at: t.createdAt.toISOString(),

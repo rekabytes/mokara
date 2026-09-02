@@ -17,12 +17,13 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  ownedTeams        Team[]            @relation("TeamOwner")
+  ownedTeams        Team[]           @relation("TeamOwner")
   memberships       TeamMember[]
-  invitationsSent   TeamInvitation[]  @relation("Inviter")
-  invitationsTarget TeamInvitation[]  @relation("Invitee")
+  invitationsSent   TeamInvitation[] @relation("Inviter")
+  invitationsTarget TeamInvitation[] @relation("Invitee")
   comments          Comment[]
-  taskEvents        TaskEvent[]       @relation("TaskEventActor")
+  taskEvents        TaskEvent[]      @relation("TaskEventActor")
+  taskDueChanges    TaskDueChange[]  @relation("TaskDueChangeActor")
 
   @@map("users")
 }
@@ -59,14 +60,14 @@ model TeamMember {
 }
 
 model TeamInvitation {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId         String    @map("team_id") @db.Uuid
-  inviterId      String    @map("inviter_id") @db.Uuid
-  inviteeUsername String   @map("invitee_username") @db.Citext
-  status         String    @default("pending")
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  expiresAt      DateTime  @default(dbgenerated("(now() + interval '7 days')")) @map("expires_at") @db.Timestamptz(3)
-  respondedAt    DateTime? @map("responded_at") @db.Timestamptz(3)
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId          String    @map("team_id") @db.Uuid
+  inviterId       String    @map("inviter_id") @db.Uuid
+  inviteeUsername String    @map("invitee_username") @db.Citext
+  status          String    @default("pending")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt       DateTime  @default(dbgenerated("(now() + interval '7 days')")) @map("expires_at") @db.Timestamptz(3)
+  respondedAt     DateTime? @map("responded_at") @db.Timestamptz(3)
 
   team    Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
   inviter User @relation("Inviter", fields: [inviterId], references: [id])
@@ -84,15 +85,15 @@ model Task {
   description String?
   status      String    @default("todo")
   priority    String    @default("medium")
-  startDate   DateTime? @map("start_date") @db.Timestamptz(3)
   dueDate     DateTime? @map("due_date") @db.Timestamptz(3)
   flagged     Boolean   @default(false)
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  team     Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  comments Comment[]
-  events   TaskEvent[]
+  team       Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  comments   Comment[]
+  events     TaskEvent[]
+  dueChanges TaskDueChange[]
 
   @@index([teamId, status])
   @@index([status])
@@ -134,4 +135,21 @@ model TaskEvent {
   @@index([teamId, createdAt])
   @@index([taskId])
   @@map("task_events")
+}
+
+// Due-date history: one row per actual due_date edit, so progress
+// analytics can show "extra time was added" (deadline revisions).
+model TaskDueChange {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId    String    @map("task_id") @db.Uuid
+  fromDue   DateTime? @map("from_due") @db.Timestamptz(3)
+  toDue     DateTime? @map("to_due") @db.Timestamptz(3)
+  actorId   String    @map("actor_id") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  task  Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor User @relation("TaskDueChangeActor", fields: [actorId], references: [id])
+
+  @@index([taskId, createdAt])
+  @@map("task_due_changes")
 }

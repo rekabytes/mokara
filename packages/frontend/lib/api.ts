@@ -10,7 +10,6 @@ export type Task = {
   description: string;
   status: TaskStatus;
   priority: TaskPriority;
-  start_date: string | null;
   due_date: string | null;
   flagged: boolean;
   created_at: string;
@@ -74,10 +73,6 @@ export type AnalyticsSeriesItem = {
   in_progress: number;
   completed: number;
   canceled: number;
-  created_avg: number;
-  in_progress_avg: number;
-  completed_avg: number;
-  canceled_avg: number;
 };
 
 export type AnalyticsTotals = {
@@ -91,6 +86,29 @@ export type Analytics = {
   range: number;
   series: AnalyticsSeriesItem[];
   totals: AnalyticsTotals;
+};
+
+export type ProgressDueChange = {
+  from_due: string | null;
+  to_due: string | null;
+  changed_at: string;
+};
+
+export type ProgressTask = {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  created_at: string;
+  // When work actually started = first in_progress event (null = never
+  // started). Start dates are not user-entered.
+  started_at: string | null;
+  due_date: string;
+  completed_at: string | null;
+  due_changes: ProgressDueChange[];
+};
+
+export type Progress = {
+  tasks: ProgressTask[];
 };
 
 export type ApiError = {
@@ -195,7 +213,6 @@ export const api = {
       description?: string;
       status?: TaskStatus;
       priority?: TaskPriority;
-      start_date?: string;
       due_date?: string;
     }
   ) =>
@@ -226,6 +243,7 @@ export const api = {
   deleteComment: (id: string) => req<void>(`/comments/${id}`, { method: "DELETE" }),
 
   // ---- Analytics ----
-  getAnalytics: (teamId: string, range: 7 | 30 | 90) =>
+  getAnalytics: (teamId: string, range: number) =>
     req<Analytics>(`/teams/${teamId}/analytics?range=${range}`),
+  getProgress: (teamId: string) => req<Progress>(`/teams/${teamId}/progress`),
 };

@@ -10,7 +10,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { createPortal } from "react-dom";
-import { DateRangePicker } from "./DateRangePicker";
+import { DatePicker } from "./DatePicker";
 import { useRouter } from "next/navigation";
 import {
   api,
@@ -145,10 +145,7 @@ export default function TasksPage() {
   const [newDescription, setNewDescription] = useState("");
   const [newPriority, setNewPriority] = useState<TaskPriority>("medium");
   const [newStatus, setNewStatus] = useState<TaskStatus>("todo");
-  const [newDateRange, setNewDateRange] = useState<{ start: string | null; end: string | null }>({
-    start: null,
-    end: null,
-  });
+  const [newDueDate, setNewDueDate] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
@@ -223,8 +220,7 @@ export default function TasksPage() {
         description: newDescription.trim() || undefined,
         priority: newPriority,
         status: newStatus,
-        start_date: newDateRange.start ?? undefined,
-        due_date: newDateRange.end ?? undefined,
+        due_date: newDueDate ?? undefined,
       });
       setTasks((prev) => [created, ...prev]);
       resetAndCloseModal();
@@ -240,7 +236,7 @@ export default function TasksPage() {
     setNewDescription("");
     setNewPriority("medium");
     setNewStatus("todo");
-    setNewDateRange({ start: null, end: null });
+    setNewDueDate(null);
     setModalOpen(true);
     requestAnimationFrame(() => titleInputRef.current?.focus());
   }
@@ -250,7 +246,7 @@ export default function TasksPage() {
     setNewDescription("");
     setNewPriority("medium");
     setNewStatus("todo");
-    setNewDateRange({ start: null, end: null });
+    setNewDueDate(null);
     setModalOpen(false);
   }
 
@@ -686,8 +682,8 @@ export default function TasksPage() {
         setPriority={setNewPriority}
         status={newStatus}
         setStatus={setNewStatus}
-        dateRange={newDateRange}
-        setDateRange={setNewDateRange}
+        dueDate={newDueDate}
+        setDueDate={setNewDueDate}
         creating={creating}
         titleInputRef={titleInputRef}
         onSubmit={createTaskFromModal}
@@ -708,8 +704,8 @@ function NewTaskModal({
   setPriority,
   status,
   setStatus,
-  dateRange,
-  setDateRange,
+  dueDate,
+  setDueDate,
   creating,
   titleInputRef,
   onSubmit,
@@ -725,8 +721,8 @@ function NewTaskModal({
   setPriority: (p: TaskPriority) => void;
   status: TaskStatus;
   setStatus: (s: TaskStatus) => void;
-  dateRange: { start: string | null; end: string | null };
-  setDateRange: (r: { start: string | null; end: string | null }) => void;
+  dueDate: string | null;
+  setDueDate: (iso: string | null) => void;
   creating: boolean;
   titleInputRef: React.RefObject<HTMLInputElement | null>;
   onSubmit: (e: FormEvent) => void;
@@ -846,17 +842,13 @@ function NewTaskModal({
                 </MenuItem>
               ))}
             </Dropdown>
-            <DateRangePicker
-              value={dateRange}
-              onChange={setDateRange}
+            <DatePicker
+              value={dueDate}
+              onChange={setDueDate}
               trigger={(open, summary) => (
                 <ChipShell open={open}>
                   <CalendarIcon />
-                  <span
-                    className={dateRange.start || dateRange.end ? "text-[var(--color-ink)]" : ""}
-                  >
-                    {summary}
-                  </span>
+                  <span className={dueDate ? "text-[var(--color-ink)]" : ""}>{summary}</span>
                 </ChipShell>
               )}
             />
@@ -1539,8 +1531,7 @@ type DrawerPatch = {
   description?: string | null;
   status?: TaskStatus;
   priority?: TaskPriority;
-  start_date?: string;
-  due_date?: string;
+  due_date?: string | null;
 };
 
 function TaskDetailDrawer({
@@ -1569,15 +1560,13 @@ function TaskDetailDrawer({
     if (!titleEditing) setTitleDraft(task.title);
   }, [task.title, titleEditing]);
 
-  // ---- Date range — mirrored from task so DateRangePicker stays a
-  //      controlled component, and persisted via PATCH on every change. ----
-  const [dateRange, setDateRange] = useState<{ start: string | null; end: string | null }>({
-    start: task.start_date ?? null,
-    end: task.due_date ?? null,
-  });
+  // ---- Due date — mirrored from task so DatePicker stays a controlled
+  //      component, and persisted via PATCH on every change. There is no
+  //      start date: work starts when the status moves to in_progress. ----
+  const [dueDate, setDueDate] = useState<string | null>(task.due_date ?? null);
   useEffect(() => {
-    setDateRange({ start: task.start_date ?? null, end: task.due_date ?? null });
-  }, [task.start_date, task.due_date]);
+    setDueDate(task.due_date ?? null);
+  }, [task.due_date]);
 
   // ---- Global ESC closes the drawer, but only when no input/textarea is
   //      focused — inputs handle their own ESC semantics locally. ----
@@ -1748,14 +1737,13 @@ function TaskDetailDrawer({
             ))}
           </Dropdown>
 
-          <DateRangePicker
-            value={dateRange}
-            onChange={(r) => {
-              setDateRange(r);
-              onUpdate({
-                start_date: r.start ?? undefined,
-                due_date: r.end ?? undefined,
-              });
+          <DatePicker
+            value={dueDate}
+            onChange={(iso) => {
+              setDueDate(iso);
+              // null clears the due date (undefined would be dropped by
+              // JSON.stringify and leave the old value in place).
+              onUpdate({ due_date: iso });
             }}
             trigger={(open, summary) => (
               <ChipShell open={open}>

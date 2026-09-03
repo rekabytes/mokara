@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { manualError } from "@/lib/errors";
 import { useAsyncError } from "@/hooks/useAsyncError";
+import { ErrorBanner } from "@/components/ErrorBanner";
 import { useContainers } from "@/lib/containers";
 
 export default function NewTeamPage() {
@@ -70,14 +71,10 @@ export default function NewTeamPage() {
           />
         </label>
 
-        {error && (
-          <div className="mb-4 rounded-[var(--radius-btn)] border border-[var(--color-danger-border)] bg-[rgba(239,68,68,0.08)] px-4 py-[0.7rem] text-[0.88rem] text-[var(--color-danger-ink)]">
-            {error.message}
-          </div>
-        )}
+        <ErrorBanner className="mb-4" message={error?.message} />
 
         <div className="mt-2 flex justify-end gap-2">
-          <Link href="/dashboard" className="btn-base btn-ghost">
+          <Link href="/tasks" className="btn-base btn-ghost">
             Cancel
           </Link>
           <button type="submit" className="btn-base btn-primary" disabled={loading || !name.trim()}>

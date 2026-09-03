@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState, Fragment, type FormEvent } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
 import {
   api,
   type Team,
-  type TeamMember,
-  type TeamInvitation,
+  type TeamDetail,
   type Project,
   type Kpi,
   type KpiProgress,
@@ -15,6 +15,8 @@ import {
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { useContainerMeta } from "@/lib/meta";
 import { useSession } from "@/lib/session";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { collapseVariants, snap, DUR } from "@/lib/motion";
 import { cn } from "@/lib/cn";
 
 // PRD-06: the liaison view — team layer (owner-created, shared) and each
@@ -185,22 +187,37 @@ function LayersPanel({
               ))}
             </Fragment>
           ))}
-          {showArchived &&
-            pgArchived.map((p) => (
-              <LayerRow
-                key={p.id}
-                kind="project"
-                name={p.name}
-                color={p.color}
-                badge="archived"
-                count={String(p.task_count)}
-                archived={true}
-                canManage={p.owner_id === currentUsername || role === "owner"}
-                onRename={(n) => onRename("project", p.id, n)}
-                onArchive={(a) => onArchive(p.id, a)}
-                onDelete={() => onDelete("project", p.id)}
-              />
-            ))}
+          {/* The archived block used to appear and disappear between two
+              renders. `height: "auto"` is measured by framer-motion, so the
+              section opens without a scrollHeight in an effect. */}
+          <AnimatePresence initial={false}>
+            {showArchived && (
+              <motion.ul
+                key="archived-projects"
+                variants={collapseVariants}
+                initial="hidden"
+                animate="visible"
+                exit="hidden"
+                className="m-0 mb-3 flex max-h-[300px] list-none flex-col gap-1.5 overflow-hidden overflow-y-auto p-0"
+              >
+                {pgArchived.map((p) => (
+                  <LayerRow
+                    key={p.id}
+                    kind="project"
+                    name={p.name}
+                    color={p.color}
+                    badge="archived"
+                    count={String(p.task_count)}
+                    archived={true}
+                    canManage={p.owner_id === currentUsername || role === "owner"}
+                    onRename={(n) => onRename("project", p.id, n)}
+                    onArchive={(a) => onArchive(p.id, a)}
+                    onDelete={() => onDelete("project", p.id)}
+                  />
+                ))}
+              </motion.ul>
+            )}
+          </AnimatePresence>
           {projects.length === 0 && (
             <li className="text-[0.8rem] text-[var(--color-ink-faint)]">None yet.</li>
           )}
@@ -395,9 +412,17 @@ function LayerRow({
   }
 
   return (
-    <li
+    <motion.li
+      // `position`, not `layout`: renaming, archiving or deleting a layer
+      // re-sorts these rows, and they now slide to their new slot instead of
+      // jumping. Position-only means the row's width never gets projected
+      // through the list's overflow clip. No enter/exit here on purpose —
+      // these lists render on page load, and a fade-in for every layer would
+      // read as a screensaver, not as feedback.
+      layout="position"
+      transition={snap(DUR.base)}
       className={cn(
-        "group flex items-center gap-2 rounded-[9px] border border-[var(--color-border-soft)] bg-[var(--color-surface-2)] px-2.5 py-1.5 text-[0.84rem]",
+        "group flex items-center gap-2 rounded-[9px] border border-[var(--color-border-soft)] bg-[var(--color-surface-2)] px-2.5 py-1.5 text-[0.84rem] transition-opacity duration-[140ms]",
         archived && "opacity-60"
       )}
     >
@@ -451,7 +476,9 @@ function LayerRow({
               <span className="h-1 w-[110px] shrink-0 overflow-hidden rounded-[999px] bg-[rgba(148,163,184,0.22)]">
                 <span
                   className={cn(
-                    "block h-full rounded-[999px]",
+                    // Same width transition the analytics scorecard uses, so a
+                    // KPI/project bar animates identically on both pages.
+                    "block h-full rounded-[999px] transition-[width] duration-300 ease-out",
                     kind === "project" ? "bg-[var(--color-success)]" : "bg-[var(--color-accent)]"
                   )}
                   style={{ width: `${progressPct}%` }}
@@ -508,7 +535,7 @@ function LayerRow({
           )}
         </>
       )}
-    </li>
+    </motion.li>
   );
 }
 
@@ -624,20 +651,13 @@ function ScopeToggle({
   );
 }
 
-type Detail = {
-  team: Team;
-  role: "owner" | "member";
-  members: TeamMember[];
-  invitations: TeamInvitation[];
-};
-
 export default function TeamDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const teamId = params.id;
   const session = useSession();
 
-  const [detail, setDetail] = useState<Detail | null>(null);
+  const [detail, setDetail] = useState<TeamDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const { error, setError, run } = useAsyncError();
   const { projects, kpis, progress, refresh: refreshMeta } = useContainerMeta(teamId);
@@ -654,12 +674,11 @@ export default function TeamDetailPage() {
   }, [teamId, run, setError]);
 
   useEffect(() => {
-    if (session.status === "anonymous") {
-      router.push("/login");
-      return;
-    }
+    // Server sync only. The `anonymous → /login` half that used to sit here is
+    // gone: AppShell is this page's parent and already redirects during
+    // render, so a signed-out visitor never reaches this effect.
     if (session.status === "authed") load();
-  }, [session.status, load, router]);
+  }, [session.status, load]);
 
   async function invite(e: FormEvent) {
     e.preventDefault();
@@ -678,7 +697,7 @@ export default function TeamDetailPage() {
     if (!confirm("Leave this team?")) return;
     const ok = await run(() => api.leaveTeam(teamId), { fallback: "Failed to leave team" });
     if (ok === null) return;
-    router.push("/dashboard");
+    router.push("/tasks");
     router.refresh();
   }
 
@@ -717,11 +736,7 @@ export default function TeamDetailPage() {
         </button>
       </div>
 
-      {error && (
-        <div className="mb-4 rounded-[var(--radius-btn)] border border-[var(--color-danger-border)] bg-[rgba(239,68,68,0.08)] px-4 py-[0.7rem] text-[0.88rem] text-[var(--color-danger-ink)]">
-          {error.message}
-        </div>
-      )}
+      <ErrorBanner className="mb-4" message={error?.message} />
 
       <div className="grid grid-cols-[1fr_300px] items-start gap-4 max-[800px]:grid-cols-1">
         <section className="flex flex-col">
@@ -848,8 +863,12 @@ export default function TeamDetailPage() {
               </div>
               <div className="flex flex-col">
                 {detail.members.map((m) => (
-                  <div
+                  <motion.div
                     key={m.user_id}
+                    // Accepting an invitation or adding a member re-orders this
+                    // rail; rows slide instead of teleporting.
+                    layout="position"
+                    transition={snap(DUR.base)}
                     className="flex items-center gap-2.5 rounded-[10px] px-1.5 py-[0.45rem] transition-colors duration-[120ms] hover:bg-[var(--color-surface-2)]"
                   >
                     <div className="grid size-[34px] shrink-0 place-items-center rounded-full bg-[var(--color-accent)] text-[13.5px] font-bold text-white">
@@ -873,7 +892,7 @@ export default function TeamDetailPage() {
                     >
                       {m.role}
                     </span>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
               {detail.members.length < 3 && (

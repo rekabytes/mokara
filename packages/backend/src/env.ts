@@ -4,7 +4,7 @@ import { z } from "zod";
 const EnvSchema = z
   .object({
     DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
-    PORT: z.coerce.number().int().positive().default(4200),
+    PORT: z.coerce.number().int().positive().default(4700),
     CORS_ALLOWED_ORIGINS: z.string().default(""),
     // Empty by default so development boots without a .env value (jwt.ts falls
     // back to a labelled dev secret). The refine below makes "unset" fatal in

@@ -55,7 +55,7 @@ To change the schema: edit `packages/db/prisma/schema.prisma`, then run `pnpm db
 ```bash
 cp packages/backend/.env.example packages/backend/.env
 pnpm dev:backend
-# -> http://localhost:4200  (try /health)
+# -> http://localhost:4700  (try /health)
 ```
 
 `@mokara/backend` depends on `@mokara/db` via `workspace:*`, so the Prisma client is shared — no separate codegen for the backend.
@@ -65,7 +65,7 @@ pnpm dev:backend
 ```bash
 cp packages/frontend/.env.example packages/frontend/.env
 pnpm dev:frontend
-# -> http://localhost:4201
+# -> http://localhost:4701
 ```
 
 ### Or run both at once
@@ -80,8 +80,8 @@ pnpm dev
 | Script                   | What it does                                            |
 | ------------------------ | ------------------------------------------------------- |
 | `pnpm dev`               | Run backend + frontend in parallel                      |
-| `pnpm dev:backend`       | Backend only (`tsx watch src/index.ts` on :4200)        |
-| `pnpm dev:frontend`      | Frontend only (`next dev` on :4201)                     |
+| `pnpm dev:backend`       | Backend only (`tsx watch src/index.ts` on :4700)        |
+| `pnpm dev:frontend`      | Frontend only (`next dev` on :4701)                     |
 | `pnpm build:frontend`    | Production build (Next standalone output)               |
 | `pnpm start:backend`     | Run the backend as the container does (`tsx`, no watch) |
 | `pnpm typecheck`         | `tsc --noEmit` across all workspaces                    |
@@ -158,8 +158,8 @@ reasoning behind each choice: `docs/development/PRD-07.md`.
 
 | Service  | Port | Reads                                                        |
 | -------- | ---- | ------------------------------------------------------------ |
-| frontend | 4201 | `BACKEND_URL` (runtime — the browser only ever calls `/api`) |
-| backend  | 4200 | `DATABASE_URL`, `AUTH_SECRET`, `ENV=production`, `PORT`      |
+| frontend | 4701 | `BACKEND_URL` (runtime — the browser only ever calls `/api`) |
+| backend  | 4700 | `DATABASE_URL`, `AUTH_SECRET`, `ENV=production`, `PORT`      |
 
 The backend container applies pending migrations on start (`packages/backend/
 scripts/start.sh`) before the server binds, so it can never come up against a

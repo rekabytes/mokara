@@ -1,4 +1,4 @@
-const LOCAL_BACKEND_URL = "http://localhost:4200";
+const LOCAL_BACKEND_URL = "http://localhost:4700";
 
 /**
  * Origin of the backend, as the Next *server* reaches it.
@@ -10,7 +10,7 @@ const LOCAL_BACKEND_URL = "http://localhost:4200";
  * of the Next server and nothing else — one image then serves any host, which
  * is the point of pulling an image instead of building one.
  *
- * Value has no trailing slash and no `/api` suffix: `BACKEND_URL=http://backend:4200`.
+ * Value has no trailing slash and no `/api` suffix: `BACKEND_URL=http://backend:4700`.
  */
 export function getBackendUrl(): string {
   const configuredUrl = process.env.BACKEND_URL?.trim();

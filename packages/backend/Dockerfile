@@ -48,7 +48,7 @@ RUN pnpm --filter @mokara/db generate
 FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
-    PORT=4200
+    PORT=4700
 
 # node_modules and the workspace packages both come from the build stage, so the
 # `node_modules/@mokara/db` symlink still resolves to a real, generated-client-
@@ -62,13 +62,13 @@ COPY --from=build /app/package.json /app/pnpm-workspace.yaml ./
 RUN chmod +x /app/packages/backend/scripts/start.sh
 
 USER node
-EXPOSE 4200
+EXPOSE 4700
 
 # /health answers without touching the database (see routes + the request log
 # skip), so this reports "the process is serving" and a DB outage shows up as a
 # failing dependency instead of a dead container being restarted in a loop.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD node -e "const p=process.env.PORT||4200;fetch('http://127.0.0.1:'+p+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+    CMD node -e "const p=process.env.PORT||4700;fetch('http://127.0.0.1:'+p+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 # Migrations run here, not in CI: idempotent, forward-only, and it means a
 # container can never come up against a schema it does not expect.

@@ -3,8 +3,8 @@
 // see the connection state in the terminal.
 //
 // Logs:
-//   ✓ Backend reachable at http://localhost:4200/health (12ms)
-//   ✗ Backend unreachable at http://localhost:4200/health: <reason>
+//   ✓ Backend reachable at http://localhost:4700/health (12ms)
+//   ✗ Backend unreachable at http://localhost:4700/health: <reason>
 //
 // After the first ping, subsequent pings only log on state change (up→down or
 // down→up), so a healthy connection stays quiet.

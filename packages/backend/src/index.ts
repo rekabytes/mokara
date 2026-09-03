@@ -7,6 +7,8 @@ import { authRoutes, meHandler } from "./routes/auth.ts";
 import { teamRoutes } from "./routes/teams.ts";
 import { invitationRoutes } from "./routes/invitations.ts";
 import { taskRoutes } from "./routes/tasks.ts";
+import { projectRoutes } from "./routes/projects.ts";
+import { kpiRoutes } from "./routes/kpis.ts";
 import { commentRoutes } from "./routes/comments.ts";
 import { analyticsRoutes } from "./routes/analytics.ts";
 import { env } from "./env.ts";
@@ -56,6 +58,8 @@ async function main() {
   authed.route("/", taskRoutes);
   authed.route("/", commentRoutes);
   authed.route("/", analyticsRoutes);
+  authed.route("/", projectRoutes);
+  authed.route("/", kpiRoutes);
 
   api.route("/", authed);
   app.route("/api", api);

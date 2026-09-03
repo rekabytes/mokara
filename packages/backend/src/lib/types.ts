@@ -4,6 +4,9 @@
 
 import type {
   Task as PrismaTask,
+  Project as PrismaProject,
+  Kpi as PrismaKpi,
+  TaskKpi as PrismaTaskKpi,
   User as PrismaUser,
   Team as PrismaTeam,
   TeamMember as PrismaTeamMember,
@@ -23,6 +26,8 @@ export type TeamResponse = {
   name: string;
   slug: string;
   owner_id: string;
+  kind: string; // "workspace" | "team" (PRD-06)
+  member_count: number;
   created_at: string;
 };
 
@@ -56,11 +61,41 @@ export type TaskResponse = {
   description: string;
   status: string;
   priority: string;
+  project_id: string | null;
+  kpis: TaskKpiResponse[];
   due_date: string | null;
   flagged: boolean;
   created_at: string;
   updated_at: string;
 };
+
+export type ProjectResponse = {
+  id: string;
+  team_id: string;
+  owner_id: string;
+  owner_username: string;
+  scope: string; // "team" | "personal"
+  name: string;
+  color: string | null;
+  archived: boolean;
+  task_count: number;
+  task_done_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type KpiResponse = {
+  id: string;
+  team_id: string;
+  owner_id: string;
+  owner_username: string;
+  name: string;
+  binding_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TaskKpiResponse = { kpi_id: string; name: string; weight: number };
 
 export type CommentResponse = {
   id: string;
@@ -103,12 +138,16 @@ export function toUser(
   };
 }
 
-export function toTeam(t: PrismaTeam): TeamResponse {
+// member_count is not on the row — callers pass the count they already have
+// (list route group-bys it, detail route uses its members array, create is 1).
+export function toTeam(t: PrismaTeam, memberCount = 1): TeamResponse {
   return {
     id: t.id,
     name: t.name,
     slug: t.slug,
     owner_id: t.ownerId,
+    kind: t.kind,
+    member_count: memberCount,
     created_at: t.createdAt.toISOString(),
   };
 }
@@ -168,7 +207,7 @@ export function toAnalytics(
   return a;
 }
 
-export function toTask(t: PrismaTask): TaskResponse {
+export function toTask(t: PrismaTask, kpis: TaskKpiResponse[] = []): TaskResponse {
   return {
     id: t.id,
     team_id: t.teamId,
@@ -176,9 +215,56 @@ export function toTask(t: PrismaTask): TaskResponse {
     description: t.description ?? "",
     status: t.status,
     priority: t.priority,
+    project_id: t.projectId,
+    kpis,
     due_date: t.dueDate ? t.dueDate.toISOString() : null,
     flagged: t.flagged,
     created_at: t.createdAt.toISOString(),
     updated_at: t.updatedAt.toISOString(),
+  };
+}
+
+// Binding rows arrive as taskKpiBindings (include) — mapped here so routes
+// stay one-liners.
+export function toTaskKpi(b: PrismaTaskKpi & { kpi: Pick<PrismaKpi, "name"> }): TaskKpiResponse {
+  return { kpi_id: b.kpiId, name: b.kpi.name, weight: b.weight };
+}
+
+export function toProject(
+  p: PrismaProject & {
+    owner: Pick<PrismaUser, "username">;
+    tasks?: { status: string }[];
+  }
+): ProjectResponse {
+  const tasks = p.tasks ?? [];
+  return {
+    id: p.id,
+    team_id: p.teamId,
+    owner_id: p.ownerId,
+    owner_username: p.owner.username,
+    scope: p.scope,
+    name: p.name,
+    color: p.color,
+    archived: p.archived,
+    task_count: tasks.length,
+    task_done_count: tasks.filter((t) => t.status === "done").length,
+    created_at: p.createdAt.toISOString(),
+    updated_at: p.updatedAt.toISOString(),
+  };
+}
+
+export function toKpi(
+  k: PrismaKpi & { owner: Pick<PrismaUser, "username"> },
+  bindingCount = 0
+): KpiResponse {
+  return {
+    id: k.id,
+    team_id: k.teamId,
+    owner_id: k.ownerId,
+    owner_username: k.owner.username,
+    name: k.name,
+    binding_count: bindingCount,
+    created_at: k.createdAt.toISOString(),
+    updated_at: k.updatedAt.toISOString(),
   };
 }

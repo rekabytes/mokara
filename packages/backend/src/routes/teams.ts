@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { Prisma } from "@mokara/db/prisma/generated/client";
+import { isUniqueViolation } from "../lib/db-error.ts";
 import { prisma } from "../db.ts";
 import { createTeamSchema, inviteSchema } from "../lib/validation.ts";
 import { validate } from "../lib/validate.ts";
@@ -14,7 +14,7 @@ export const teamRoutes = new Hono<{ Variables: Vars }>();
 
 teamRoutes.post("/", validate("json", createTeamSchema), async (c) => {
   const userId = c.get("userId");
-  const { name } = c.req.valid("json");
+  const { name, kind } = c.req.valid("json");
 
   const slug = await ensureUniqueSlug(async (s) => {
     const found = await prisma.team.findUnique({ where: { slug: s }, select: { id: true } });
@@ -23,7 +23,7 @@ teamRoutes.post("/", validate("json", createTeamSchema), async (c) => {
 
   const team = await prisma.$transaction(async (tx) => {
     const t = await tx.team.create({
-      data: { name, slug, ownerId: userId },
+      data: { name, slug, ownerId: userId, kind },
     });
     await tx.teamMember.create({
       data: { teamId: t.id, userId, role: "owner" },
@@ -41,8 +41,19 @@ teamRoutes.get("/", async (c) => {
     include: { team: true },
     orderBy: { team: { createdAt: "desc" } },
   });
+  // One grouped count for the whole list — the switcher needs member_count
+  // to tell workspaces from teams without N queries.
+  const counts = await prisma.teamMember.groupBy({
+    by: ["teamId"],
+    _count: { _all: true },
+    where: { teamId: { in: rows.map((r) => r.teamId) } },
+  });
+  const countOf = new Map(counts.map((g) => [g.teamId, g._count._all]));
   return c.json({
-    teams: rows.map((m) => ({ ...toTeam(m.team), role: m.role })),
+    teams: rows.map((m) => ({
+      ...toTeam(m.team, countOf.get(m.teamId) ?? 1),
+      role: m.role,
+    })),
   });
 });
 
@@ -76,7 +87,7 @@ teamRoutes.get("/:id", async (c) => {
   });
 
   return c.json({
-    team: toTeam(team),
+    team: toTeam(team, members.length),
     role,
     members: members.map(toTeamMember),
     invitations: openInvites.map(toInvitation),
@@ -161,14 +172,11 @@ teamRoutes.post("/:id/invitations", validate("json", inviteSchema), async (c) =>
     });
     return c.json({ invitation: toInvitation(inv) }, 201);
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      const target = (e.meta?.target as string[] | undefined) ?? [];
-      if (target.includes("team_invitations_team_pending_unique")) {
-        return c.json(
-          { error: "already_invited", message: "user already has a pending invitation" },
-          409
-        );
-      }
+    if (isUniqueViolation(e, "team_invitations_team_pending_unique")) {
+      return c.json(
+        { error: "already_invited", message: "user already has a pending invitation" },
+        409
+      );
     }
     throw e;
   }

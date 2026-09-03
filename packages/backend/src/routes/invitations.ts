@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { Prisma } from "@mokara/db/prisma/generated/client";
 import { prisma } from "../db.ts";
+import { isTeamFull } from "../lib/db-error.ts";
 import { respondSchema } from "../lib/validation.ts";
 import { validate } from "../lib/validate.ts";
 import { toInvitation } from "../lib/types.ts";
@@ -63,27 +63,22 @@ invitationRoutes.post("/:id/respond", validate("json", respondSchema), async (c)
   // accept — insert member + mark accepted. The team_full trigger
   // raises P0001 with message containing "team_full" if the cap is hit.
   try {
-    await prisma.$transaction([
-      prisma.teamMember.create({
+    await prisma.$transaction(async (tx) => {
+      await tx.teamMember.create({
         data: { teamId: inv.teamId, userId, role: "member" },
-      }),
-      prisma.teamInvitation.update({
+      });
+      await tx.teamInvitation.update({
         where: { id: invId },
         data: { status: "accepted", respondedAt: new Date() },
-      }),
-    ]);
+      });
+      // PRD-06: the first ACCEPTED invitation promotes the container —
+      // one-way, a team never reverts to a workspace.
+      await tx.team.update({ where: { id: inv.teamId }, data: { kind: "team" } });
+    });
   } catch (e) {
-    // The trigger raises with ERRCODE P0001 / message "team_full". Prisma
-    // surfaces this as a known request error; we match defensively on both
-    // code and message in case the adapter wraps it differently.
-    if (
-      e instanceof Prisma.PrismaClientKnownRequestError &&
-      ((e.meta as { code?: string } | undefined)?.code === "P0001" ||
-        e.message.includes("team_full"))
-    ) {
-      return c.json({ error: "team_full", message: "team already has 3 members" }, 409);
-    }
-    if (e instanceof Error && e.message.includes("team_full")) {
+    // The enforce_max_team_members trigger raises 'team_full'; db-error.ts
+    // explains why the raw Prisma message can't be matched directly.
+    if (isTeamFull(e)) {
       return c.json({ error: "team_full", message: "team already has 3 members" }, 409);
     }
     throw e;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { atom, getDefaultStore, useAtom } from "jotai";
 import { api, type User } from "./api";
 
@@ -61,12 +61,17 @@ export function useSession(): SessionState & {
     markAnonymous();
   }, []);
 
-  // Bootstrap probe — once per app lifetime, not once per page mount.
+  // Bootstrap probe — once per app lifetime, not once per page mount. This is
+  // the canonical allowed effect: a one-time read of something outside React
+  // (the session cookie), guarded by a module flag so it never re-runs.
   useEffect(() => {
     if (booted) return;
     booted = true;
     void refresh();
   }, [refresh]);
 
-  return { ...state, refresh, logout };
+  // Memoised so `session` is safe to put in a consumer's dependency array —
+  // spreading `...state` into a fresh object every render made every mount of
+  // a hook consumer re-run anything that (correctly) depended on it.
+  return useMemo(() => ({ ...state, refresh, logout }), [state, refresh, logout]);
 }

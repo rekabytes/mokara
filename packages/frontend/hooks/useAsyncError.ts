@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { normalizeError, type NormalizedError } from "@/lib/errors";
 
@@ -35,10 +35,11 @@ export function useAsyncError() {
   // `run` must keep a stable identity: pages put it in useCallback deps, and a
   // new function every render would re-create their loaders and refetch in a
   // loop. The router lives in a ref so the callback needs no dependency.
+  // Writing it during render (not in an effect) is safe and idempotent — the
+  // ref holds a value `run` only ever reads inside an async callback, which by
+  // definition happens after the render that set it.
   const routerRef = useRef(router);
-  useEffect(() => {
-    routerRef.current = router;
-  });
+  routerRef.current = router;
 
   const clearError = useCallback(() => setError(null), []);
 

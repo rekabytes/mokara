@@ -2,6 +2,25 @@ const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4200/api"
 export type TaskStatus = "todo" | "in_progress" | "done" | "canceled";
 export type TaskPriority = "low" | "medium" | "high";
 
+// Exactly the body PATCH /tasks/:id accepts (backend `updateTaskSchema`,
+// which is `.strict()`). `description` and `due_date` are nullable here — a
+// null clears them — which is NOT true of `Partial<Task>`, so this is its own
+// type rather than a derivation. Every drawer edit is one of these; the client
+// and the validator can no longer disagree, so no call site needs a cast.
+export type TaskPatch = {
+  title?: string;
+  description?: string | null;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  due_date?: string | null;
+  project_id?: string | null;
+};
+
+// One task→KPI binding as the client composes it, before the server has said
+// the kpi exists. `PUT /tasks/:id/kpis` and `POST /teams/:id/tasks` both take
+// an array of these.
+export type BindingDraft = { kpi_id: string; weight: number };
+
 export type Task = {
   id: string;
   team_id: string;
@@ -78,6 +97,14 @@ export type Team = {
 };
 
 export type TeamWithRole = Team & { role: "owner" | "member" };
+
+/** GET /teams/:id — the container page's whole payload in one named type. */
+export type TeamDetail = {
+  team: Team;
+  role: "owner" | "member";
+  members: TeamMember[];
+  invitations: TeamInvitation[];
+};
 
 export type TeamMember = {
   user_id: string;
@@ -211,8 +238,18 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     try {
       const text = await res.text();
       if (text) {
-        const parsed = JSON.parse(text);
-        payload = { ...parsed, status: res.status };
+        // Every API failure is `{ error, message }` (see lib/errors.ts);
+        // JSON.parse hands back `any`, so read it as `unknown` and keep only
+        // the two fields we actually trust. Spreading the parsed blob
+        // wholesale is how an unexpected body used to leak into `payload`.
+        const parsed: unknown = JSON.parse(text);
+        if (isErrorBody(parsed)) {
+          payload = {
+            error: parsed.error,
+            message: typeof parsed.message === "string" ? parsed.message : "",
+            status: res.status,
+          };
+        }
       }
     } catch {
       /* keep default */
@@ -224,7 +261,19 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   done(res.status);
   if (res.status === 204) return undefined as T;
   const text = await res.text();
-  return (text ? JSON.parse(text) : undefined) as T;
+  // The one place the client asserts a shape it cannot check: the endpoint's
+  // declared return type IS the contract, and every response is built by a
+  // mapper in backend/lib/types.ts. Going through `unknown` keeps that trust
+  // explicit instead of silently widening whatever JSON.parse returned.
+  const body: unknown = text ? JSON.parse(text) : undefined;
+  return body as T;
+}
+
+/** Narrow the `{ error, … }` envelope of a failed response before trusting it. */
+function isErrorBody(v: unknown): v is { error: string; message?: unknown } {
+  return (
+    typeof v === "object" && v !== null && typeof (v as { error?: unknown }).error === "string"
+  );
 }
 
 export const api = {
@@ -249,13 +298,7 @@ export const api = {
       body: JSON.stringify(data),
     }),
   listTeams: () => req<{ teams: TeamWithRole[] }>("/teams"),
-  getTeam: (id: string) =>
-    req<{
-      team: Team;
-      role: "owner" | "member";
-      members: TeamMember[];
-      invitations: TeamInvitation[];
-    }>(`/teams/${id}`),
+  getTeam: (id: string) => req<TeamDetail>(`/teams/${id}`),
   leaveTeam: (id: string) => req<void>(`/teams/${id}/leave`, { method: "POST" }),
   inviteToTeam: (id: string, data: { username: string }) =>
     req<{ invitation: TeamInvitation }>(`/teams/${id}/invitations`, {
@@ -290,7 +333,7 @@ export const api = {
       priority?: TaskPriority;
       due_date?: string;
       project_id?: string | null;
-      kpis?: { kpi_id: string; weight: number }[];
+      kpis?: BindingDraft[];
     }
   ) =>
     req<Task>(`/teams/${teamId}/tasks`, {
@@ -327,9 +370,9 @@ export const api = {
   getKpiProgress: (teamId: string) =>
     req<{ kpis: KpiProgress[] }>(`/teams/${teamId}/kpis/progress`),
   // Replace-all binding set for a task; [] clears.
-  setTaskKpis: (id: string, kpis: { kpi_id: string; weight: number }[]) =>
+  setTaskKpis: (id: string, kpis: BindingDraft[]) =>
     req<Task>(`/tasks/${id}/kpis`, { method: "PUT", body: JSON.stringify({ kpis }) }),
-  updateTask: (id: string, data: Partial<Task>) =>
+  updateTask: (id: string, data: TaskPatch) =>
     req<Task>(`/tasks/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),

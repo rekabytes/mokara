@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { atom, useAtom, useAtomValue } from "jotai";
 import { api, type Team, type TeamWithRole } from "./api";
 import { normalizeError, type NormalizedError } from "./errors";
@@ -62,11 +62,18 @@ export function useContainers() {
     [setContainers, setSelectedId, setError]
   );
 
+  // Bootstrap probe — same one-time-outside-React read as lib/session.ts.
   useEffect(() => {
     if (booted) return;
     booted = true;
     void load();
   }, [load]);
 
-  return { containers, selected, selectedId, setSelectedId, error, load, create };
+  // Memoised for the same reason as useSession(): consumers legitimately list
+  // this object (or `load`) in a useCallback dep array, and a fresh identity
+  // every render turns that into a refetch loop.
+  return useMemo(
+    () => ({ containers, selected, selectedId, setSelectedId, error, load, create }),
+    [containers, selected, selectedId, setSelectedId, error, load, create]
+  );
 }

@@ -10,12 +10,16 @@ import {
   type KeyboardEvent,
 } from "react";
 import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import { useAtom } from "jotai";
 import { DatePicker } from "./DatePicker";
 import {
   api,
   type Task,
   type TaskStatus,
   type TaskPriority,
+  type TaskPatch,
+  type BindingDraft,
   type Comment,
   type User,
   type Project,
@@ -25,24 +29,41 @@ import { useAsyncError } from "@/hooks/useAsyncError";
 import { useContainers } from "@/lib/containers";
 import { useContainerMeta } from "@/lib/meta";
 import { useSession } from "@/lib/session";
+import {
+  taskFilterAtom,
+  taskSortAtom,
+  useCollapsedGroups,
+  type GroupId,
+  type TaskFilter,
+  type TaskSort,
+} from "@/lib/tasksView";
+import {
+  DUR,
+  snap,
+  popoverVariants,
+  listItemVariants,
+  collapseVariants,
+  backdropVariants,
+  sheetVariants,
+  bannerVariants,
+  tickVariants,
+} from "@/lib/motion";
+import { ErrorBanner } from "@/components/ErrorBanner";
 import { cn } from "@/lib/cn";
 
-type Filter = "active" | "today" | "week" | "done";
-type Sort = "manual" | "priority" | "due";
-type GroupId = "todo" | "in_progress" | "done" | "canceled";
+// Gap between a trigger and the menu that opens under it, and the same number
+// used by the drawer's width animation. Module scope so `placeBelow`'s
+// useCallback can legitimately depend on nothing.
+const MENU_GAP = 4;
 
-// Duration of the drawer slide-in / list-squeeze transition (ms). Kept in
-// sync with the `duration-[220ms]` classes on the drawer wrapper below.
-const DRAWER_ANIM_MS = 220;
-
-const FILTERS: { id: Filter; label: string }[] = [
+const FILTERS: { id: TaskFilter; label: string }[] = [
   { id: "active", label: "Active" },
   { id: "today", label: "Today" },
   { id: "week", label: "This week" },
   { id: "done", label: "Done" },
 ];
 
-const SORTS: { id: Sort; label: string }[] = [
+const SORTS: { id: TaskSort; label: string }[] = [
   { id: "manual", label: "Manual" },
   { id: "priority", label: "Priority" },
   { id: "due", label: "Due date" },
@@ -54,6 +75,13 @@ const GROUPS: { id: GroupId; name: string }[] = [
   { id: "done", name: "Done" },
   { id: "canceled", name: "Canceled" },
 ];
+
+// Derived from the data the page already has, so the dropdowns and the sort
+// loops can list statuses/priorities without re-declaring (and re-casting) the
+// same four/five literals in five places.
+const GROUP_IDS: GroupId[] = GROUPS.map((g) => g.id);
+const STATUS_IDS: TaskStatus[] = GROUP_IDS;
+const PRIORITY_IDS: TaskPriority[] = ["low", "medium", "high"];
 
 const PRIORITY_BAR_COLOR: Record<TaskPriority, string> = {
   high: "bg-[var(--color-prio-high)]",
@@ -139,11 +167,13 @@ export default function TasksPage() {
   const { projects, kpis: containerKpis } = useContainerMeta(selected?.id ?? null);
   const { error, setError, run } = useAsyncError();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [filter, setFilter] = useState<Filter>("active");
-  const [sort, setSort] = useState<Sort>("manual");
+  // View preferences live in Jotai (lib/tasksView.ts), so they survive a trip
+  // to /teams/x and back instead of resetting on every mount.
+  const [filter, setFilter] = useAtom(taskFilterAtom);
+  const [sort, setSort] = useAtom(taskSortAtom);
   const [loading, setLoading] = useState(true);
 
-  const [collapsed, setCollapsed] = useState<Set<GroupId>>(new Set());
+  const { collapsed, toggleGroup } = useCollapsedGroups();
   const [modalOpen, setModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
@@ -151,17 +181,10 @@ export default function TasksPage() {
   const [newStatus, setNewStatus] = useState<TaskStatus>("todo");
   const [newDueDate, setNewDueDate] = useState<string | null>(null);
   const [newProjectId, setNewProjectId] = useState<string | null>(null);
-  const [newKpis, setNewKpis] = useState<{ kpi_id: string; weight: number }[]>([]);
+  const [newKpis, setNewKpis] = useState<BindingDraft[]>([]);
   const [creating, setCreating] = useState(false);
-  const titleInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  // Drives the drawer slide-in/squeeze animation. `selectedTaskId` owns the
-  // data; `drawerOpen` owns the visual state. On close we flip drawerOpen
-  // first, then clear selectedTaskId after the transition so the drawer
-  // stays mounted while it animates out.
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const drawerCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadTasks = useCallback(async () => {
     if (!teamId) return;
@@ -172,6 +195,10 @@ export default function TasksPage() {
     if (list) setTasks(list);
   }, [teamId, run, setError]);
 
+  // Server state, not app state: the task list belongs to the database, so
+  // refetching when the container changes is outside-React sync (the one kind
+  // this codebase allows). Shared *view* state deliberately lives in Jotai
+  // instead — see lib/tasksView.ts.
   useEffect(() => {
     if (teamId) loadTasks();
   }, [teamId, loadTasks]);
@@ -209,7 +236,6 @@ export default function TasksPage() {
     setNewProjectId(null);
     setNewKpis([]);
     setModalOpen(true);
-    requestAnimationFrame(() => titleInputRef.current?.focus());
   }
 
   function resetAndCloseModal() {
@@ -240,8 +266,7 @@ export default function TasksPage() {
   }
 
   async function cyclePriority(t: Task) {
-    const order: TaskPriority[] = ["low", "medium", "high"];
-    const next = order[(order.indexOf(t.priority) + 1) % order.length];
+    const next = PRIORITY_IDS[(PRIORITY_IDS.indexOf(t.priority) + 1) % PRIORITY_IDS.length];
     const updated = await run(() => api.updateTask(t.id, { priority: next }), {
       fallback: "Failed to update task",
     });
@@ -260,36 +285,25 @@ export default function TasksPage() {
     const ok = await run(() => api.deleteTask(id), { fallback: "Failed to delete task" });
     if (ok === null) return;
     setTasks((prev) => prev.filter((x) => x.id !== id));
-    // selectedTask is derived from `tasks`, so the drawer would unmount
-    // instantly mid-animation — close it synchronously instead.
-    if (selectedTaskId === id) {
-      if (drawerCloseTimer.current) {
-        clearTimeout(drawerCloseTimer.current);
-        drawerCloseTimer.current = null;
-      }
-      setDrawerOpen(false);
-      setSelectedTaskId(null);
-    }
+    // selectedTask is derived from `tasks`, so it goes null here — which is
+    // what triggers the drawer's exit. AnimatePresence keeps the last render
+    // (task and all) on screen while it slides out, so no unmount race.
+    if (selectedTaskId === id) setSelectedTaskId(null);
   }
 
-  // Generic field updater for the TaskDetailDrawer. Typed against the
-  // narrower `DrawerPatch` (mirrors the backend's updateTaskSchema) since
-  // `api.updateTask` is typed as Partial<Task> but the backend validator
-  // accepts `description: null` for clearing it, which Partial<Task>
-  // rejects. Flag toggling goes through api.flagTask directly since the
-  // PATCH schema is `.strict()` and rejects unknown keys.
-  async function updateTaskField(id: string, patch: DrawerPatch) {
-    // Cast: api.updateTask is typed Partial<Task> but the backend validator
-    // accepts `description: null` to clear it. The runtime behavior is fine.
-    const updated = await run(
-      () => api.updateTask(id, patch as Parameters<typeof api.updateTask>[1]),
-      { fallback: "Failed to update task" }
-    );
+  // Generic field updater for the TaskDetailDrawer. `TaskPatch` is the exact
+  // body PATCH /tasks/:id accepts, so the drawer's patch reaches api.updateTask
+  // with no cast. Flag toggling goes through api.flagTask directly because the
+  // PATCH schema is `.strict()` and would reject `flagged`.
+  async function updateTaskField(id: string, patch: TaskPatch) {
+    const updated = await run(() => api.updateTask(id, patch), {
+      fallback: "Failed to update task",
+    });
     if (!updated) return;
     setTasks((prev) => prev.map((x) => (x.id === id ? updated : x)));
   }
 
-  async function setTaskKpis(id: string, bindings: { kpi_id: string; weight: number }[]) {
+  async function setTaskKpis(id: string, bindings: BindingDraft[]) {
     const updated = await run(() => api.setTaskKpis(id, bindings), {
       fallback: "Failed to update KPI weights",
     });
@@ -298,44 +312,17 @@ export default function TasksPage() {
   }
 
   function openTask(id: string) {
-    // Re-open that raced a pending close — cancel the unmount.
-    if (drawerCloseTimer.current) {
-      clearTimeout(drawerCloseTimer.current);
-      drawerCloseTimer.current = null;
-    }
-    const wasVisible = Boolean(selectedTaskId);
     setSelectedTaskId(id);
-    if (wasVisible) {
-      // Drawer already on screen (open or mid-close): just swap the task.
-      setDrawerOpen(true);
-      return;
-    }
-    // Fresh open: mount at width 0 first, then flip to open on the next
-    // frame so the width/translate transition actually runs.
-    requestAnimationFrame(() => requestAnimationFrame(() => setDrawerOpen(true)));
   }
 
   function closeDrawer() {
-    setDrawerOpen(false);
-    drawerCloseTimer.current = setTimeout(() => {
-      setSelectedTaskId(null);
-      drawerCloseTimer.current = null;
-    }, DRAWER_ANIM_MS);
+    setSelectedTaskId(null);
   }
 
   const selectedTask = useMemo(
     () => (selectedTaskId ? (tasks.find((t) => t.id === selectedTaskId) ?? null) : null),
     [selectedTaskId, tasks]
   );
-
-  function toggleGroup(g: GroupId) {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(g)) next.delete(g);
-      else next.add(g);
-      return next;
-    });
-  }
 
   const visibleByGroup = useMemo(() => {
     const buckets: Record<GroupId, Task[]> = { todo: [], in_progress: [], done: [], canceled: [] };
@@ -353,13 +340,13 @@ export default function TasksPage() {
       buckets[t.status].push(t);
     }
     if (sort === "priority") {
-      for (const k of Object.keys(buckets) as GroupId[]) {
+      for (const k of GROUP_IDS) {
         buckets[k] = [...buckets[k]].sort(
           (a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
         );
       }
     } else if (sort === "due") {
-      for (const k of Object.keys(buckets) as GroupId[]) {
+      for (const k of GROUP_IDS) {
         buckets[k] = [...buckets[k]].sort((a, b) => {
           if (!a.due_date && !b.due_date) return 0;
           if (!a.due_date) return 1;
@@ -434,13 +421,23 @@ export default function TasksPage() {
                 key={f.id}
                 onClick={() => setFilter(f.id)}
                 className={cn(
-                  "cursor-pointer rounded-full px-3 py-[0.3rem] text-[0.82rem] font-medium transition-colors duration-[140ms]",
+                  "relative cursor-pointer rounded-full px-3 py-[0.3rem] text-[0.82rem] font-medium transition-colors duration-[140ms]",
                   filter === f.id
-                    ? "bg-white text-[var(--color-ink)] shadow-[0_1px_3px_rgba(15,23,42,0.1)]"
+                    ? "text-[var(--color-ink)]"
                     : "text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
                 )}
               >
-                {f.label}
+                {/* One shared layoutId across the four pills: the white plate
+                    travels to whichever filter is active instead of being
+                    re-painted from scratch on the new one. */}
+                {filter === f.id && (
+                  <motion.span
+                    layoutId="active-filter-plate"
+                    className="absolute inset-0 rounded-full bg-white shadow-[0_1px_3px_rgba(15,23,42,0.1)]"
+                    transition={snap(DUR.base)}
+                  />
+                )}
+                <span className="relative">{f.label}</span>
               </button>
             ))}
           </div>
@@ -460,7 +457,12 @@ export default function TasksPage() {
           <div className="relative">
             <select
               value={sort}
-              onChange={(e) => setSort(e.target.value as Sort)}
+              onChange={(e) => {
+                // Guarded lookup instead of `e.target.value as Sort`: an
+                // unexpected value can't smuggle itself into the atom.
+                const next = SORTS.find((s) => s.id === e.target.value)?.id;
+                if (next) setSort(next);
+              }}
               aria-label="Sort"
               className="cursor-pointer appearance-none rounded-full border border-[var(--color-border-soft)] bg-[var(--color-surface)] py-[0.3rem] pl-3 pr-7 text-[0.82rem] font-medium text-[var(--color-ink-muted)] backdrop-blur-[22px] outline-none hover:text-[var(--color-ink)]"
             >
@@ -492,11 +494,7 @@ export default function TasksPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="mb-3 rounded-[var(--radius-btn)] border border-[var(--color-danger-border)] bg-[rgba(239,68,68,0.08)] px-4 py-[0.7rem] text-[0.88rem] text-[var(--color-danger-ink)]">
-          {error.message}
-        </div>
-      )}
+      <ErrorBanner className="mb-3" message={error?.message} />
 
       {/* Tasks list + task-detail drawer share a horizontal row. The row is
           a size container (`@container`) so the drawer's `cqw` width
@@ -592,30 +590,42 @@ export default function TasksPage() {
                         )}
                       </div>
 
-                      {!isCollapsed && (
-                        <ul className="m-0 flex list-none flex-col p-0">
-                          {items.map((t) => {
-                            const done = t.status === "done";
-                            return (
-                              <TaskRow
-                                key={t.id}
-                                task={t}
-                                done={done}
-                                project={
-                                  t.project_id
-                                    ? (projects.find((p) => p.id === t.project_id) ?? null)
-                                    : null
-                                }
-                                onOpen={() => openTask(t.id)}
-                                onToggle={() => toggleTask(t)}
-                                onCyclePriority={() => cyclePriority(t)}
-                                onToggleFlag={() => toggleFlag(t)}
-                                onDelete={() => removeTask(t.id)}
-                              />
-                            );
-                          })}
-                        </ul>
-                      )}
+                      {/* Collapse is measured by framer-motion (`height: "auto"`
+                          in lib/motion.ts), which is the whole reason this
+                          doesn't need a scrollHeight in an effect. */}
+                      <AnimatePresence initial={false}>
+                        {!isCollapsed && (
+                          <motion.ul
+                            key="rows"
+                            variants={collapseVariants}
+                            initial="hidden"
+                            animate="visible"
+                            exit="hidden"
+                            className="m-0 flex list-none flex-col overflow-hidden p-0"
+                          >
+                            {items.map((t) => {
+                              const done = t.status === "done";
+                              return (
+                                <TaskRow
+                                  key={t.id}
+                                  task={t}
+                                  done={done}
+                                  project={
+                                    t.project_id
+                                      ? (projects.find((p) => p.id === t.project_id) ?? null)
+                                      : null
+                                  }
+                                  onOpen={() => openTask(t.id)}
+                                  onToggle={() => toggleTask(t)}
+                                  onCyclePriority={() => cyclePriority(t)}
+                                  onToggleFlag={() => toggleFlag(t)}
+                                  onDelete={() => removeTask(t.id)}
+                                />
+                              );
+                            })}
+                          </motion.ul>
+                        )}
+                      </AnimatePresence>
                     </div>
                   );
                 })}
@@ -624,66 +634,79 @@ export default function TasksPage() {
           </div>
         </div>
 
-        {selectedTask && (
-          // Animating wrapper: width transitions 0 → min(40cqw,640px) which
-          // squeezes the task list smoothly; margin-left animates with it so
-          // the 16px gutter collapses on close (no jump at unmount).
-          // overflow-hidden clips the fixed-width card inside, revealing it
-          // from the right edge like a sliding sidebar panel. The `card`
-          // look lives HERE (not on the aside) — an element's own shadow
-          // isn't clipped by its overflow, so the rounded corners + soft
-          // shadow survive the clip.
-          <div
-            className={cn(
-              "card shrink-0 self-stretch overflow-hidden transition-[width,margin] duration-[220ms] ease-out",
-              drawerOpen ? "ml-4 w-[min(40cqw,640px)]" : "ml-0 w-0"
-            )}
-          >
-            <TaskDetailDrawer
-              task={selectedTask}
-              currentUser={session.status === "authed" ? session.user : null}
-              projects={projects}
-              kpis={containerKpis}
-              onClose={closeDrawer}
-              onUpdate={(patch) => updateTaskField(selectedTask.id, patch)}
-              onSetKpis={(bindings) => setTaskKpis(selectedTask.id, bindings)}
-              onToggleFlag={() => toggleFlag(selectedTask)}
-              onDelete={() => removeTask(selectedTask.id)}
-            />
-          </div>
-        )}
+        {/* Presence owns the mount lifetime, so `selectedTaskId` is the only
+            drawer state: mount = open, unmount = slide back out. The old rig
+            (a `drawerOpen` mirror, a 220ms unmount timer and a double
+            requestAnimationFrame to make the first transition actually run)
+            is gone — AnimatePresence keeps the last render on screen while it
+            exits, and framer-motion starts from `initial` without a nudge.
+            Width animates in % against the `@container` row, so "40%" is
+            exactly the `40cqw` the inner card is sized in, with max-w-[640px]
+            standing in for the `min()`. The `card` look stays on THIS wrapper:
+            an element's own shadow isn't clipped by its overflow. */}
+        <AnimatePresence>
+          {selectedTask && (
+            <motion.div
+              key="task-drawer"
+              initial="closed"
+              animate="open"
+              exit="closed"
+              variants={{
+                closed: { width: "0%", marginLeft: 0 },
+                open: { width: "40%", marginLeft: 16 },
+              }}
+              transition={snap(DUR.panel)}
+              className="card max-w-[640px] shrink-0 self-stretch overflow-hidden"
+            >
+              <TaskDetailDrawer
+                task={selectedTask}
+                currentUser={session.status === "authed" ? session.user : null}
+                projects={projects}
+                kpis={containerKpis}
+                onClose={closeDrawer}
+                onUpdate={(patch) => updateTaskField(selectedTask.id, patch)}
+                onSetKpis={(bindings) => setTaskKpis(selectedTask.id, bindings)}
+                onToggleFlag={() => toggleFlag(selectedTask)}
+                onDelete={() => removeTask(selectedTask.id)}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      <NewTaskModal
-        open={modalOpen}
-        title={newTitle}
-        setTitle={setNewTitle}
-        description={newDescription}
-        setDescription={setNewDescription}
-        priority={newPriority}
-        setPriority={setNewPriority}
-        status={newStatus}
-        setStatus={setNewStatus}
-        dueDate={newDueDate}
-        setDueDate={setNewDueDate}
-        projects={projects}
-        kpis={containerKpis}
-        projectId={newProjectId}
-        setProjectId={setNewProjectId}
-        kpiBindings={newKpis}
-        setKpiBindings={setNewKpis}
-        creating={creating}
-        titleInputRef={titleInputRef}
-        onSubmit={createTaskFromModal}
-        onClose={resetAndCloseModal}
-        onKeyDown={onModalKey}
-      />
+      {/* Presence owns the mount, which is what `if (!open) return null` used
+          to do from inside. One gate, not two, so the modal can animate out. */}
+      <AnimatePresence>
+        {modalOpen && (
+          <NewTaskModal
+            title={newTitle}
+            setTitle={setNewTitle}
+            description={newDescription}
+            setDescription={setNewDescription}
+            priority={newPriority}
+            setPriority={setNewPriority}
+            status={newStatus}
+            setStatus={setNewStatus}
+            dueDate={newDueDate}
+            setDueDate={setNewDueDate}
+            projects={projects}
+            kpis={containerKpis}
+            projectId={newProjectId}
+            setProjectId={setNewProjectId}
+            kpiBindings={newKpis}
+            setKpiBindings={setNewKpis}
+            creating={creating}
+            onSubmit={createTaskFromModal}
+            onClose={resetAndCloseModal}
+            onKeyDown={onModalKey}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 function NewTaskModal({
-  open,
   title,
   setTitle,
   description,
@@ -701,12 +724,10 @@ function NewTaskModal({
   kpiBindings,
   setKpiBindings,
   creating,
-  titleInputRef,
   onSubmit,
   onClose,
   onKeyDown,
 }: {
-  open: boolean;
   title: string;
   setTitle: (s: string) => void;
   description: string;
@@ -724,17 +745,19 @@ function NewTaskModal({
   kpiBindings: BindingDraft[];
   setKpiBindings: (b: BindingDraft[]) => void;
   creating: boolean;
-  titleInputRef: React.RefObject<HTMLInputElement | null>;
   onSubmit: (e: FormEvent) => void;
   onClose: () => void;
   onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => void;
 }) {
-  if (!open) return null;
   return (
-    <div
+    <motion.div
       role="dialog"
       aria-modal="true"
       aria-labelledby="new-task-title"
+      variants={backdropVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
       onKeyDown={onKeyDown}
       className="fixed inset-0 z-50 grid place-items-center px-4"
     >
@@ -744,7 +767,13 @@ function NewTaskModal({
         onClick={onClose}
         className="absolute inset-0 cursor-default border-0 bg-[rgba(15,23,42,0.75)] backdrop-blur-[2px]"
       />
-      <div className="relative z-10 w-full max-w-[640px] overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-white shadow-[var(--shadow-card)]">
+      {/* No initial/animate: it inherits the scrim's variant labels, so the
+          card lifts into place while the backdrop fades — and both reverse on
+          close from one presence check. */}
+      <motion.div
+        variants={sheetVariants}
+        className="relative z-10 w-full max-w-[640px] overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-white shadow-[var(--shadow-card)]"
+      >
         {/* Top bar: breadcrumb + actions */}
         <div className="flex items-center justify-between border-b border-[var(--color-border-soft)] px-4 py-2.5">
           <div className="flex items-center gap-1.5 text-[0.85rem] font-semibold">
@@ -776,9 +805,12 @@ function NewTaskModal({
           {/* Body: title + description */}
           <div className="px-4 pt-3 pb-2">
             <input
-              ref={titleInputRef}
               type="text"
               required
+              // Declarative focus: the modal now mounts inside AnimatePresence,
+              // so autoFocus replaces the rAF(focus()) that openModal used to
+              // need to wait for a render that no longer exists.
+              autoFocus
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Task title"
@@ -809,7 +841,7 @@ function NewTaskModal({
                 </ChipShell>
               )}
             >
-              {(["todo", "in_progress", "done", "canceled"] as TaskStatus[]).map((s) => (
+              {STATUS_IDS.map((s) => (
                 <MenuItem
                   key={s}
                   selected={s === status}
@@ -831,7 +863,7 @@ function NewTaskModal({
                 </ChipShell>
               )}
             >
-              {(["low", "medium", "high"] as TaskPriority[]).map((p) => (
+              {PRIORITY_IDS.map((p) => (
                 <MenuItem
                   key={p}
                   selected={p === priority}
@@ -892,8 +924,8 @@ function NewTaskModal({
             </div>
           </div>
         </form>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -1012,22 +1044,26 @@ function Dropdown({
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const margin = 4;
 
   const placeBelow = useCallback(() => {
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setPos({ top: r.bottom + margin, left: r.left });
+    setPos({ top: r.bottom + MENU_GAP, left: r.left });
   }, []);
 
+  // Outside-React sync — document/window listeners plus a rect measurement —
+  // so this is one of the effects that legitimately stays. It only owns
+  // "where is the trigger" and "who clicked elsewhere"; the menu's appearance
+  // is framer-motion's problem, not a re-render's.
   useEffect(() => {
     if (!open) return;
     placeBelow();
     const onClick = (e: MouseEvent) => {
-      const target = e.target as Node;
+      const target = e.target;
+      if (!(target instanceof Node)) return;
       if (triggerRef.current?.contains(target)) return;
-      if ((target as HTMLElement).closest("[data-dropdown-menu]")) return;
+      if (target instanceof Element && target.closest("[data-dropdown-menu]")) return;
       setOpen(false);
     };
     const onKey = (e: globalThis.KeyboardEvent) => {
@@ -1046,16 +1082,24 @@ function Dropdown({
     };
   }, [open, placeBelow]);
 
+  // `pos` is left set when the menu closes: the exiting frame reuses the last
+  // measurement, which is what keeps the fade from flashing at the top-left
+  // corner. Nulling it here would move the element mid-exit.
   const menu =
     open && pos ? (
-      <div
+      <motion.div
+        key="dropdown-menu"
         data-dropdown-menu
         role="listbox"
+        variants={popoverVariants}
+        initial="hidden"
+        animate="visible"
+        exit="hidden"
         style={{ position: "fixed", top: pos.top, left: pos.left }}
         className="z-[60] overflow-hidden rounded-lg border border-[var(--color-border-soft)] bg-white py-1 whitespace-nowrap shadow-[var(--shadow-lift)]"
       >
         {children}
-      </div>
+      </motion.div>
     ) : null;
 
   return (
@@ -1073,7 +1117,11 @@ function Dropdown({
       >
         {trigger(open)}
       </button>
-      {typeof document !== "undefined" && menu && createPortal(menu, document.body)}
+      {/* AnimatePresence has to wrap the portal call itself: the menu is not a
+          DOM descendant of this component, so no ancestor presence-check can
+          see it unmount. */}
+      {typeof document !== "undefined" &&
+        createPortal(<AnimatePresence>{menu}</AnimatePresence>, document.body)}
     </>
   );
 }
@@ -1118,32 +1166,39 @@ function MenuItem({
         <span>{children}</span>
       </span>
       <span className="flex items-center justify-center">
-        {selected && (
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-            className="text-[var(--color-accent)]"
-          >
-            <path
-              d="M5 12.5l4.5 4.5L19 7"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        )}
+        {/* The 18px checkmark column is reserved on every row (see the grid
+            comment above), so the tick can scale in without shifting text. */}
+        <AnimatePresence>
+          {selected && (
+            <motion.svg
+              key="tick"
+              variants={tickVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              className="text-[var(--color-accent)]"
+            >
+              <path
+                d="M5 12.5l4.5 4.5L19 7"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </motion.svg>
+          )}
+        </AnimatePresence>
       </span>
     </button>
   );
 }
 
 // ---- PRD-06 binding chips -------------------------------------------------
-
-type BindingDraft = { kpi_id: string; weight: number };
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -1366,8 +1421,16 @@ function TaskRow({
   onDelete: () => void;
 }) {
   return (
-    <li
+    <motion.li
       onClick={onOpen}
+      // `position`, not `layout`: rows glide to their new slot when the sort
+      // or filter changes (today they teleport) without projecting a size,
+      // which is what goes wrong inside an overflow-clipped scroll area.
+      layout="position"
+      variants={listItemVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
       className={cn(
         "group mx-1 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors duration-[120ms] hover:bg-[var(--color-surface-2)]"
       )}
@@ -1491,7 +1554,7 @@ function TaskRow({
           <TrashIcon />
         </SmallIconButton>
       </div>
-    </li>
+    </motion.li>
   );
 }
 
@@ -1761,17 +1824,9 @@ function TrashIcon() {
   );
 }
 
-// PATCH-safe patch shape — mirrors the backend's updateTaskSchema keys.
-// `flagged` is intentionally excluded (PATCH is .strict()); the flag chip
-// in the drawer goes through `onToggleFlag` -> POST /tasks/:id/flag instead.
-type DrawerPatch = {
-  title?: string;
-  description?: string | null;
-  status?: TaskStatus;
-  priority?: TaskPriority;
-  due_date?: string | null;
-  project_id?: string | null;
-};
+// PATCH-safe patch shape lives in lib/api.ts as `TaskPatch` — it mirrors the
+// backend's updateTaskSchema keys and is what api.updateTask now accepts, so
+// the drawer and the client can no longer disagree about `description: null`.
 
 function TaskDetailDrawer({
   task,
@@ -1789,32 +1844,30 @@ function TaskDetailDrawer({
   projects: Project[];
   kpis: Kpi[];
   onClose: () => void;
-  onUpdate: (patch: DrawerPatch) => void;
+  onUpdate: (patch: TaskPatch) => void;
   onSetKpis: (bindings: BindingDraft[]) => void;
   onToggleFlag: () => void;
   onDelete: () => void;
 }) {
   // ---- Title rename (double-click in drawer) ----
+  // `titleEditing` is the only state here; the read-only branch renders
+  // `task.title` and `startRename()` seeds the draft on the way in. The mirror
+  // effect that used to copy `task.title` into `titleDraft` therefore only ever
+  // ran while the draft was invisible — it was a useState->useState chain, not
+  // a sync with anything outside React.
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState(task.title);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync local draft with the upstream task when it changes — but only when
-  // the input isn't focused, so the user's in-progress typing isn't clobbered.
-  useEffect(() => {
-    if (!titleEditing) setTitleDraft(task.title);
-  }, [task.title, titleEditing]);
-
-  // ---- Due date — mirrored from task so DatePicker stays a controlled
-  //      component, and persisted via PATCH on every change. There is no
-  //      start date: work starts when the status moves to in_progress. ----
-  const [dueDate, setDueDate] = useState<string | null>(task.due_date ?? null);
-  useEffect(() => {
-    setDueDate(task.due_date ?? null);
-  }, [task.due_date]);
+  // ---- Due date: read straight off the task, persisted via PATCH on every
+  //      change. DatePicker is fully controlled by `task.due_date`, so a
+  //      server-side change lands on the chip with no mirroring (and no local
+  //      copy to fall out of step). There is no start date: work starts when
+  //      the status moves to in_progress. ----
 
   // ---- Global ESC closes the drawer, but only when no input/textarea is
-  //      focused — inputs handle their own ESC semantics locally. ----
+  //      focused — inputs handle their own ESC semantics locally. A document
+  //      keydown listener is outside React, so this effect stays. ----
   useEffect(() => {
     function onKey(e: globalThis.KeyboardEvent) {
       if (e.key !== "Escape") return;
@@ -1823,7 +1876,9 @@ function TaskDetailDrawer({
         active &&
         (active.tagName === "INPUT" ||
           active.tagName === "TEXTAREA" ||
-          (active as HTMLElement).isContentEditable)
+          // instanceof, not `as HTMLElement`: activeElement can be a node where
+          // the cast would simply lie about isContentEditable existing.
+          (active instanceof HTMLElement && active.isContentEditable))
       ) {
         return;
       }
@@ -1949,7 +2004,7 @@ function TaskDetailDrawer({
               </ChipShell>
             )}
           >
-            {(["todo", "in_progress", "done", "canceled"] as TaskStatus[]).map((s) => (
+            {STATUS_IDS.map((s) => (
               <MenuItem
                 key={s}
                 selected={s === task.status}
@@ -1970,7 +2025,7 @@ function TaskDetailDrawer({
               </ChipShell>
             )}
           >
-            {(["low", "medium", "high"] as TaskPriority[]).map((p) => (
+            {PRIORITY_IDS.map((p) => (
               <MenuItem
                 key={p}
                 selected={p === task.priority}
@@ -1983,13 +2038,12 @@ function TaskDetailDrawer({
           </Dropdown>
 
           <DatePicker
-            value={dueDate}
-            onChange={(iso) => {
-              setDueDate(iso);
+            value={task.due_date ?? null}
+            onChange={(iso) =>
               // null clears the due date (undefined would be dropped by
               // JSON.stringify and leave the old value in place).
-              onUpdate({ due_date: iso });
-            }}
+              onUpdate({ due_date: iso })
+            }
             trigger={(open, summary) => (
               <ChipShell open={open}>
                 <CalendarIcon />
@@ -2057,13 +2111,10 @@ function TaskDetailDrawer({
 }
 
 function DescriptionField({ value, onSave }: { value: string; onSave: (text: string) => void }) {
+  // Read-only branch shows `value`, `startEdit()` seeds the draft — so nothing
+  // has to copy `value` into `draft` behind the scenes.
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
-
-  // Mirror external value into local draft when not editing.
-  useEffect(() => {
-    if (!editing) setDraft(value);
-  }, [value, editing]);
 
   function startEdit() {
     setDraft(value);
@@ -2158,12 +2209,17 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
   const [replyTo, setReplyTo] = useState<Comment | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Keep relative timestamps honest without refetching.
+  // Relative timestamps need a clock, so this is a real outside-React sync:
+  // one 60s tick keeps "3m ago" honest without refetching. Both timers in this
+  // component are of that kind — nothing here is a state-mirroring chain.
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(id);
   }, []);
 
+  // A failed comment action announces itself for 4s. Timer again, so it stays;
+  // it lives here rather than in ErrorBanner because this surface is the
+  // drawer's compact inline notice, not one of the full-width block banners.
   useEffect(() => {
     if (!actionError) return;
     const id = setTimeout(() => setActionError(null), 4_000);
@@ -2180,12 +2236,16 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
     }
   }, [taskId]);
 
+  // Server sync: (re)load the thread when the task changes. Clearing `comments`
+  // first is what makes the drawer show "Loading…" for the new task rather than
+  // the previous task's discussion.
   useEffect(() => {
     setComments(null);
     load();
   }, [load]);
 
-  // Keep the newest comment in view as the list grows.
+  // Keep the newest comment in view as the list grows. Writing scrollHeight is
+  // imperative DOM work with no declarative equivalent, so this effect stays.
   const count = comments?.length ?? 0;
   useEffect(() => {
     const el = listRef.current;
@@ -2285,46 +2345,84 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
             No comments yet. Start the conversation.
           </p>
         ) : (
-          threads.roots.map((c) => {
-            const replies = threads.repliesByParent.get(c.id) ?? [];
-            return (
-              <div key={c.id}>
-                <CommentRow
-                  comment={c}
-                  now={now}
-                  isOwn={currentUser?.id === c.author_id}
-                  onSave={(body) => saveEdit(c.id, c.body, body)}
-                  onDelete={() => remove(c.id)}
-                  onReply={() => setReplyTo(c)}
-                />
-                {replies.length > 0 && (
-                  <div className="ml-3 mt-3 space-y-3 border-l border-[var(--color-border-soft)] pl-3.5">
-                    {replies.map((r) => (
-                      <CommentRow
-                        key={r.id}
-                        comment={r}
-                        now={now}
-                        isOwn={currentUser?.id === r.author_id}
-                        replyToUsername={c.author.username}
-                        onSave={(body) => saveEdit(r.id, r.body, body)}
-                        onDelete={() => remove(r.id)}
-                        onReply={() => setReplyTo(r)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })
+          <AnimatePresence initial={false}>
+            {threads.roots.map((c) => {
+              const replies = threads.repliesByParent.get(c.id) ?? [];
+              return (
+                <motion.div
+                  key={c.id}
+                  variants={listItemVariants}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                >
+                  <CommentRow
+                    comment={c}
+                    now={now}
+                    isOwn={currentUser?.id === c.author_id}
+                    onSave={(body) => saveEdit(c.id, c.body, body)}
+                    onDelete={() => remove(c.id)}
+                    onReply={() => setReplyTo(c)}
+                  />
+                  {/* Replies fade in under their parent as a block; no `layout`
+                      here — nested layout nodes inside this force-scrolled,
+                      overflow-clipped list is where motion gets smeared. */}
+                  <AnimatePresence initial={false}>
+                    {replies.length > 0 && (
+                      <motion.div
+                        key="replies"
+                        variants={listItemVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit="exit"
+                        className="ml-3 mt-3 space-y-3 border-l border-[var(--color-border-soft)] pl-3.5"
+                      >
+                        {replies.map((r) => (
+                          <CommentRow
+                            key={r.id}
+                            comment={r}
+                            now={now}
+                            isOwn={currentUser?.id === r.author_id}
+                            replyToUsername={c.author.username}
+                            onSave={(body) => saveEdit(r.id, r.body, body)}
+                            onDelete={() => remove(r.id)}
+                            onReply={() => setReplyTo(r)}
+                          />
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
         )}
       </div>
 
-      {actionError && (
-        <p className="mt-1.5 text-[0.74rem] text-[var(--color-danger)]">{actionError.message}</p>
-      )}
+      {/* Same failure the drawer used to print as a bare <p>, now with an exit:
+          AnimatePresence owns unmounting, so `setActionError(null)` (the 4s
+          timer above) fades it out instead of blanking it. */}
+      <AnimatePresence initial={false}>
+        {actionError && (
+          <motion.p
+            key="comment-error"
+            variants={bannerVariants}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            className="mt-1.5 overflow-hidden text-[0.74rem] text-[var(--color-danger)]"
+          >
+            <span className="block">{actionError.message}</span>
+          </motion.p>
+        )}
+      </AnimatePresence>
 
       {currentUser && (
+        // `key` is what makes the composer's prefill declarative: changing the
+        // reply target remounts it, so the @mention is its initial value and
+        // autoFocus re-fires — no change-detecting effect.
         <CommentComposer
+          key={replyTo?.id ?? "root"}
           replyTo={replyTo}
           onCancelReply={() => setReplyTo(null)}
           onSubmit={submit}
@@ -2343,22 +2441,14 @@ function CommentComposer({
   onCancelReply: () => void;
   onSubmit: (body: string, parentId?: string) => void;
 }) {
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(() =>
+    // The mention is the initial value, not a value copied in later. Combined
+    // with the `key` at the call site (which remounts this composer whenever
+    // the reply target changes), that replaces an effect whose whole job was
+    // "when replyTo changes, overwrite the draft and focus".
+    replyTo ? `@${replyTo.author.username} ` : ""
+  );
   const taRef = useRef<HTMLTextAreaElement>(null);
-
-  // Entering reply mode: prefill the @mention and park the caret after it so
-  // the user immediately sees who they're answering.
-  useEffect(() => {
-    if (!replyTo) return;
-    const mention = `@${replyTo.author.username} `;
-    setDraft(mention);
-    requestAnimationFrame(() => {
-      const el = taRef.current;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(mention.length, mention.length);
-    });
-  }, [replyTo]);
 
   function submit() {
     const body = draft.trim();
@@ -2395,6 +2485,10 @@ function CommentComposer({
       )}
       <textarea
         ref={taRef}
+        // Only when replying — otherwise opening a task drawer would yank
+        // focus into the comment box. Caret lands at the end of the seeded
+        // mention, which is where the old setSelectionRange put it.
+        autoFocus={replyTo !== null}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {

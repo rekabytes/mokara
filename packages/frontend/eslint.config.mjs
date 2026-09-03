@@ -35,6 +35,13 @@ export default [
       ...nextPlugin.configs["core-web-vitals"].rules,
       "react/react-in-jsx-scope": "off",
       "react/prop-types": "off",
+      // Effects in this app are only allowed to sync with something outside
+      // React (listeners, timers, DOM measurement, one bootstrap probe).
+      // A wrong dependency array is how a "server sync" effect turns into a
+      // refetch loop or silently stops noticing a value, so the rule that
+      // catches it is an error, not a warning. Every kept effect lists its
+      // dependencies honestly — no file-level disables.
+      "react-hooks/exhaustive-deps": "error",
     },
   },
   prettierConfig,

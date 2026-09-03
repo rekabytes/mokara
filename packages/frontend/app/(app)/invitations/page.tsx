@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { api, isApiError, type TeamInvitation } from "@/lib/api";
+import { api, type TeamInvitation } from "@/lib/api";
+import { useAsyncError } from "@/hooks/useAsyncError";
 import { useSession } from "@/lib/session";
 
 export default function InvitationsPage() {
@@ -10,7 +11,7 @@ export default function InvitationsPage() {
   const session = useSession();
   const [invites, setInvites] = useState<TeamInvitation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { error, setError, run } = useAsyncError();
 
   useEffect(() => {
     router.replace("/tasks");
@@ -19,19 +20,10 @@ export default function InvitationsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    try {
-      const { invitations } = await api.listInvitations();
-      setInvites(invitations);
-    } catch (e: unknown) {
-      if (isApiError(e) && e.status === 401) {
-        router.push("/login");
-        return;
-      }
-      setError(isApiError(e) ? e.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
+    const res = await run(() => api.listInvitations(), { fallback: "Failed to load invitations" });
+    setLoading(false);
+    if (res) setInvites(res.invitations);
+  }, [run, setError]);
 
   useEffect(() => {
     if (session.status === "anonymous") {
@@ -43,16 +35,15 @@ export default function InvitationsPage() {
 
   async function respond(id: string, action: "accept" | "decline") {
     setError(null);
-    try {
-      const res = await api.respondToInvitation(id, action);
-      if (action === "accept" && res.team_id) {
-        router.push(`/teams/${res.team_id}`);
-        return;
-      }
-      await load();
-    } catch (e: unknown) {
-      setError(isApiError(e) ? e.message : "Failed to respond");
+    const res = await run(() => api.respondToInvitation(id, action), {
+      fallback: "Failed to respond",
+    });
+    if (!res) return;
+    if (action === "accept" && res.team_id) {
+      router.push(`/teams/${res.team_id}`);
+      return;
     }
+    await load();
   }
 
   return (
@@ -68,7 +59,7 @@ export default function InvitationsPage() {
 
       {error && (
         <div className="mb-4 rounded-[var(--radius-btn)] border border-[var(--color-danger-border)] bg-[rgba(239,68,68,0.08)] px-4 py-[0.7rem] text-[0.88rem] text-[var(--color-danger-ink)]">
-          {error}
+          {error.message}
         </div>
       )}
 

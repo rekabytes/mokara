@@ -4,12 +4,15 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useSession } from "@/lib/session";
+import { useContainers } from "@/lib/containers";
+import { ContainerSwitcher } from "./ContainerSwitcher";
 import { cn } from "@/lib/cn";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const session = useSession();
   const router = useRouter();
   const pathname = usePathname();
+  const { selected } = useContainers();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
@@ -33,10 +36,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const user = session.user;
   const handle = user.display_name || user.username;
 
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+
   const navItems: { href: string; label: string; icon: React.ReactNode }[] = [
     { href: "/tasks", label: "Tasks", icon: <TasksIcon /> },
     { href: "/analytics", label: "Analytics", icon: <AnalyticsIcon /> },
   ];
+
+  // PRD-06: the container page (members, invites, projects & KPIs layers) had
+  // no entry point at all — its only links lived on the self-redirecting
+  // dashboard. This is that entry point, in its own group below a divider.
+  const teamItem = selected
+    ? { href: `/teams/${selected.id}`, label: "Team", icon: <TeamIcon /> }
+    : null;
 
   return (
     <div
@@ -74,32 +86,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
 
+        <ContainerSwitcher />
+
         <nav className="mb-auto flex flex-col gap-1" aria-label="Primary">
-          {navItems.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(item.href + "/");
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-[0.7rem] rounded-[10px] px-[0.7rem] py-[0.55rem] text-[0.92rem] font-medium text-[var(--color-ink-muted)] no-underline transition-colors duration-[160ms]",
-                  "hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]",
-                  active &&
-                    "bg-[var(--color-surface-solid)] text-[var(--color-ink)] shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_var(--color-border-soft)]"
-                )}
-              >
-                <span
-                  className={cn(
-                    "inline-flex shrink-0 text-[var(--color-ink-faint)]",
-                    active && "text-[var(--color-accent)]"
-                  )}
-                >
-                  {item.icon}
-                </span>
-                <span className="flex-1">{item.label}</span>
-              </Link>
-            );
-          })}
+          {navItems.map((item) => (
+            <NavLeaf key={item.href} {...item} active={isActive(item.href)} />
+          ))}
+
+          {teamItem && (
+            <>
+              <div
+                className="mt-2 mb-1.5 border-t border-[var(--color-border-soft)]"
+                role="separator"
+              />
+              <NavLeaf {...teamItem} active={isActive("/teams")} />
+            </>
+          )}
         </nav>
 
         <div className="flex flex-col gap-[0.6rem] border-t border-[var(--color-border-soft)] pt-[0.85rem]">
@@ -139,6 +141,61 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
     </div>
+  );
+}
+
+function NavLeaf({
+  href,
+  label,
+  icon,
+  active,
+}: {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+  active: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "flex items-center gap-[0.7rem] rounded-[10px] px-[0.7rem] py-[0.55rem] text-[0.92rem] font-medium text-[var(--color-ink-muted)] no-underline transition-colors duration-[160ms]",
+        "hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]",
+        active &&
+          "bg-[var(--color-surface-solid)] text-[var(--color-ink)] shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_var(--color-border-soft)]"
+      )}
+    >
+      <span
+        className={cn(
+          "inline-flex shrink-0 text-[var(--color-ink-faint)]",
+          active && "text-[var(--color-accent)]"
+        )}
+      >
+        {icon}
+      </span>
+      <span className="flex-1">{label}</span>
+    </Link>
+  );
+}
+
+function TeamIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6" />
+      <circle cx="16.8" cy="9.2" r="2.6" />
+      <path d="M16 14.5c2.4.2 4.1 1.7 4.6 4" />
+    </svg>
   );
 }
 

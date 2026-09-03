@@ -3,12 +3,16 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api, isApiError } from "@/lib/api";
+import { api } from "@/lib/api";
+import { manualError } from "@/lib/errors";
+import { useAsyncError } from "@/hooks/useAsyncError";
+import { useContainers } from "@/lib/containers";
 
 export default function NewTeamPage() {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const { error, setError, run } = useAsyncError();
+  const { load: reloadContainers, setSelectedId } = useContainers();
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: FormEvent) {
@@ -16,24 +20,23 @@ export default function NewTeamPage() {
     setError(null);
     const trimmed = name.trim();
     if (!trimmed) {
-      setError("Team name is required");
+      setError(manualError("Team name is required"));
       return;
     }
     if (trimmed.length > 50) {
-      setError("Team name must be 50 chars or fewer");
+      setError(manualError("Team name must be 50 chars or fewer"));
       return;
     }
     setLoading(true);
-    try {
-      const { team } = await api.createTeam({ name: trimmed });
-      router.push(`/teams/${team.id}`);
-      router.refresh();
-    } catch (e: unknown) {
-      if (isApiError(e)) setError(e.message);
-      else setError("Failed to create team");
-    } finally {
-      setLoading(false);
-    }
+    const res = await run(() => api.createTeam({ name: trimmed, kind: "team" }), {
+      fallback: "Failed to create team",
+    });
+    setLoading(false);
+    if (!res) return;
+    // Keep the switcher atoms in sync, then land on the new container.
+    setSelectedId(res.team.id);
+    await reloadContainers();
+    router.push(`/teams/${res.team.id}`);
   }
 
   return (
@@ -69,7 +72,7 @@ export default function NewTeamPage() {
 
         {error && (
           <div className="mb-4 rounded-[var(--radius-btn)] border border-[var(--color-danger-border)] bg-[rgba(239,68,68,0.08)] px-4 py-[0.7rem] text-[0.88rem] text-[var(--color-danger-ink)]">
-            {error}
+            {error.message}
           </div>
         )}
 

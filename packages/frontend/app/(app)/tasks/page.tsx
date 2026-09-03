@@ -11,17 +11,19 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { DatePicker } from "./DatePicker";
-import { useRouter } from "next/navigation";
 import {
   api,
-  isApiError,
   type Task,
   type TaskStatus,
   type TaskPriority,
-  type TeamWithRole,
   type Comment,
   type User,
+  type Project,
+  type Kpi,
 } from "@/lib/api";
+import { useAsyncError } from "@/hooks/useAsyncError";
+import { useContainers } from "@/lib/containers";
+import { useContainerMeta } from "@/lib/meta";
 import { useSession } from "@/lib/session";
 import { cn } from "@/lib/cn";
 
@@ -128,16 +130,18 @@ function shortId(t: Task): string {
 }
 
 export default function TasksPage() {
-  const router = useRouter();
   const session = useSession();
 
-  const [teamId, setTeamId] = useState<string | null>(null);
-  const [bootError, setBootError] = useState<string | null>(null);
+  // PRD-06: the container comes from the global switcher atoms — no boot
+  // fetch/effect here anymore. Containers failing is a boot-level error.
+  const { selected, error: bootError } = useContainers();
+  const teamId = selected?.id ?? null;
+  const { projects, kpis: containerKpis } = useContainerMeta(selected?.id ?? null);
+  const { error, setError, run } = useAsyncError();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filter, setFilter] = useState<Filter>("active");
   const [sort, setSort] = useState<Sort>("manual");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const [collapsed, setCollapsed] = useState<Set<GroupId>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
@@ -146,6 +150,8 @@ export default function TasksPage() {
   const [newPriority, setNewPriority] = useState<TaskPriority>("medium");
   const [newStatus, setNewStatus] = useState<TaskStatus>("todo");
   const [newDueDate, setNewDueDate] = useState<string | null>(null);
+  const [newProjectId, setNewProjectId] = useState<string | null>(null);
+  const [newKpis, setNewKpis] = useState<{ kpi_id: string; weight: number }[]>([]);
   const [creating, setCreating] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
@@ -157,53 +163,14 @@ export default function TasksPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    if (session.status !== "authed") return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { teams } = await api.listTeams();
-        if (cancelled) return;
-        let team: TeamWithRole | undefined = teams[0];
-        if (!team) {
-          const created = await api.createTeam({ name: "Personal" });
-          if (cancelled) return;
-          team = { ...created.team, role: "owner" };
-        }
-        setTeamId(team.id);
-      } catch (e: unknown) {
-        if (!cancelled) {
-          if (isApiError(e) && e.status === 401) {
-            router.push("/login");
-            return;
-          }
-          setBootError(isApiError(e) ? e.message : "Failed to load workspace");
-          setLoading(false);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [session.status, router]);
-
   const loadTasks = useCallback(async () => {
     if (!teamId) return;
     setLoading(true);
     setError(null);
-    try {
-      const list = await api.listTeamTasks(teamId);
-      setTasks(list);
-    } catch (e: unknown) {
-      if (isApiError(e) && e.status === 401) {
-        router.push("/login");
-        return;
-      }
-      setError(isApiError(e) ? e.message : "Failed to load tasks");
-    } finally {
-      setLoading(false);
-    }
-  }, [teamId, router]);
+    const list = await run(() => api.listTeamTasks(teamId), { fallback: "Failed to load tasks" });
+    setLoading(false);
+    if (list) setTasks(list);
+  }, [teamId, run, setError]);
 
   useEffect(() => {
     if (teamId) loadTasks();
@@ -214,21 +181,23 @@ export default function TasksPage() {
     const title = newTitle.trim();
     if (!title || creating) return;
     setCreating(true);
-    try {
-      const created = await api.createTeamTask(teamId, {
-        title,
-        description: newDescription.trim() || undefined,
-        priority: newPriority,
-        status: newStatus,
-        due_date: newDueDate ?? undefined,
-      });
-      setTasks((prev) => [created, ...prev]);
-      resetAndCloseModal();
-    } catch (e: unknown) {
-      setError(isApiError(e) ? e.message : "Failed to create task");
-    } finally {
-      setCreating(false);
-    }
+    const created = await run(
+      () =>
+        api.createTeamTask(teamId, {
+          title,
+          description: newDescription.trim() || undefined,
+          priority: newPriority,
+          status: newStatus,
+          due_date: newDueDate ?? undefined,
+          project_id: newProjectId ?? undefined,
+          kpis: newKpis.length ? newKpis : undefined,
+        }),
+      { fallback: "Failed to create task" }
+    );
+    setCreating(false);
+    if (!created) return;
+    setTasks((prev) => [created, ...prev]);
+    resetAndCloseModal();
   }
 
   function openModal() {
@@ -237,6 +206,8 @@ export default function TasksPage() {
     setNewPriority("medium");
     setNewStatus("todo");
     setNewDueDate(null);
+    setNewProjectId(null);
+    setNewKpis([]);
     setModalOpen(true);
     requestAnimationFrame(() => titleInputRef.current?.focus());
   }
@@ -247,6 +218,8 @@ export default function TasksPage() {
     setNewPriority("medium");
     setNewStatus("todo");
     setNewDueDate(null);
+    setNewProjectId(null);
+    setNewKpis([]);
     setModalOpen(false);
   }
 
@@ -259,50 +232,43 @@ export default function TasksPage() {
 
   async function toggleTask(t: Task) {
     const next: TaskStatus = t.status === "done" ? "todo" : "done";
-    try {
-      const updated = await api.updateTask(t.id, { status: next });
-      setTasks((prev) => prev.map((x) => (x.id === t.id ? updated : x)));
-    } catch (e: unknown) {
-      setError(isApiError(e) ? e.message : "Failed to update task");
-    }
+    const updated = await run(() => api.updateTask(t.id, { status: next }), {
+      fallback: "Failed to update task",
+    });
+    if (!updated) return;
+    setTasks((prev) => prev.map((x) => (x.id === t.id ? updated : x)));
   }
 
   async function cyclePriority(t: Task) {
     const order: TaskPriority[] = ["low", "medium", "high"];
     const next = order[(order.indexOf(t.priority) + 1) % order.length];
-    try {
-      const updated = await api.updateTask(t.id, { priority: next });
-      setTasks((prev) => prev.map((x) => (x.id === t.id ? updated : x)));
-    } catch (e: unknown) {
-      setError(isApiError(e) ? e.message : "Failed to update task");
-    }
+    const updated = await run(() => api.updateTask(t.id, { priority: next }), {
+      fallback: "Failed to update task",
+    });
+    if (!updated) return;
+    setTasks((prev) => prev.map((x) => (x.id === t.id ? updated : x)));
   }
 
   async function toggleFlag(t: Task) {
-    try {
-      const updated = await api.flagTask(t.id);
-      setTasks((prev) => prev.map((x) => (x.id === t.id ? updated : x)));
-    } catch (e: unknown) {
-      setError(isApiError(e) ? e.message : "Failed to update task");
-    }
+    const updated = await run(() => api.flagTask(t.id), { fallback: "Failed to update task" });
+    if (!updated) return;
+    setTasks((prev) => prev.map((x) => (x.id === t.id ? updated : x)));
   }
 
   async function removeTask(id: string) {
-    try {
-      await api.deleteTask(id);
-      setTasks((prev) => prev.filter((x) => x.id !== id));
-      // selectedTask is derived from `tasks`, so the drawer would unmount
-      // instantly mid-animation — close it synchronously instead.
-      if (selectedTaskId === id) {
-        if (drawerCloseTimer.current) {
-          clearTimeout(drawerCloseTimer.current);
-          drawerCloseTimer.current = null;
-        }
-        setDrawerOpen(false);
-        setSelectedTaskId(null);
+    // deleteTask resolves void → undefined, so test for null, not falsiness.
+    const ok = await run(() => api.deleteTask(id), { fallback: "Failed to delete task" });
+    if (ok === null) return;
+    setTasks((prev) => prev.filter((x) => x.id !== id));
+    // selectedTask is derived from `tasks`, so the drawer would unmount
+    // instantly mid-animation — close it synchronously instead.
+    if (selectedTaskId === id) {
+      if (drawerCloseTimer.current) {
+        clearTimeout(drawerCloseTimer.current);
+        drawerCloseTimer.current = null;
       }
-    } catch (e: unknown) {
-      setError(isApiError(e) ? e.message : "Failed to delete task");
+      setDrawerOpen(false);
+      setSelectedTaskId(null);
     }
   }
 
@@ -313,14 +279,22 @@ export default function TasksPage() {
   // rejects. Flag toggling goes through api.flagTask directly since the
   // PATCH schema is `.strict()` and rejects unknown keys.
   async function updateTaskField(id: string, patch: DrawerPatch) {
-    try {
-      // Cast: api.updateTask is typed Partial<Task> but the backend validator
-      // accepts `description: null` to clear it. The runtime behavior is fine.
-      const updated = await api.updateTask(id, patch as Parameters<typeof api.updateTask>[1]);
-      setTasks((prev) => prev.map((x) => (x.id === id ? updated : x)));
-    } catch (e: unknown) {
-      setError(isApiError(e) ? e.message : "Failed to update task");
-    }
+    // Cast: api.updateTask is typed Partial<Task> but the backend validator
+    // accepts `description: null` to clear it. The runtime behavior is fine.
+    const updated = await run(
+      () => api.updateTask(id, patch as Parameters<typeof api.updateTask>[1]),
+      { fallback: "Failed to update task" }
+    );
+    if (!updated) return;
+    setTasks((prev) => prev.map((x) => (x.id === id ? updated : x)));
+  }
+
+  async function setTaskKpis(id: string, bindings: { kpi_id: string; weight: number }[]) {
+    const updated = await run(() => api.setTaskKpis(id, bindings), {
+      fallback: "Failed to update KPI weights",
+    });
+    if (!updated) return;
+    setTasks((prev) => prev.map((x) => (x.id === id ? updated : x)));
   }
 
   function openTask(id: string) {
@@ -412,7 +386,7 @@ export default function TasksPage() {
   if (bootError) {
     return (
       <div className="grid min-h-[60vh] place-items-center">
-        <p className="text-[var(--color-danger-ink)]">{bootError}</p>
+        <p className="text-[var(--color-danger-ink)]">{bootError.message}</p>
       </div>
     );
   }
@@ -520,7 +494,7 @@ export default function TasksPage() {
 
       {error && (
         <div className="mb-3 rounded-[var(--radius-btn)] border border-[var(--color-danger-border)] bg-[rgba(239,68,68,0.08)] px-4 py-[0.7rem] text-[0.88rem] text-[var(--color-danger-ink)]">
-          {error}
+          {error.message}
         </div>
       )}
 
@@ -627,6 +601,11 @@ export default function TasksPage() {
                                 key={t.id}
                                 task={t}
                                 done={done}
+                                project={
+                                  t.project_id
+                                    ? (projects.find((p) => p.id === t.project_id) ?? null)
+                                    : null
+                                }
                                 onOpen={() => openTask(t.id)}
                                 onToggle={() => toggleTask(t)}
                                 onCyclePriority={() => cyclePriority(t)}
@@ -663,8 +642,11 @@ export default function TasksPage() {
             <TaskDetailDrawer
               task={selectedTask}
               currentUser={session.status === "authed" ? session.user : null}
+              projects={projects}
+              kpis={containerKpis}
               onClose={closeDrawer}
               onUpdate={(patch) => updateTaskField(selectedTask.id, patch)}
+              onSetKpis={(bindings) => setTaskKpis(selectedTask.id, bindings)}
               onToggleFlag={() => toggleFlag(selectedTask)}
               onDelete={() => removeTask(selectedTask.id)}
             />
@@ -684,6 +666,12 @@ export default function TasksPage() {
         setStatus={setNewStatus}
         dueDate={newDueDate}
         setDueDate={setNewDueDate}
+        projects={projects}
+        kpis={containerKpis}
+        projectId={newProjectId}
+        setProjectId={setNewProjectId}
+        kpiBindings={newKpis}
+        setKpiBindings={setNewKpis}
         creating={creating}
         titleInputRef={titleInputRef}
         onSubmit={createTaskFromModal}
@@ -706,6 +694,12 @@ function NewTaskModal({
   setStatus,
   dueDate,
   setDueDate,
+  projects,
+  kpis,
+  projectId,
+  setProjectId,
+  kpiBindings,
+  setKpiBindings,
   creating,
   titleInputRef,
   onSubmit,
@@ -723,6 +717,12 @@ function NewTaskModal({
   setStatus: (s: TaskStatus) => void;
   dueDate: string | null;
   setDueDate: (iso: string | null) => void;
+  projects: Project[];
+  kpis: Kpi[];
+  projectId: string | null;
+  setProjectId: (id: string | null) => void;
+  kpiBindings: BindingDraft[];
+  setKpiBindings: (b: BindingDraft[]) => void;
   creating: boolean;
   titleInputRef: React.RefObject<HTMLInputElement | null>;
   onSubmit: (e: FormEvent) => void;
@@ -852,6 +852,8 @@ function NewTaskModal({
                 </ChipShell>
               )}
             />
+            <ProjectChip projects={projects} value={projectId} onChange={setProjectId} />
+            <KpiChip kpis={kpis} value={kpiBindings} onChange={setKpiBindings} />
             <button
               type="button"
               aria-label="More"
@@ -1139,9 +1141,215 @@ function MenuItem({
   );
 }
 
+// ---- PRD-06 binding chips -------------------------------------------------
+
+type BindingDraft = { kpi_id: string; weight: number };
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="px-3 pb-0.5 pt-2 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-[var(--color-ink-faint)]">
+      {children}
+    </div>
+  );
+}
+
+function ProjectChip({
+  projects,
+  value,
+  onChange,
+}: {
+  projects: Project[];
+  value: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  const current = projects.find((p) => p.id === value);
+  // Archived projects are picked nowhere; they're managed on the team page.
+  const live = projects.filter((p) => !p.archived);
+  const team = live.filter((p) => p.scope === "team");
+  const personal = live.filter((p) => p.scope === "personal");
+  return (
+    <Dropdown
+      trigger={(open) => (
+        <ChipShell open={open}>
+          <MinWidthChip icon={<ProjectIcon />} longestLabel="Project">
+            <span>{current?.name ?? "Project"}</span>
+          </MinWidthChip>
+          <ChevronIcon />
+        </ChipShell>
+      )}
+    >
+      <MenuItem selected={!value} onClick={() => onChange(null)}>
+        No project
+      </MenuItem>
+      {team.length > 0 && <SectionLabel>Team</SectionLabel>}
+      {team.map((p) => (
+        <MenuItem key={p.id} selected={p.id === value} onClick={() => onChange(p.id)}>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span
+              className="size-2 shrink-0 rounded-full"
+              style={{ background: p.color ?? "var(--color-ink-faint)" }}
+            />
+            {p.name}
+          </span>
+        </MenuItem>
+      ))}
+      {personal.length > 0 && <SectionLabel>Personal</SectionLabel>}
+      {personal.map((p) => (
+        <MenuItem key={p.id} selected={p.id === value} onClick={() => onChange(p.id)}>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span
+              className="size-2 shrink-0 rounded-full"
+              style={{ background: p.color ?? "var(--color-ink-faint)" }}
+            />
+            {p.name} · {p.owner_username}
+          </span>
+        </MenuItem>
+      ))}
+      {projects.length === 0 && (
+        <p className="m-0 px-3 py-2 text-[0.78rem] text-[var(--color-ink-faint)]">
+          No projects yet — create them on the team page.
+        </p>
+      )}
+    </Dropdown>
+  );
+}
+
+function KpiChip({
+  kpis,
+  value,
+  onChange,
+}: {
+  kpis: Kpi[];
+  value: BindingDraft[];
+  onChange: (next: BindingDraft[]) => void;
+}) {
+  const total = value.reduce((s, b) => s + b.weight, 0);
+  return (
+    <Dropdown
+      trigger={(open) => (
+        <ChipShell open={open}>
+          <MinWidthChip icon={<KpiIcon />} longestLabel="KPIs 100%">
+            <span>{value.length > 0 ? `KPIs ${total}%` : "KPIs"}</span>
+          </MinWidthChip>
+          <ChevronIcon />
+        </ChipShell>
+      )}
+    >
+      {kpis.length === 0 && (
+        <p className="m-0 px-3 py-2 text-[0.78rem] text-[var(--color-ink-faint)]">
+          No KPIs yet — create them on the team page.
+        </p>
+      )}
+      {kpis.map((k) => {
+        const binding = value.find((b) => b.kpi_id === k.id);
+        return (
+          <div key={k.id} className="flex items-center gap-2 px-3 py-[0.3rem]">
+            <button
+              type="button"
+              onClick={() =>
+                binding
+                  ? onChange(value.filter((b) => b.kpi_id !== k.id))
+                  : onChange([...value, { kpi_id: k.id, weight: 25 }])
+              }
+              className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 border-0 bg-transparent p-0 text-left text-[0.82rem] text-[var(--color-ink)]"
+            >
+              <span
+                className={cn(
+                  "grid size-[14px] shrink-0 place-items-center rounded-[3px] border-[1.5px] text-transparent",
+                  binding
+                    ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
+                    : "border-[var(--color-border-strong)]"
+                )}
+              >
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M5 12.5l4.5 4.5L19 7"
+                    stroke="currentColor"
+                    strokeWidth="3.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+              <span className="truncate">
+                {k.name}
+                <span className="text-[var(--color-ink-faint)]"> · {k.owner_username}</span>
+              </span>
+            </button>
+            {binding && (
+              <input
+                key={`${k.id}:${binding.weight}`}
+                type="number"
+                min={1}
+                max={100}
+                defaultValue={binding.weight}
+                onBlur={(e) => {
+                  const w = Math.min(100, Math.max(1, Number(e.target.value) || 1));
+                  onChange(value.map((b) => (b.kpi_id === k.id ? { ...b, weight: w } : b)));
+                }}
+                aria-label={`Weight for ${k.name}`}
+                className="w-14 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-1.5 py-0.5 text-right font-mono text-[0.76rem] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+              />
+            )}
+          </div>
+        );
+      })}
+      {value.length > 0 && (
+        <div
+          className={cn(
+            "border-t border-[var(--color-border-soft)] px-3 py-1.5 text-[0.72rem]",
+            total > 100
+              ? "font-semibold text-[var(--color-danger)]"
+              : "text-[var(--color-ink-faint)]"
+          )}
+        >
+          {total}% of 100%{total > 100 ? " — over budget" : ""}
+        </div>
+      )}
+    </Dropdown>
+  );
+}
+
+function ProjectIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2h9a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 19.5 18h-15A1.5 1.5 0 0 1 3 16.5z" />
+    </svg>
+  );
+}
+
+function KpiIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M12 4v2.5M12 17.5V20" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function TaskRow({
   task,
   done,
+  project,
   onOpen,
   onToggle,
   onCyclePriority,
@@ -1150,6 +1358,7 @@ function TaskRow({
 }: {
   task: Task;
   done: boolean;
+  project: Project | null;
   onOpen: () => void;
   onToggle: () => void;
   onCyclePriority: () => void;
@@ -1218,6 +1427,35 @@ function TaskRow({
           {task.title}
         </span>
       </div>
+
+      {(task.project_id || task.kpis.length > 0) && (
+        <span className="flex shrink-0 max-w-[320px] items-center gap-2 text-[0.72rem] text-[var(--color-ink-faint)] max-[900px]:hidden">
+          {project && (
+            <span
+              className="inline-flex min-w-0 items-center gap-1"
+              title={`Project: ${project.name}`}
+            >
+              <span
+                className="size-2 shrink-0 rounded-full"
+                style={{ background: project.color ?? "var(--color-ink-faint)" }}
+              />
+              <span className="truncate">{project.name}</span>
+            </span>
+          )}
+          {task.kpis.map((k) => (
+            <span
+              key={k.kpi_id}
+              className="inline-flex min-w-0 items-center gap-1"
+              title={`${k.name}: ${k.weight}%`}
+            >
+              <KpiIcon />
+              <span className="truncate">
+                {k.name} {k.weight}%
+              </span>
+            </span>
+          ))}
+        </span>
+      )}
 
       {task.due_date && (
         <span className="shrink-0 font-mono text-[0.74rem] text-[var(--color-ink-faint)]">
@@ -1532,20 +1770,27 @@ type DrawerPatch = {
   status?: TaskStatus;
   priority?: TaskPriority;
   due_date?: string | null;
+  project_id?: string | null;
 };
 
 function TaskDetailDrawer({
   task,
   currentUser,
+  projects,
+  kpis,
   onClose,
   onUpdate,
+  onSetKpis,
   onToggleFlag,
   onDelete,
 }: {
   task: Task;
   currentUser: User | null;
+  projects: Project[];
+  kpis: Kpi[];
   onClose: () => void;
   onUpdate: (patch: DrawerPatch) => void;
+  onSetKpis: (bindings: BindingDraft[]) => void;
   onToggleFlag: () => void;
   onDelete: () => void;
 }) {
@@ -1754,6 +1999,19 @@ function TaskDetailDrawer({
             )}
           />
 
+          <ProjectChip
+            projects={projects}
+            value={task.project_id}
+            onChange={(id) => onUpdate({ project_id: id })}
+          />
+          <KpiChip
+            kpis={kpis}
+            value={task.kpis}
+            onChange={(next) =>
+              onSetKpis(next.map((b) => ({ kpi_id: b.kpi_id, weight: b.weight })))
+            }
+          />
+
           {/* Flag chip — uses onToggleFlag (POST /tasks/:id/flag), since
                 PATCH /tasks/:id is .strict() and rejects `flagged`. */}
           <button
@@ -1895,7 +2153,7 @@ function wasEdited(c: Comment): boolean {
 function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser: User | null }) {
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const { error: actionError, setError: setActionError, run } = useAsyncError();
   const [now, setNow] = useState(() => Date.now());
   const [replyTo, setReplyTo] = useState<Comment | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -1910,7 +2168,7 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
     if (!actionError) return;
     const id = setTimeout(() => setActionError(null), 4_000);
     return () => clearTimeout(id);
-  }, [actionError]);
+  }, [actionError, setActionError]);
 
   const load = useCallback(async () => {
     try {
@@ -1951,24 +2209,22 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
       updated_at: iso,
     };
     setComments((cs) => [...(cs ?? []), temp]);
-    try {
-      const { comment } = await api.createComment(taskId, body, parentId);
-      setComments((cs) => (cs ?? []).map((c) => (c.id === temp.id ? comment : c)));
-    } catch (e) {
-      setComments((cs) => (cs ?? []).filter((c) => c.id !== temp.id));
-      setActionError(isApiError(e) ? e.message : "Failed to post comment");
-    }
+    const res = await run(() => api.createComment(taskId, body, parentId), {
+      fallback: "Failed to post comment",
+      // Undo the optimistic insert; the hook already surfaced the failure.
+      onError: () => setComments((cs) => (cs ?? []).filter((c) => c.id !== temp.id)),
+    });
+    if (res) setComments((cs) => (cs ?? []).map((c) => (c.id === temp.id ? res.comment : c)));
   }
 
   async function saveEdit(id: string, prevBody: string, body: string) {
     setComments((cs) => (cs ?? []).map((c) => (c.id === id ? { ...c, body } : c)));
-    try {
-      const { comment } = await api.updateComment(id, body);
-      setComments((cs) => (cs ?? []).map((c) => (c.id === id ? comment : c)));
-    } catch (e) {
-      setComments((cs) => (cs ?? []).map((c) => (c.id === id ? { ...c, body: prevBody } : c)));
-      setActionError(isApiError(e) ? e.message : "Failed to save comment");
-    }
+    const res = await run(() => api.updateComment(id, body), {
+      fallback: "Failed to save comment",
+      onError: () =>
+        setComments((cs) => (cs ?? []).map((c) => (c.id === id ? { ...c, body: prevBody } : c))),
+    });
+    if (res) setComments((cs) => (cs ?? []).map((c) => (c.id === id ? res.comment : c)));
   }
 
   async function remove(id: string) {
@@ -1976,12 +2232,10 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
     setReplyTo((r) => (r && (r.id === id || r.parent_id === id) ? null : r));
     // Mirror the DB cascade locally: deleting a comment drops its replies.
     setComments(prev.filter((c) => c.id !== id && c.parent_id !== id));
-    try {
-      await api.deleteComment(id);
-    } catch (e) {
-      setComments(prev);
-      setActionError(isApiError(e) ? e.message : "Failed to delete comment");
-    }
+    await run(() => api.deleteComment(id), {
+      fallback: "Failed to delete comment",
+      onError: () => setComments(prev),
+    });
   }
 
   // One level of threading: roots in arrival order, replies grouped under
@@ -2066,7 +2320,7 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
       </div>
 
       {actionError && (
-        <p className="mt-1.5 text-[0.74rem] text-[var(--color-danger)]">{actionError}</p>
+        <p className="mt-1.5 text-[0.74rem] text-[var(--color-danger)]">{actionError.message}</p>
       )}
 
       {currentUser && (

@@ -1,5 +1,4 @@
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4200/api";
-
 export type TaskStatus = "todo" | "in_progress" | "done" | "canceled";
 export type TaskPriority = "low" | "medium" | "high";
 
@@ -10,10 +9,54 @@ export type Task = {
   description: string;
   status: TaskStatus;
   priority: TaskPriority;
+  project_id: string | null;
+  kpis: TaskKpiBinding[];
   due_date: string | null;
   flagged: boolean;
   created_at: string;
   updated_at: string;
+};
+
+// PRD-06: projects group tasks; KPIs measure them via weighted bindings.
+export type ContainerScope = "team" | "personal";
+
+export type Project = {
+  id: string;
+  team_id: string;
+  owner_id: string;
+  owner_username: string;
+  scope: ContainerScope;
+  name: string;
+  color: string | null;
+  archived: boolean;
+  task_count: number;
+  task_done_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Kpi = {
+  id: string;
+  team_id: string;
+  owner_id: string;
+  owner_username: string;
+  name: string;
+  binding_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TaskKpiBinding = { kpi_id: string; name: string; weight: number };
+
+// PRD-06 phase 3: weighted progress per KPI (analytics card).
+export type KpiProgress = {
+  id: string;
+  name: string;
+  scope: ContainerScope;
+  owner_username: string;
+  task_count: number;
+  weight_sum: number;
+  progress: number; // 0–100
 };
 
 export type User = {
@@ -28,6 +71,9 @@ export type Team = {
   name: string;
   slug: string;
   owner_id: string;
+  // PRD-06: one container model, two states.
+  kind: "workspace" | "team";
+  member_count: number;
   created_at: string;
 };
 
@@ -111,25 +157,51 @@ export type Progress = {
   tasks: ProgressTask[];
 };
 
-export type ApiError = {
-  error: string;
-  message: string;
-  status: number;
-};
+// Errors live in lib/errors.ts (shared with the useAsyncError hook); these
+// re-exports keep `import { isApiError } from "@/lib/api"` working.
+export { isApiError } from "@/lib/errors";
+export type { ApiError } from "@/lib/errors";
+import { ERROR_RULES, type ApiError } from "@/lib/errors";
 
-export function isApiError(e: unknown): e is ApiError {
-  return typeof e === "object" && e !== null && "error" in e && "message" in e && "status" in e;
+// Mirrors the backend's request log so one call reads the same in both
+// terminals (Next forwards browser console output to the dev terminal):
+//   [api] GET /teams → 200 (4ms)
+//   [api] POST /tasks → 403 (2ms) · forbidden "not a member of this team"
+// Plain text, no %c styling, so the forwarded line stays readable.
+function logCall(method: string, path: string, status: number, ms: number, detail?: string) {
+  const line = `[api] ${method} ${path} → ${status} (${ms}ms)${detail ? ` · ${detail}` : ""}`;
+  if (status === 0 || status >= 500) console.error(line);
+  else if (status >= 400) console.warn(line);
+  else console.log(line);
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    credentials: "include",
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
+  const method = (init?.method ?? "GET").toUpperCase();
+  const start = Date.now();
+  const done = (status: number, detail?: string) =>
+    logCall(method, path, status, Date.now() - start, detail);
+
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      credentials: "include",
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+  } catch {
+    // fetch() itself rejected: server down, offline, CORS or DNS. Hand back the
+    // same shape as every other failure so callers never special-case it.
+    done(0, "network_error");
+    throw {
+      error: "network_error",
+      message: `${ERROR_RULES.network_error.message} (${BASE})`,
+      status: 0,
+    } satisfies ApiError;
+  }
+
   if (!res.ok) {
     let payload: ApiError = {
       error: "unknown",
@@ -145,8 +217,11 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       /* keep default */
     }
+    const detail = payload.error === "unknown" ? "" : `${payload.error} "${payload.message}"`;
+    done(res.status, detail);
     throw payload;
   }
+  done(res.status);
   if (res.status === 204) return undefined as T;
   const text = await res.text();
   return (text ? JSON.parse(text) : undefined) as T;
@@ -168,7 +243,7 @@ export const api = {
   me: () => req<{ user: User }>("/me"),
 
   // ---- Teams ----
-  createTeam: (data: { name: string }) =>
+  createTeam: (data: { name: string; kind?: "workspace" | "team" }) =>
     req<{ team: Team }>("/teams", {
       method: "POST",
       body: JSON.stringify(data),
@@ -214,12 +289,46 @@ export const api = {
       status?: TaskStatus;
       priority?: TaskPriority;
       due_date?: string;
+      project_id?: string | null;
+      kpis?: { kpi_id: string; weight: number }[];
     }
   ) =>
     req<Task>(`/teams/${teamId}/tasks`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
+
+  // ---- Projects & KPIs (PRD-06) ----
+  listProjects: (teamId: string, all?: boolean) =>
+    req<{ projects: Project[] }>(`/teams/${teamId}/projects${all ? "?all=1" : ""}`),
+  createProject: (
+    teamId: string,
+    data: { name: string; color?: string | null; scope?: ContainerScope }
+  ) =>
+    req<{ project: Project }>(`/teams/${teamId}/projects`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateProject: (id: string, data: { name?: string; color?: string | null; archived?: boolean }) =>
+    req<{ project: Project }>(`/projects/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  deleteProject: (id: string) => req<void>(`/projects/${id}`, { method: "DELETE" }),
+  listKpis: (teamId: string) => req<{ kpis: Kpi[] }>(`/teams/${teamId}/kpis`),
+  createKpi: (teamId: string, data: { name: string }) =>
+    req<{ kpi: Kpi }>(`/teams/${teamId}/kpis`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateKpi: (id: string, data: { name?: string }) =>
+    req<{ kpi: Kpi }>(`/kpis/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteKpi: (id: string) => req<void>(`/kpis/${id}`, { method: "DELETE" }),
+  getKpiProgress: (teamId: string) =>
+    req<{ kpis: KpiProgress[] }>(`/teams/${teamId}/kpis/progress`),
+  // Replace-all binding set for a task; [] clears.
+  setTaskKpis: (id: string, kpis: { kpi_id: string; weight: number }[]) =>
+    req<Task>(`/tasks/${id}/kpis`, { method: "PUT", body: JSON.stringify({ kpis }) }),
   updateTask: (id: string, data: Partial<Task>) =>
     req<Task>(`/tasks/${id}`, {
       method: "PATCH",

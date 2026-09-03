@@ -12,13 +12,14 @@ import {
 } from "recharts";
 import {
   api,
-  isApiError,
   type Analytics,
   type AnalyticsSeriesItem,
+  type KpiProgress,
   type Progress,
   type ProgressTask,
-  type TeamWithRole,
 } from "@/lib/api";
+import { useAsyncError } from "@/hooks/useAsyncError";
+import { useContainers } from "@/lib/containers";
 
 // PRD-04 phase 3 — team activity chart. Lines plot cumulative running
 // totals (created, started, finished, canceled) so the line never drops
@@ -74,59 +75,38 @@ function fmtDate(iso: string): string {
   return `${months[Number(m) - 1]} ${Number(d)}`;
 }
 
-function timeOfDayGreeting(): string {
-  return "Analytics";
-}
-
 export default function AnalyticsPage() {
-  const [teams, setTeams] = useState<TeamWithRole[]>([]);
-  const [teamId, setTeamId] = useState<string | null>(null);
+  // PRD-06: container comes from the global switcher atoms.
+  const { selected } = useContainers();
+  const teamId = selected?.id ?? null;
   // Trailing window: today is the right edge, `WINDOW_DAYS` - 1 days ago
   // is the left edge. Sent as the API `range`, which already counts days
   // back from today.
   const windowDates = useMemo(() => trailingDates(new Date(), WINDOW_DAYS), []);
   const [data, setData] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { error, setError, run } = useAsyncError();
+  const { error: progressError, setError: setProgressError, run: runProgress } = useAsyncError();
+  const { error: kpiError, setError: setKpiError, run: runKpiProgress } = useAsyncError();
+  const [kpiProgress, setKpiProgress] = useState<KpiProgress[] | null>(null);
+  const [kpiLoading, setKpiLoading] = useState(true);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [progressLoading, setProgressLoading] = useState(true);
-  const [progressError, setProgressError] = useState<string | null>(null);
   const [jumpMonth, setJumpMonth] = useState<number | null>(null);
   const [visible, setVisible] = useState<Set<SeriesKey>>(
     new Set(["created", "in_progress", "completed", "canceled"])
   );
 
-  // Load teams once; preselect the first so the chart has somewhere to point.
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const res = await api.listTeams();
-        if (!alive) return;
-        setTeams(res.teams);
-        if (res.teams[0]) setTeamId(res.teams[0].id);
-      } catch (e) {
-        if (alive) setError(isApiError(e) ? e.message : "Couldn't load teams");
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, []);
-
   const load = useCallback(async () => {
     if (!teamId) return;
     setLoading(true);
     setError(null);
-    try {
-      const a = await api.getAnalytics(teamId, WINDOW_DAYS);
-      setData(a);
-    } catch (e) {
-      setError(isApiError(e) ? e.message : "Couldn't load analytics");
-    } finally {
-      setLoading(false);
-    }
-  }, [teamId]);
+    const a = await run(() => api.getAnalytics(teamId, WINDOW_DAYS), {
+      fallback: "Couldn't load analytics",
+    });
+    setLoading(false);
+    if (a) setData(a);
+  }, [teamId, run, setError]);
 
   useEffect(() => {
     load();
@@ -136,18 +116,31 @@ export default function AnalyticsPage() {
     if (!teamId) return;
     setProgressLoading(true);
     setProgressError(null);
-    try {
-      setProgress(await api.getProgress(teamId));
-    } catch (e) {
-      setProgressError(isApiError(e) ? e.message : "Couldn't load progress");
-    } finally {
-      setProgressLoading(false);
-    }
-  }, [teamId]);
+    const p = await runProgress(() => api.getProgress(teamId), {
+      fallback: "Couldn't load progress",
+    });
+    setProgressLoading(false);
+    if (p) setProgress(p);
+  }, [teamId, runProgress, setProgressError]);
 
   useEffect(() => {
     loadProgress();
   }, [loadProgress]);
+
+  const loadKpiProgress = useCallback(async () => {
+    if (!teamId) return;
+    setKpiLoading(true);
+    setKpiError(null);
+    const res = await runKpiProgress(() => api.getKpiProgress(teamId), {
+      fallback: "Couldn't load KPI progress",
+    });
+    setKpiLoading(false);
+    if (res) setKpiProgress(res.kpis);
+  }, [teamId, runKpiProgress, setKpiError]);
+
+  useEffect(() => {
+    loadKpiProgress();
+  }, [loadKpiProgress]);
 
   function toggle(k: SeriesKey) {
     setVisible((v) => {
@@ -159,7 +152,6 @@ export default function AnalyticsPage() {
   }
 
   const visibleSeries = useMemo(() => SERIES.filter((s) => visible.has(s.key)), [visible]);
-  const teamName = teams.find((t) => t.id === teamId)?.name ?? "—";
 
   // Normalize the API series into one row per day of the window. The
   // backend starts its series at the oldest event, so the early days of a
@@ -189,34 +181,33 @@ export default function AnalyticsPage() {
   }, [data, windowDates]);
 
   return (
-    <div className="py-8 max-[800px]:py-5">
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-[1.25rem] tracking-[-0.015em] m-0">{timeOfDayGreeting()}</h1>
-          <p className="mt-1 text-[0.82rem] text-[var(--color-ink-muted)]">
-            How work flows through <b>{teamName}</b> — last {WINDOW_DAYS} days.
-          </p>
+    <div>
+      {/* Top bar: breadcrumb + actions — same as the Tasks/Team pages */}
+      <div className="flex items-center justify-between border-b border-[var(--color-border-soft)] py-1">
+        <div className="flex items-center gap-[0.4rem] text-[0.92rem] font-semibold">
+          <span className="text-[var(--color-ink-muted)]">Mokara</span>
+          <span className="text-[var(--color-ink-faint)]">›</span>
+          <span>Analytics</span>
+          <button
+            type="button"
+            aria-label="Star"
+            className="ml-1 grid size-6 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink-muted)]"
+          >
+            <StarIcon />
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          {teams.length > 1 && (
-            <select
-              value={teamId ?? ""}
-              onChange={(e) => setTeamId(e.target.value)}
-              className="cursor-pointer rounded-[999px] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] px-3 py-1.5 text-[0.78rem] font-medium text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
-            >
-              {teams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+        <button
+          type="button"
+          aria-label="Notifications"
+          className="grid size-8 cursor-pointer place-items-center rounded-md text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+        >
+          <BellIcon />
+        </button>
       </div>
 
       {/* Progress card */}
       {data && (
-        <section className="mb-4 rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-18px_rgba(15,23,42,0.25)]">
+        <section className="mt-3 mb-4 rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-18px_rgba(15,23,42,0.25)]">
           <div className="mb-3 flex items-baseline justify-between">
             <span className="text-[0.8rem] font-semibold">Current distribution</span>
             <span className="text-[0.78rem] text-[var(--color-ink-muted)]">
@@ -294,7 +285,7 @@ export default function AnalyticsPage() {
             </div>
           ) : error ? (
             <div className="grid h-full place-items-center text-[0.8rem] text-[var(--color-ink-faint)]">
-              {error}
+              {error.message}
               <button
                 type="button"
                 onClick={load}
@@ -383,7 +374,7 @@ export default function AnalyticsPage() {
           </div>
         ) : progressError ? (
           <div className="grid h-[120px] place-items-center text-[0.8rem] text-[var(--color-ink-faint)]">
-            {progressError}
+            {progressError.message}
             <button
               type="button"
               onClick={loadProgress}
@@ -394,6 +385,61 @@ export default function AnalyticsPage() {
           </div>
         ) : (
           <ProgressGantt tasks={progress?.tasks ?? []} jumpToMonth={jumpMonth} />
+        )}
+      </section>
+
+      {/* KPI progress card — weighted: Σ(weight × status) ÷ Σ(weight) */}
+      <section className="mt-4 rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-18px_rgba(15,23,42,0.25)]">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[0.8rem] font-semibold">KPI progress</span>
+          <span className="text-[0.7rem] text-[var(--color-ink-faint)]">
+            Σ(weight × status) ÷ Σ(weight) · canceled excluded
+          </span>
+        </div>
+        {kpiLoading && !kpiProgress ? (
+          <div className="grid h-[80px] place-items-center text-[0.8rem] text-[var(--color-ink-faint)]">
+            Loading…
+          </div>
+        ) : kpiError ? (
+          <div className="grid h-[80px] place-items-center text-[0.8rem] text-[var(--color-ink-faint)]">
+            {kpiError.message}
+            <button
+              type="button"
+              onClick={loadKpiProgress}
+              className="ml-2 cursor-pointer text-[var(--color-accent)] underline"
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
+            {(kpiProgress ?? []).map((k) => (
+              <li key={k.id} className="flex items-center gap-3 py-1.5">
+                <span className="w-[180px] shrink-0 truncate text-[0.8rem] font-medium text-[var(--color-ink)]">
+                  {k.name}
+                </span>
+                <span className="pill shrink-0">{k.owner_username}</span>
+                <span className="flex h-2 flex-1 overflow-hidden rounded-[999px] bg-[rgba(148,163,184,0.18)]">
+                  <span
+                    className="h-full rounded-[999px] bg-[var(--color-accent)] transition-[width] duration-300"
+                    style={{ width: `${k.progress}%` }}
+                  />
+                </span>
+                <span className="w-[42px] shrink-0 text-right font-mono text-[0.76rem] text-[var(--color-ink)]">
+                  {k.progress}%
+                </span>
+                <span className="w-[92px] shrink-0 text-right text-[0.72rem] text-[var(--color-ink-faint)]">
+                  {k.task_count} tied · Σ{k.weight_sum}
+                </span>
+              </li>
+            ))}
+            {(kpiProgress ?? []).length === 0 && (
+              <li className="py-2 text-[0.78rem] text-[var(--color-ink-faint)]">
+                No KPIs in this container yet — create them on the team page, then weight tasks
+                toward them from the task drawer.
+              </li>
+            )}
+          </ul>
         )}
       </section>
     </div>
@@ -945,4 +991,31 @@ function ChartTooltip({
 // cn helper must be imported to support compact sibling classes above.
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
+}
+
+function StarIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 3.5l2.7 5.5 6 .9-4.4 4.2 1.1 6L12 17.3 6.6 20l1.1-6L3.3 9.9l6-.9L12 3.5z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function BellIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M6 16V11a6 6 0 1112 0v5l1.5 2H4.5L6 16z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path d="M10 21h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
 }

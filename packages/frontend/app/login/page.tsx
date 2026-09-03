@@ -1,13 +1,25 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { setSessionUser } from "@/lib/session";
 import { useAsyncError } from "@/hooks/useAsyncError";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 export default function LoginPage() {
+  // useSearchParams() bails out of static rendering, and Next requires it to
+  // sit under a Suspense boundary — without one, `next build` fails the export
+  // of /login outright. The form itself is unchanged, just one level down.
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
   const search = useSearchParams();
   const [username, setUsername] = useState("");
@@ -80,11 +92,7 @@ export default function LoginPage() {
             />
           </label>
 
-          {error && (
-            <div className="mb-4 rounded-[var(--radius-btn)] border border-[var(--color-danger-border)] bg-[rgba(239,68,68,0.08)] px-4 py-[0.7rem] text-[0.88rem] text-[var(--color-danger-ink)]">
-              {error.message}
-            </div>
-          )}
+          <ErrorBanner className="mb-4" message={error?.message} />
 
           <button
             type="submit"

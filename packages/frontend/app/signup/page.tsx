@@ -6,6 +6,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { setSessionUser } from "@/lib/session";
 import { useAsyncError } from "@/hooks/useAsyncError";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -115,11 +116,7 @@ export default function SignupPage() {
             )}
           </label>
 
-          {error && (
-            <div className="mb-4 rounded-[var(--radius-btn)] border border-[var(--color-danger-border)] bg-[rgba(239,68,68,0.08)] px-4 py-[0.7rem] text-[0.88rem] text-[var(--color-danger-ink)]">
-              {error.message}
-            </div>
-          )}
+          <ErrorBanner className="mb-4" message={error?.message} />
 
           <button type="submit" className="btn-base btn-primary mt-2 w-full" disabled={!canSubmit}>
             {loading ? "Creating…" : "Create account"}

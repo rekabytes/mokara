@@ -24,6 +24,8 @@ model User {
   comments          Comment[]
   taskEvents        TaskEvent[]      @relation("TaskEventActor")
   taskDueChanges    TaskDueChange[]  @relation("TaskDueChangeActor")
+  projects          Project[]        @relation("ProjectOwner")
+  kpis              Kpi[]            @relation("KpiOwner")
 
   @@map("users")
 }
@@ -33,6 +35,7 @@ model Team {
   name      String
   slug      String   @unique
   ownerId   String   @map("owner_id") @db.Uuid
+  kind      String   @default("team") // "workspace" (private, solo) | "team"
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -41,6 +44,8 @@ model Team {
   invitations TeamInvitation[]
   tasks       Task[]
   taskEvents  TaskEvent[]
+  projects    Project[]
+  kpis        Kpi[]
 
   @@map("teams")
 }
@@ -81,6 +86,7 @@ model TeamInvitation {
 model Task {
   id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   teamId      String    @map("team_id") @db.Uuid
+  projectId   String?   @map("project_id") @db.Uuid
   title       String
   description String?
   status      String    @default("todo")
@@ -91,12 +97,15 @@ model Task {
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   team       Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  project    Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
   comments   Comment[]
   events     TaskEvent[]
   dueChanges TaskDueChange[]
+  kpiBindings TaskKpi[]
 
   @@index([teamId, status])
   @@index([status])
+  @@index([projectId])
   @@map("tasks")
 }
 
@@ -152,4 +161,56 @@ model TaskDueChange {
 
   @@index([taskId, createdAt])
   @@map("task_due_changes")
+}
+
+// PRD-06: Projects group tasks; scope "team" (owner-created, shared) or
+// "personal" (any member, visible to the team). No linking between them.
+model Project {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId    String   @map("team_id") @db.Uuid
+  ownerId   String   @map("owner_id") @db.Uuid
+  scope     String   @default("personal") // "team" | "personal"
+  name      String
+  color     String?
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  team  Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  owner User   @relation("ProjectOwner", fields: [ownerId], references: [id])
+  tasks Task[]
+
+  @@index([teamId, scope])
+  @@map("projects")
+}
+
+// KPIs are measured via weighted task bindings (TaskKpi), progress =
+// Σ(weight × status fraction) ÷ Σ(weight) — see routes/kpis.ts.
+model Kpi {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId    String   @map("team_id") @db.Uuid
+  ownerId   String   @map("owner_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  team     Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  owner    User      @relation("KpiOwner", fields: [ownerId], references: [id])
+  bindings TaskKpi[]
+
+  @@index([teamId])
+  @@map("kpis")
+}
+
+model TaskKpi {
+  taskId String @map("task_id") @db.Uuid
+  kpiId  String @map("kpi_id") @db.Uuid
+  weight Int    // percent 1–100; per-task total ≤ 100 enforced in the route
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  kpi  Kpi  @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, kpiId])
+  @@index([kpiId])
+  @@map("task_kpis")
 }

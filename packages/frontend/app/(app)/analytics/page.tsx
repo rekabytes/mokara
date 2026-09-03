@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { DUR, snap, tickVariants } from "@/lib/motion";
+import { cn } from "@/lib/cn";
 import {
   LineChart,
   Line,
@@ -28,7 +31,7 @@ import { useContainers } from "@/lib/containers";
 // so the right edge is always the current date and every day in between
 // gets its own tick on the x-axis.
 
-type SeriesKey = "created" | "in_progress" | "completed" | "canceled";
+type SeriesKey = keyof Omit<AnalyticsSeriesItem, "date">;
 
 const WINDOW_DAYS = 14;
 
@@ -75,6 +78,21 @@ function fmtDate(iso: string): string {
   return `${months[Number(m) - 1]} ${Number(d)}`;
 }
 
+/**
+ * Index of a local date within its year (0 = Jan 1). Anchored on local
+ * midnight parts, never a live timestamp — see the heatmap's "two different
+ * todays" note. Used by the month ruler and by the "Jump to month" handler,
+ * which is what lets the jump be a plain event handler instead of an effect
+ * watching a `jumpMonth` state.
+ */
+function dayIdxOfYear(year: number, d: Date): number {
+  return Math.round((d.getTime() - new Date(year, 0, 1).getTime()) / DAY_MS);
+}
+
+function monthStartPx(year: number, month: number): number {
+  return dayIdxOfYear(year, new Date(year, month, 1)) * DAY_WIDTH;
+}
+
 export default function AnalyticsPage() {
   // PRD-06: container comes from the global switcher atoms.
   const { selected } = useContainers();
@@ -92,7 +110,9 @@ export default function AnalyticsPage() {
   const [kpiLoading, setKpiLoading] = useState(true);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [progressLoading, setProgressLoading] = useState(true);
-  const [jumpMonth, setJumpMonth] = useState<number | null>(null);
+  // The heatmap's scroll container, reached from the month dropdown's onChange.
+  // Owning it here is what removes the "watch jumpMonth, then scroll" effect.
+  const ganttScrollRef = useRef<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState<Set<SeriesKey>>(
     new Set(["created", "in_progress", "completed", "canceled"])
   );
@@ -108,10 +128,6 @@ export default function AnalyticsPage() {
     if (a) setData(a);
   }, [teamId, run, setError]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
   const loadProgress = useCallback(async () => {
     if (!teamId) return;
     setProgressLoading(true);
@@ -122,10 +138,6 @@ export default function AnalyticsPage() {
     setProgressLoading(false);
     if (p) setProgress(p);
   }, [teamId, runProgress, setProgressError]);
-
-  useEffect(() => {
-    loadProgress();
-  }, [loadProgress]);
 
   const loadKpiProgress = useCallback(async () => {
     if (!teamId) return;
@@ -138,9 +150,28 @@ export default function AnalyticsPage() {
     if (res) setKpiProgress(res.kpis);
   }, [teamId, runKpiProgress, setKpiError]);
 
+  // One effect for the three reads this page makes. Each loader is still
+  // separate because every card has its own Retry button, but the trigger is
+  // now a single server-sync — three near-identical `useEffect(() => x(), [x])`
+  // chains was three chances to get a dependency wrong.
+  //
+  // The `!teamId` branch is the bug this consolidates: the loaders returned
+  // early there without ever clearing their own `loading` flag, which is
+  // initialised to true — so an account with no containers sat on "Loading…"
+  // on all three cards, forever.
+  const loadAll = useCallback(() => {
+    if (!teamId) {
+      setLoading(false);
+      setProgressLoading(false);
+      setKpiLoading(false);
+      return;
+    }
+    return Promise.all([load(), loadProgress(), loadKpiProgress()]);
+  }, [teamId, load, loadProgress, loadKpiProgress]);
+
   useEffect(() => {
-    loadKpiProgress();
-  }, [loadKpiProgress]);
+    void loadAll();
+  }, [loadAll]);
 
   function toggle(k: SeriesKey) {
     setVisible((v) => {
@@ -256,22 +287,29 @@ export default function AnalyticsPage() {
                 >
                   <span className="block size-2 rounded-[50%]" style={{ background: s.token }} />
                   {s.label}
-                  {on && (
-                    <svg
-                      width="10"
-                      height="10"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="text-[var(--color-ink-faint)]"
-                      aria-hidden
-                    >
-                      <path d="M4 12.5l5 5L20 6.5" />
-                    </svg>
-                  )}
+                  <AnimatePresence>
+                    {on && (
+                      <motion.svg
+                        key="tick"
+                        variants={tickVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit="exit"
+                        width="10"
+                        height="10"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="text-[var(--color-ink-faint)]"
+                        aria-hidden
+                      >
+                        <path d="M4 12.5l5 5L20 6.5" />
+                      </motion.svg>
+                    )}
+                  </AnimatePresence>
                 </button>
               );
             })}
@@ -353,8 +391,18 @@ export default function AnalyticsPage() {
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <span className="text-[0.8rem] font-semibold">Progress</span>
           <select
-            value={jumpMonth ?? ""}
-            onChange={(e) => setJumpMonth(e.target.value === "" ? null : Number(e.target.value))}
+            // Uncontrolled: the only thing this dropdown does is scroll a DOM
+            // node, which it can do straight from onChange. It used to write a
+            // `jumpMonth` state that an effect watched — state whose sole
+            // purpose was to be noticed by an effect.
+            defaultValue=""
+            onChange={(e) => {
+              const el = ganttScrollRef.current;
+              if (!el) return;
+              const month = e.target.value;
+              if (month === "") return;
+              el.scrollLeft = Math.max(0, monthStartPx(new Date().getFullYear(), Number(month)));
+            }}
             aria-label="Jump to month"
             className="cursor-pointer rounded-[999px] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] px-3 py-1.5 text-[0.78rem] font-medium text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
           >
@@ -384,7 +432,7 @@ export default function AnalyticsPage() {
             </button>
           </div>
         ) : (
-          <ProgressGantt tasks={progress?.tasks ?? []} jumpToMonth={jumpMonth} />
+          <ProgressGantt tasks={progress?.tasks ?? []} scrollRef={ganttScrollRef} />
         )}
       </section>
 
@@ -496,10 +544,12 @@ type HeatRowData = { id: string; title: string; dot: string; cells: HeatCell[] }
 
 function ProgressGantt({
   tasks,
-  jumpToMonth,
+  scrollRef,
 }: {
   tasks: ProgressTask[];
-  jumpToMonth: number | null;
+  // The page owns this ref so its "Jump to month" dropdown can scroll the track
+  // from an event handler. The month math is the same `monthStartPx` helper.
+  scrollRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const now = new Date();
   const year = now.getFullYear();
@@ -510,7 +560,6 @@ function ProgressGantt({
     null
   );
   const [dragging, setDragging] = useState(false);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef({ startX: 0, startScroll: 0 });
 
   // Window = Jan 1 → Dec 31 of the current year (always 365 or 366 days).
@@ -519,12 +568,22 @@ function ProgressGantt({
   const trackWidth = totalDays * DAY_WIDTH;
   // Local date math (not toISOString round-trips) so +UTC timezones don't
   // shift month starts back a day and collide day keys.
-  const dayIdxOf = (d: Date) => Math.round((d.getTime() - new Date(year, 0, 1).getTime()) / DAY_MS);
-  const dayIdx = (iso: string) =>
-    Math.max(0, Math.min(totalDays - 1, (Date.parse(iso.slice(0, 10)) - startMs) / DAY_MS));
-  const xPx = (iso: string) => dayIdx(iso) * DAY_WIDTH;
+  const dayIdxOf = useCallback((d: Date) => dayIdxOfYear(year, d), [year]);
+  const dayIdx = useCallback(
+    (iso: string) =>
+      Math.max(0, Math.min(totalDays - 1, (Date.parse(iso.slice(0, 10)) - startMs) / DAY_MS)),
+    [totalDays, startMs]
+  );
+  // Memoised so the center-today effect can list it honestly: an unstable
+  // `xPx` in that dependency array would re-run the effect on every render and
+  // fight the user's own scrolling.
+  const xPx = useCallback((iso: string) => dayIdx(iso) * DAY_WIDTH, [dayIdx]);
 
   // Drag-to-scroll: track the mousedown anchor, update scrollLeft on move.
+  // Document listeners that only exist while a drag is in flight — outside
+  // React, so the effect stays. (motion's `drag` is not a free substitute
+  // here: it fights native overflow scrolling and needs measured
+  // dragConstraints, which is another effect.)
   useEffect(() => {
     if (!dragging) return;
     const onMove = (e: MouseEvent) => {
@@ -539,7 +598,7 @@ function ProgressGantt({
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
     };
-  }, [dragging]);
+  }, [dragging, scrollRef]);
 
   const onMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
@@ -551,25 +610,18 @@ function ProgressGantt({
     };
   };
 
-  // Center today in the viewport on first render so the user lands on the
-  // current slice of the year.
+  // Center today on first paint. Reading `clientWidth` and writing `scrollLeft`
+  // is raw DOM work with no declarative form, so this effect stays — it is the
+  // definition of syncing with something outside React. (useLayoutEffect would
+  // remove the one-frame jump but this component still server-renders, which is
+  // how Next earns a warning.)
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const visible = el.clientWidth - TITLE_COL;
     const target = Math.max(0, xPx(todayStr) - visible / 2);
     el.scrollLeft = target;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Jump the viewport to the month picked in the header dropdown.
-  useEffect(() => {
-    if (jumpToMonth == null) return;
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollLeft = Math.max(0, dayIdxOf(new Date(year, jumpToMonth, 1)) * DAY_WIDTH);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jumpToMonth]);
+  }, [scrollRef, xPx, todayStr]);
 
   if (tasks.length === 0) {
     return <div className="h-[40px]" />;
@@ -589,7 +641,9 @@ function ProgressGantt({
     const doneIdx = t.completed_at ? dayIdx(t.completed_at) : null;
     const startedIdx = t.started_at ? dayIdx(t.started_at) : null;
     const movedDays = new Set(
-      t.due_changes.filter((ch) => ch.from_due).map((ch) => dayIdx(ch.from_due!))
+      // flatMap with a truthy check instead of filter-then-`ch.from_due!`: the
+      // compiler does the narrowing with us rather than around us.
+      t.due_changes.flatMap((ch) => (ch.from_due ? [dayIdx(ch.from_due)] : []))
     );
     const doneOnTime = doneIdx != null && doneIdx <= dueIdx;
     const dot =
@@ -653,7 +707,7 @@ function ProgressGantt({
       setHover(null);
       return;
     }
-    const cell = (e.target as HTMLElement).closest("[data-col]");
+    const cell = e.target instanceof HTMLElement ? e.target.closest("[data-col]") : null;
     if (!cell) {
       setHover(null);
       return;
@@ -773,12 +827,16 @@ function ProgressGantt({
         </div>
       </div>
 
-      {hover &&
-        (() => {
-          const row = rowsData.find((r) => r.id === hover.rowId);
-          const cell = row?.cells.find((c) => c.col === hover.col);
-          return row && cell ? <CellTooltip row={row} cell={cell} x={hover.x} y={hover.y} /> : null;
-        })()}
+      <AnimatePresence>
+        {hover &&
+          (() => {
+            const row = rowsData.find((r) => r.id === hover.rowId);
+            const cell = row?.cells.find((c) => c.col === hover.col);
+            return row && cell ? (
+              <CellTooltip key="cell-tip" row={row} cell={cell} x={hover.x} y={hover.y} />
+            ) : null;
+          })()}
+      </AnimatePresence>
 
       {/* Legend + hint */}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-[0.7rem] text-[var(--color-ink-muted)]">
@@ -898,7 +956,16 @@ function CellTooltip({
     day: "numeric",
   });
   return (
-    <div
+    <motion.div
+      // Opacity only. Left/top stay a plain style write: they follow the cursor
+      // every mousemove, and interpolating toward a moving target is how a
+      // tooltip starts lagging the pointer. Nothing here reads `window` for an
+      // `initial` value either — the tooltip only exists client-side after a
+      // hover, and keeping it that way is what avoids a hydration mismatch.
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={snap(DUR.fast)}
       className="pointer-events-none fixed z-50 rounded-[10px] bg-[var(--color-ink)] px-3 py-2 text-[0.72rem] text-[#f8fafc] shadow-[0_8px_24px_-8px_rgba(15,23,42,0.45)]"
       style={{ left: Math.min(x + 14, window.innerWidth - 240), top: y + 16 }}
     >
@@ -907,7 +974,7 @@ function CellTooltip({
         {day} — {HEAT_WORD[cell.state]}
         {cell.flags}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -959,6 +1026,8 @@ function ChartTooltip({
   series: AnalyticsSeriesItem[];
 }) {
   if (!active || !payload || payload.length === 0 || !payload[0]?.payload) return null;
+  // Recharts hands the hovered datapoint back as `unknown`, so this assertion is
+  // the library's, not ours: the object is the row we passed to LineChart data.
   const data = payload[0].payload as AnalyticsSeriesItem;
   // Look up the previous day in the series so we can show today's delta.
   // No "previous" on the leftmost point — its total is the cumulative
@@ -968,8 +1037,8 @@ function ChartTooltip({
   const rows = SERIES.filter((s) => visible.has(s.key)).map((s) => ({
     label: s.label,
     color: s.color,
-    total: data[s.key] as number,
-    delta: prev ? (data[s.key] as number) - (prev[s.key] as number) : 0,
+    total: data[s.key],
+    delta: prev ? data[s.key] - prev[s.key] : 0,
   }));
   return (
     <div className="rounded-[10px] bg-[var(--color-ink)] px-3 py-2 text-[0.72rem] text-[#f8fafc] shadow-[0_8px_24px_-8px_rgba(15,23,42,0.45)]">
@@ -988,11 +1057,8 @@ function ChartTooltip({
   );
 }
 
-// cn helper must be imported to support compact sibling classes above.
-function cn(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
-}
-
+// cn lives in lib/cn.ts (clsx + tailwind-merge) — this page carried a local
+// copy that only did the clsx half of the job.
 function StarIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">

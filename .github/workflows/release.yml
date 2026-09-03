@@ -1,0 +1,183 @@
+# Release — publish the frontend and backend Docker images to GHCR.
+#
+# Triggered by a version tag only:
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# Coolify then pulls `ghcr.io/<owner>/mokara-frontend:0.1.0` and
+# `mokara-backend:0.1.0`; nothing is built on the server. Structure follows
+# jejak-athlete's release.yml (matrix over services, QEMU + Buildx, GHCR login
+# with the built-in GITHUB_TOKEN, metadata-action tag set, GHA layer caching,
+# provenance disabled). The addition here is the `gate` job — see its comment.
+#
+# `v*.*.*` deliberately excludes prereleases: a `v0.2.0-rc.1` tag never matches,
+# so `latest` can never be moved by one. When prereleases are actually wanted,
+# add the pattern and make the `latest` tag conditional on
+# `github.event.base_ref`/ref name not containing a dash.
+
+name: Build & Publish Docker Images
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+# Two pushes of the same tag must not interleave and half-publish an image.
+# cancel-in-progress is false on purpose: a tag build is not disposable.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Everything that would make a bad release, checked before anything is pushed:
+  # the three normal gates, the real Next production build (the artifact the
+  # frontend image runs), and every migration applied against an empty Postgres.
+  # This job exists because the pre-release audit found a production build that
+  # had never succeeded — `pnpm typecheck` runs `tsc --noEmit`, so a tsconfig
+  # that cannot emit is invisible to the normal gates. Image builds themselves
+  # are NOT duplicated here; the matrix below is the only place they happen.
+  gate:
+    name: Gate — checks, production build, migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16.14-alpine3.24
+        env:
+          POSTGRES_USER: mokara
+          POSTGRES_PASSWORD: mokara
+          POSTGRES_DB: mokara
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U mokara -d mokara"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.13.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The backend imports Prisma's generated client, which is gitignored.
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Prettier check
+        run: pnpm format
+
+      # The frontend image's CMD runs this exact artifact; if it does not build,
+      # there is no image worth publishing.
+      - name: Build frontend (standalone)
+        run: pnpm build:frontend
+
+      # Applies every migration to an empty database, which is the only honest
+      # way to prove a new one fits with the ones before it.
+      - name: Migrations apply from empty
+        env:
+          DATABASE_URL: postgresql://mokara:mokara@localhost:5432/mokara
+        run: pnpm db:migrate:deploy
+
+      # Fail the tag rather than publish images whose version disagrees with it.
+      - name: Tag matches package version
+        run: |
+          pkg="$(node -p "require('./package.json').version")"
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$pkg" != "$tag" ]; then
+            echo "::error::tag v$tag does not match package.json version $pkg"
+            exit 1
+          fi
+
+  build:
+    name: Build ${{ matrix.service }} image
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: backend
+            dockerfile: packages/backend/Dockerfile
+            context: .
+          - service: frontend
+            dockerfile: packages/frontend/Dockerfile
+            context: .
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # Present because the reference keeps it: harmless today (single-arch
+      # build), and it is the one thing already in place if linux/arm64 is ever
+      # added to the build step below.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # GITHUB_TOKEN works because this repo's owner is also the GHCR namespace;
+      # no PAT to create, rotate, or leak.
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/mokara-${{ matrix.service }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=Mokara ${{ matrix.service }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          # The reference sets this too: without it buildx publishes an extra
+          # attestation manifest per image, which several pull-side tools (Coolify
+          # included) surface as "no matching manifest" / unknown blobs.
+          provenance: false

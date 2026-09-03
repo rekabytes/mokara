@@ -1,4 +1,9 @@
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4200/api";
+// Same-origin by design: every request goes to /api/… on this Next server, which
+// proxies it to the backend (app/api/[...path]/route.ts). The backend's real
+// address is BACKEND_URL, a runtime value the proxy reads — never a NEXT_PUBLIC_*
+// var, because those are baked into the browser bundle at build time and would
+// pin a published image to one host.
+const BASE = "/api";
 export type TaskStatus = "todo" | "in_progress" | "done" | "canceled";
 export type TaskPriority = "low" | "medium" | "high";
 
@@ -224,6 +229,9 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     done(0, "network_error");
     throw {
       error: "network_error",
+      // The proxy answers 502 when it cannot reach the backend, so a failure here
+      // is this origin being unreachable — naming the API path is the only
+      // location still meaningful now that requests are same-origin.
       message: `${ERROR_RULES.network_error.message} (${BASE})`,
       status: 0,
     } satisfies ApiError;

@@ -68,7 +68,10 @@ async function main() {
   //  previous (still-draining) process doesn't kill the new one.
   let server: ServerType | null = null;
   const startServer = (attempt: number): void => {
-    const next = serve({ fetch: app.fetch, port: env.PORT }, () => {
+    // hostname is explicit (as in the jejak-athlete backend) rather than left to
+    // Node's default: inside a container a bind to anything but 0.0.0.0 is
+    // unreachable from Coolify's proxy, and the failure looks like a dead app.
+    const next = serve({ fetch: app.fetch, port: env.PORT, hostname: "0.0.0.0" }, () => {
       log.ok("Server running");
     });
     next.on("error", (err: NodeJS.ErrnoException) => {

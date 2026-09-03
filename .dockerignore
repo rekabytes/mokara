@@ -1,7 +1,28 @@
+# Build context is the repo root (both Dockerfiles COPY pnpm-workspace.yaml and
+# sibling packages/*), so these patterns are what actually lands in the image.
+
+# VCS + tooling
 .git
 **/.git
+.github
+
+# Secrets. Env values reach the containers as runtime env / build args, never
+# from here. `!` nothing: no .env file is ever wanted in an image.
 **/.env
+**/.env.*
+!**/.env.example
+
+# Installed or generated elsewhere — every one of these is rebuilt in-image, and
+# copying a host copy is how a stale artifact ships.
 **/node_modules
 **/.next
+**/dist
 **/*.tsbuildinfo
+packages/db/prisma/generated
+
+# Nothing below is read by either build.
+.pi
+docs
+**/*.md
+docker-compose.yml
 packages/backend/backend

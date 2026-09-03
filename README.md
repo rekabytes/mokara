@@ -77,21 +77,22 @@ pnpm dev
 
 ## Scripts (root)
 
-| Script                                  | What it does                                        |
-| --------------------------------------- | --------------------------------------------------- |
-| `pnpm dev`                              | Run backend + frontend in parallel                  |
-| `pnpm dev:backend`                      | Backend only (`tsx watch src/index.ts` on :4200)    |
-| `pnpm dev:frontend`                     | Frontend only (`next dev` on :4201)                 |
-| `pnpm build:backend` / `build:frontend` | Production build per workspace                      |
-| `pnpm typecheck`                        | `tsc --noEmit` across all workspaces                |
-| `pnpm lint`                             | ESLint (frontend only for now)                      |
-| `pnpm format`                           | Prettier check                                      |
-| `pnpm format:fix`                       | Prettier write                                      |
-| `pnpm db:migrate`                       | Prisma `migrate dev` (create + apply new migration) |
-| `pnpm db:migrate:deploy`                | Apply existing migrations (production / fresh DB)   |
-| `pnpm db:migrate:reset`                 | Drop + re-apply all migrations (destructive)        |
-| `pnpm db:generate`                      | Regenerate the Prisma client                        |
-| `pnpm db:seed`                          | Run `prisma/seed.ts`                                |
+| Script                   | What it does                                            |
+| ------------------------ | ------------------------------------------------------- |
+| `pnpm dev`               | Run backend + frontend in parallel                      |
+| `pnpm dev:backend`       | Backend only (`tsx watch src/index.ts` on :4200)        |
+| `pnpm dev:frontend`      | Frontend only (`next dev` on :4201)                     |
+| `pnpm build:frontend`    | Production build (Next standalone output)               |
+| `pnpm start:backend`     | Run the backend as the container does (`tsx`, no watch) |
+| `pnpm typecheck`         | `tsc --noEmit` across all workspaces                    |
+| `pnpm lint`              | ESLint (frontend only for now)                          |
+| `pnpm format`            | Prettier check                                          |
+| `pnpm format:fix`        | Prettier write                                          |
+| `pnpm db:migrate`        | Prisma `migrate dev` (create + apply new migration)     |
+| `pnpm db:migrate:deploy` | Apply existing migrations (production / fresh DB)       |
+| `pnpm db:migrate:reset`  | Drop + re-apply all migrations (destructive)            |
+| `pnpm db:generate`       | Regenerate the Prisma client                            |
+| `pnpm db:seed`           | Run `prisma/seed.ts`                                    |
 
 ## API
 
@@ -134,6 +135,37 @@ All routes are mounted under `/api`. Auth uses an HS256 JWT in the `mokara_token
 | Method | Path      | Description                                                                                 |
 | ------ | --------- | ------------------------------------------------------------------------------------------- |
 | GET    | `/health` | Returns `{ "status": "ok" }` (frontend `instrumentation.ts` pings this on boot + every 30s) |
+
+## Release (container images)
+
+Releases are tag-driven; images are built **only** by CI, never on the deploy host.
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+`.github/workflows/release.yml` gates the tag (typecheck · lint · format · the real
+frontend build · every migration applied to an empty Postgres · tag matches
+`package.json`), then publishes:
+
+```
+ghcr.io/<owner>/mokara-frontend:0.1.0   (+ :0.1, :latest, +<sha>)
+ghcr.io/<owner>/mokara-backend:0.1.0    (+ :0.1, :latest, +<sha>)
+```
+
+Coolify runs both as **Docker Image** services and pulls them. Full design and the
+reasoning behind each choice: `docs/development/PRD-07.md`.
+
+| Service  | Port | Reads                                                        |
+| -------- | ---- | ------------------------------------------------------------ |
+| frontend | 4201 | `BACKEND_URL` (runtime — the browser only ever calls `/api`) |
+| backend  | 4200 | `DATABASE_URL`, `AUTH_SECRET`, `ENV=production`, `PORT`      |
+
+The backend container applies pending migrations on start (`packages/backend/
+scripts/start.sh`) before the server binds, so it can never come up against a
+schema it does not expect. **Rolling back an image does not roll back the
+database** — keep each release's migrations additive and deploy the code that uses
+them in the same release.
 
 ## Notes
 

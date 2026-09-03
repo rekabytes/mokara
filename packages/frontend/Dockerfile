@@ -43,7 +43,7 @@ FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
-    PORT=4201
+    PORT=4701
 # HOSTNAME must be explicit. The standalone server reads process.env.HOSTNAME,
 # and a container runtime sets that to the container id — binding to it works
 # only if that name resolves, so pin it to all interfaces instead.
@@ -58,12 +58,12 @@ COPY --from=build --chown=node:node /app/packages/frontend/.next/static ./packag
 # or static files will 404 in production only.
 
 USER node
-EXPOSE 4201
+EXPOSE 4701
 
 # Any answer below 500 proves the server process is up and routing — / is a
 # redirect and protected pages answer 307, so requiring 2xx would report a
 # healthy container as unhealthy.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD node -e "const p=process.env.PORT||4201;fetch('http://127.0.0.1:'+p+'/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"
+    CMD node -e "const p=process.env.PORT||4701;fetch('http://127.0.0.1:'+p+'/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "packages/frontend/server.js"]

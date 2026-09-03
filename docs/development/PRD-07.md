@@ -151,7 +151,7 @@ one-line change.
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `base`/`deps` | same `node:24-alpine` + corepack pin; full `pnpm install --frozen-lockfile`, all workspace manifests (as the reference does — §7.2)                                                                |
 | `generate`    | copy `packages/db/prisma/{schema.prisma,migrations}` + `prisma.config.ts`, `pnpm --filter @mokara/db generate`                                                                                     |
-| `runner`      | copy `node_modules`, `packages/db`, `packages/backend/src`, `packages/backend/scripts`; `ENV NODE_ENV=production PORT=4200`; `chmod +x start.sh`; `CMD ["/app/packages/backend/scripts/start.sh"]` |
+| `runner`      | copy `node_modules`, `packages/db`, `packages/backend/src`, `packages/backend/scripts`; `ENV NODE_ENV=production PORT=4700`; `chmod +x start.sh`; `CMD ["/app/packages/backend/scripts/start.sh"]` |
 
 `scripts/start.sh`, ported from the reference and cut back to two steps:
 
@@ -226,7 +226,9 @@ disagrees with the tag.
    and the dist copy are simply gone. Necessary delta.
 2. **`tsx` is a runtime dependency** (§3.2) — same as the reference.
 3. **Port parity, not new ports.** The reference keeps dev and prod on the same ports
-   (3400/3401); we keep 4201/4200, matching `.env.example` and muscle memory.
+   (3400/3401); we keep dev = prod too — **4701/4700** as of 2026-09-03 (originally
+   4201/4200, renumbered because 4200 was already allocated on the deployment server;
+   both `.env.example` and the Dockerfiles moved together so one env story covers both).
 4. **Image hygiene the reference skips:** `USER node`, `HEALTHCHECK` in both images,
    `HOSTNAME=0.0.0.0` on the frontend (a container runtime sets `HOSTNAME` to the
    container id, and the standalone server binds to that), and per-service GHA cache
@@ -253,7 +255,7 @@ disagrees with the tag.
 3. Backend gets **no public domain** — only the frontend proxy reaches it, over the
    internal Docker network. Frontend gets the public domain and port 3000.
 4. `BACKEND_URL` on the frontend = the backend's internal URL
-   (`http://<backend-service>:4200`). If it is unset in prod the proxy answers 503
+   (`http://<backend-service>:4700`). If it is unset in prod the proxy answers 503
    rather than silently misrouting.
 5. Deploy = Coolify pulls the new tag. Rollback = reselect the previous tag.
    **The DB does not roll back with the image**, so rollback is only safe for

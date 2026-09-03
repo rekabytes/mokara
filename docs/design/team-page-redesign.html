@@ -1,0 +1,891 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mokara — Team page redesign (mockup)</title>
+    <style>
+      :root {
+        --ink: #0f172a;
+        --ink-muted: #64748b;
+        --ink-faint: #94a3b8;
+        --accent: #6366f1;
+        --accent-soft: rgba(99, 102, 241, 0.12);
+        --danger: #ef4444;
+        --success: #15803d;
+        --warning: #a16207;
+        --border-soft: rgba(15, 23, 42, 0.07);
+        --card: #ffffff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 28px 24px 90px;
+        background: #eef0f6;
+        color: var(--ink);
+        font:
+          14px/1.5 ui-sans-serif,
+          -apple-system,
+          "Segoe UI",
+          Inter,
+          system-ui,
+          sans-serif;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 4px;
+        letter-spacing: -0.015em;
+      }
+      h2 {
+        font-size: 15px;
+        margin: 38px 0 6px;
+      }
+      .lede,
+      .note {
+        color: var(--ink-muted);
+        font-size: 13px;
+        max-width: 88ch;
+      }
+      .note {
+        margin: 8px 0 0;
+      }
+
+      .app {
+        display: grid;
+        grid-template-columns: 230px 1fr;
+        gap: 0;
+        align-items: start;
+      }
+
+      /* ---------- slim sidebar (context) ---------- */
+      .side {
+        background: linear-gradient(180deg, #f7f8fc, #eef0f6);
+        border-right: 1px solid var(--border-soft);
+        border-radius: 18px 0 0 18px;
+        padding: 18px 14px 16px;
+        min-height: 100%;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 6px 14px;
+      }
+      .brand .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 0 4px var(--accent-soft);
+      }
+      .brand span {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+      }
+      .switch {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        background: #fff;
+        border: 1px solid var(--border-soft);
+        border-radius: 10px;
+        padding: 8px 10px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ink);
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+      }
+      .nav {
+        margin-top: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .nav a {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        font-size: 13.5px;
+        font-weight: 500;
+        color: var(--ink-muted);
+        text-decoration: none;
+      }
+      .nav a.active {
+        background: #fff;
+        color: var(--ink);
+        box-shadow:
+          0 1px 2px rgba(15, 23, 42, 0.06),
+          0 0 0 1px var(--border-soft);
+      }
+      .nav .sep {
+        border-top: 1px solid var(--border-soft);
+        margin: 8px 2px;
+      }
+      .nav svg {
+        opacity: 0.75;
+      }
+
+      /* ---------- page ---------- */
+      .page {
+        padding: 6px 0 0 22px;
+      }
+
+      /* header */
+      .head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .head h1 {
+        font-size: 24px;
+        margin: 0;
+        letter-spacing: -0.02em;
+      }
+      .meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 7px;
+        font-size: 13.5px;
+        color: var(--ink-muted);
+        flex-wrap: wrap;
+      }
+      .meta .pill {
+        border: 0;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 600;
+        font-size: 11.5px;
+        padding: 3px 10px;
+        border-radius: 999px;
+      }
+      .avatars {
+        display: flex;
+        align-items: center;
+      }
+      .avatars .av {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-size: 12.5px;
+        font-weight: 700;
+        border: 2px solid #fff;
+        margin-left: -8px;
+      }
+      .avatars .av:first-child {
+        margin-left: 0;
+      }
+      .head .actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .btn {
+        border: 1px solid var(--border-soft);
+        background: #fff;
+        color: var(--ink);
+        border-radius: 10px;
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+      }
+      .btn.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      .btn.small {
+        padding: 6px 11px;
+        font-size: 12.5px;
+      }
+
+      /* stat strip */
+      .stats {
+        display: flex;
+        gap: 10px;
+        margin: 16px 0 18px;
+        flex-wrap: wrap;
+      }
+      .stat {
+        background: #fff;
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        padding: 9px 14px;
+        display: flex;
+        align-items: baseline;
+        gap: 7px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+      }
+      .stat b {
+        font-size: 16px;
+        letter-spacing: -0.01em;
+      }
+      .stat span {
+        font-size: 11.5px;
+        color: var(--ink-faint);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      /* body grid */
+      .cols {
+        display: grid;
+        grid-template-columns: 1fr 300px;
+        gap: 16px;
+        align-items: start;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border-soft);
+        border-radius: 16px;
+        padding: 16px 16px 10px;
+        margin-bottom: 16px;
+        box-shadow:
+          0 1px 2px rgba(15, 23, 42, 0.04),
+          0 8px 24px -18px rgba(15, 23, 42, 0.25);
+      }
+      .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .card-head h3 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .count {
+        font-size: 11.5px;
+        color: var(--ink-faint);
+        font-weight: 600;
+        background: #f1f3f9;
+        border-radius: 999px;
+        padding: 2px 9px;
+      }
+
+      /* composer */
+      .composer {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+      .composer input {
+        flex: 1;
+        border: 1px solid var(--border-soft);
+        border-radius: 10px;
+        padding: 8px 11px;
+        font: inherit;
+        font-size: 13.5px;
+        color: var(--ink);
+        background: #fff;
+        outline: none;
+      }
+      .composer input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+      }
+      .composer .add {
+        border: 0;
+        border-radius: 10px;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 700;
+        font-size: 13px;
+        padding: 0 16px;
+        cursor: pointer;
+      }
+      .composer .add.disabled {
+        background: #c7cbf5;
+      }
+      .swatches {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 2px 2px 8px;
+      }
+      .swatches i {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 2px solid transparent;
+      }
+      .swatches i.on {
+        border-color: var(--ink);
+      }
+      .swatches span {
+        font-size: 11px;
+        color: var(--ink-faint);
+        margin-left: 4px;
+      }
+
+      /* rows */
+      .rows {
+        display: flex;
+        flex-direction: column;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 10px;
+        border-radius: 10px;
+      }
+      .row:hover {
+        background: #f6f7fb;
+      }
+      .row + .row {
+        border-top: 1px solid rgba(15, 23, 42, 0.045);
+      }
+      .grouplabel {
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        padding: 10px 10px 3px;
+      }
+      .row .cdot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        flex: none;
+      }
+      .row .name {
+        font-size: 13.5px;
+        font-weight: 500;
+        color: var(--ink);
+      }
+      .row .sub {
+        font-size: 11.5px;
+        color: var(--ink-faint);
+      }
+      .row .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .row .grow .name,
+      .row .grow .sub {
+        display: block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .badge {
+        font-size: 10.5px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 999px;
+        flex: none;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      .badge.personal {
+        background: rgba(148, 163, 184, 0.14);
+        color: var(--ink-muted);
+      }
+      .badge.you {
+        background: rgba(21, 128, 61, 0.1);
+        color: var(--success);
+      }
+      .bar {
+        width: 110px;
+        height: 4px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.22);
+        overflow: hidden;
+        flex: none;
+      }
+      .bar i {
+        display: block;
+        height: 100%;
+        border-radius: 999px;
+        background: var(--accent);
+      }
+      .bar.green i {
+        background: var(--success);
+      }
+      .pct {
+        width: 34px;
+        text-align: right;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--ink-muted);
+        flex: none;
+      }
+      .n {
+        font-size: 11.5px;
+        color: var(--ink-faint);
+        flex: none;
+        width: 52px;
+        text-align: right;
+      }
+      .row .ghost {
+        width: 22px;
+        flex: none;
+        color: var(--ink-faint);
+        opacity: 0;
+        font-size: 13px;
+      }
+      .row:hover .ghost {
+        opacity: 0.7;
+      }
+
+      /* right rail */
+      .rail .card {
+        padding-bottom: 14px;
+      }
+      .member {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 6px;
+        border-radius: 10px;
+      }
+      .member:hover {
+        background: #f6f7fb;
+      }
+      .member .av {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        font-size: 13.5px;
+      }
+      .member .who {
+        flex: 1;
+        min-width: 0;
+      }
+      .member .who b {
+        display: block;
+        font-size: 13.5px;
+        font-weight: 600;
+      }
+      .member .who span {
+        font-size: 11.5px;
+        color: var(--ink-faint);
+      }
+      .role {
+        font-size: 10.5px;
+        font-weight: 700;
+        padding: 2.5px 9px;
+        border-radius: 999px;
+        background: rgba(99, 102, 241, 0.1);
+        color: var(--accent);
+      }
+      .role.member {
+        background: rgba(148, 163, 184, 0.14);
+        color: var(--ink-muted);
+      }
+      .invite {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .invite input {
+        flex: 1;
+        border: 1px solid var(--border-soft);
+        border-radius: 10px;
+        padding: 8px 11px;
+        font: inherit;
+        font-size: 13px;
+        outline: none;
+      }
+      .invite input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+      }
+      .seats {
+        font-size: 11.5px;
+        color: var(--ink-faint);
+        margin: 9px 2px 0;
+      }
+      .cta {
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.09), rgba(14, 165, 233, 0.07));
+        border: 1px solid rgba(99, 102, 241, 0.25);
+        border-radius: 16px;
+        padding: 14px 15px;
+        margin-bottom: 16px;
+      }
+      .cta b {
+        font-size: 13.5px;
+      }
+      .cta p {
+        margin: 5px 0 10px;
+        font-size: 12.5px;
+        color: var(--ink-muted);
+      }
+
+      .legend {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+        font-size: 11.5px;
+        color: var(--ink-muted);
+      }
+      .legend b {
+        color: var(--ink);
+      }
+      .tag {
+        display: inline-block;
+        background: #fff;
+        border: 1px solid var(--border-soft);
+        border-radius: 999px;
+        padding: 2px 9px;
+        font-size: 11px;
+        color: var(--ink-muted);
+        margin-right: 6px;
+      }
+      .old {
+        opacity: 0.55;
+        filter: grayscale(0.4);
+      }
+      .oldcard {
+        background: #fff;
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        padding: 12px 14px;
+      }
+      .oldrow {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: var(--ink-muted);
+        padding: 5px 2px;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.04);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Team page — redesign</h1>
+    <p class="lede">
+      Same data, same features — re-arranged into a page that reads like a product: identity and
+      actions up top, live scorecards in the middle, people on the rail. Solo workspaces get the
+      same skeleton with personal wording.
+    </p>
+
+    <h2>1 · Current (for reference)</h2>
+    <div class="old" style="display: grid; grid-template-columns: 240px 1fr 1fr; gap: 12px">
+      <div class="oldcard">
+        <b style="font-size: 13px">Members 1/3</b>
+        <div class="oldrow">Khairul Anuar · @rekabytes <span>Owner</span></div>
+        <div
+          style="font-size: 11px; color: var(--ink-faint); margin-top: 8px; letter-spacing: 0.05em"
+        >
+          INVITE BY USERNAME
+        </div>
+        <div class="oldrow">@username &nbsp; [Send]</div>
+      </div>
+      <div class="oldcard">
+        <b style="font-size: 13px">Projects</b>
+        <div class="oldrow">● test project <span>Team · 2</span></div>
+        <div class="oldrow">[New project…] [Add]</div>
+        <div style="font-size: 11px; color: var(--ink-faint); margin-top: 6px">
+          ● ● ● ● ● ● ● ● color (optional) — Personal | Team
+        </div>
+      </div>
+      <div class="oldcard">
+        <b style="font-size: 13px">KPIs</b>
+        <div class="oldrow">REKABYTES (YOU)</div>
+        <div class="oldrow">● test kpi <span>2 tied</span></div>
+        <div class="oldrow">● test personal kpi <span>1 tied</span></div>
+        <div class="oldrow">[New KPI…] [Add]</div>
+      </div>
+    </div>
+    <p class="why">
+      Three disconnected cards, no hierarchy, no numbers that mean anything (“2”, “2 tied”), the
+      invite buried at eye-level-left, and ~60% of the page is empty background.
+    </p>
+
+    <h2>2 · Redesigned — team, owner view</h2>
+    <div class="app">
+      <div class="side">
+        <div class="brand"><span class="dot"></span><span>MOKARA</span></div>
+        <div class="switch">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#6366f1"
+            stroke-width="1.8"
+            stroke-linecap="round"
+          >
+            <circle cx="9" cy="8" r="3.2" />
+            <path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6" />
+            <circle cx="16.8" cy="9.2" r="2.6" />
+            <path d="M16 14.5c2.4.2 4.1 1.7 4.6 4" />
+          </svg>
+          Testing Teams
+          <svg
+            width="11"
+            height="11"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#94a3b8"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            style="margin-left: auto"
+          >
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </div>
+        <div class="nav">
+          <a href="#"
+            ><svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M8.5 12.5l2.5 2.5L16 9.5" /></svg
+            >Tasks</a
+          >
+          <a href="#"
+            ><svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            >
+              <path d="M4 19V5M4 19h16M8 15l3-4 3 2 4-6" /></svg
+            >Analytics</a
+          >
+          <div class="sep"></div>
+          <a href="#" class="active"
+            ><svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            >
+              <circle cx="9" cy="8" r="3.2" />
+              <path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6" />
+              <circle cx="16.8" cy="9.2" r="2.6" />
+              <path d="M16 14.5c2.4.2 4.1 1.7 4.6 4" /></svg
+            >Team</a
+          >
+        </div>
+      </div>
+
+      <div class="page">
+        <div class="head">
+          <h1>Testing Teams</h1>
+        </div>
+
+        <div class="cols">
+          <div>
+            <!-- Projects card -->
+            <div class="card">
+              <div class="card-head">
+                <h3>Projects <span class="count">1</span></h3>
+              </div>
+              <div class="composer">
+                <input placeholder="New project…" />
+                <button class="add disabled">Add</button>
+              </div>
+              <div class="swatches">
+                <i style="background: #6366f1" class="on"></i><i style="background: #0ea5e9"></i
+                ><i style="background: #15803d"></i><i style="background: #ef4444"></i
+                ><i style="background: #a16207"></i><i style="background: #ec4899"></i
+                ><i style="background: #8b5cf6"></i><i style="background: #64748b"></i>
+                <span>colour (optional)</span>
+              </div>
+              <div class="rows">
+                <div class="row">
+                  <span class="cdot" style="background: #15803d"></span>
+                  <div class="grow"><span class="name">test project</span></div>
+                  <span class="badge">Team</span>
+                  <span class="bar green"><i style="width: 62%"></i></span>
+                  <span class="pct">62%</span>
+                  <span class="n">5 tasks</span>
+                  <span class="ghost">⋯</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- KPIs card -->
+            <div class="card">
+              <div class="card-head">
+                <h3>KPIs <span class="count">2</span></h3>
+              </div>
+              <div class="composer">
+                <input placeholder="New KPI…" />
+                <button class="add">Add</button>
+              </div>
+              <div class="rows">
+                <div class="grouplabel">Rekabytes (you)</div>
+                <div class="row">
+                  <span class="cdot" style="background: var(--accent)"></span>
+                  <div class="grow"><span class="name">test kpi</span></div>
+                  <span class="bar"><i style="width: 65%"></i></span>
+                  <span class="pct">65%</span>
+                  <span class="n">2 tied</span>
+                  <span class="ghost">⋯</span>
+                </div>
+                <div class="row">
+                  <span class="cdot" style="background: var(--accent)"></span>
+                  <div class="grow"><span class="name">test personal kpi</span></div>
+                  <span class="bar"><i style="width: 25%"></i></span>
+                  <span class="pct">25%</span>
+                  <span class="n">1 tied</span>
+                  <span class="ghost">⋯</span>
+                </div>
+                <div class="grouplabel">Abu</div>
+                <div class="row">
+                  <span class="cdot" style="background: var(--accent)"></span>
+                  <div class="grow"><span class="name">leads generated</span></div>
+                  <span class="bar"><i style="width: 40%"></i></span>
+                  <span class="pct">40%</span>
+                  <span class="n">1 tied</span>
+                  <span class="ghost">⋯</span>
+                </div>
+              </div>
+              <div class="legend">
+                <span
+                  ><b>KPI bars are live</b> — Σ(weight × status) ÷ Σ(weight) from the progress
+                  endpoint.</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <!-- right rail -->
+          <div class="rail">
+            <div class="card">
+              <div class="card-head">
+                <h3>Members <span class="count">1 / 3</span></h3>
+              </div>
+              <div class="member">
+                <div class="av">K</div>
+                <div class="who"><b>Khairul Anuar</b><span>@rekabytes</span></div>
+                <span class="role">Owner</span>
+              </div>
+              <div class="invite">
+                <input placeholder="@username" />
+                <button class="btn primary small">Invite</button>
+              </div>
+              <p class="seats">2 seats free · they join the moment they accept</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h2>3 · Solo workspace variant</h2>
+    <p class="lede">
+      A personal workspace renders the same skeleton with personal wording — and the upgrade CTA
+      becomes the headline action instead of a footnote.
+    </p>
+    <div class="app">
+      <div class="page" style="padding-left: 0">
+        <div class="head">
+          <div>
+            <h1>Personal</h1>
+          </div>
+        </div>
+        <div class="cols">
+          <div>
+            <div class="card">
+              <div class="card-head">
+                <h3>My Projects <span class="count">1</span></h3>
+              </div>
+              <div class="rows">
+                <div class="row">
+                  <span class="cdot" style="background: #0ea5e9"></span>
+                  <div class="grow"><span class="name">Flutter experiments</span></div>
+                  <span class="badge personal">personal</span>
+                  <span class="bar"><i style="width: 35%"></i></span>
+                  <span class="pct">35%</span>
+                  <span class="n">2 tasks</span>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <h3>My KPIs <span class="count">1</span></h3>
+              </div>
+              <div class="rows">
+                <div class="row">
+                  <span class="cdot" style="background: var(--accent)"></span>
+                  <div class="grow"><span class="name">ship v1</span></div>
+                  <span class="bar"><i style="width: 35%"></i></span>
+                  <span class="pct">35%</span>
+                  <span class="n">1 tied</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="rail">
+            <div class="cta">
+              <b>🚀 Make this a team</b>
+              <p>
+                Invite someone — the moment they accept, this workspace becomes a team: everything
+                here is shared with them, and you unlock team projects &amp; KPIs as the leader.
+              </p>
+              <button class="btn primary small">Invite a teammate</button>
+            </div>
+            <div class="card">
+              <div class="card-head"><h3>Just you</h3></div>
+              <div class="member">
+                <div class="av">K</div>
+                <div class="who"><b>Khairul Anuar</b><span>@rekabytes · Owner</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h2>4 · What changed, in one list</h2>
+    <p class="note">
+      <span class="tag">Header</span> just the name and the two real actions (New project, Invite) —
+      zero meta: the switcher already says which container you’re in, and roles live in the Members
+      card.<br />
+      <span class="tag">Header slimmed</span> stat strip and the “This container” trivia card
+      deleted — counts live once, in their card headers (Projects 1, KPIs 2, Members 1/3);
+      slug/kind/created aren't displayed anywhere.<br />
+      <span class="tag">KPI rows</span> become live scorecards: progress bar + % from the existing
+      <b>/kpis/progress</b> endpoint, grouped per owner.<br />
+      <span class="tag">Project rows</span> get mini progress bars + task counts — needs one small
+      API addition (per-project done/total).<br />
+      <span class="tag">Members rail</span> avatars, roles, invite inline, seats meter; workspace
+      CTA card for solo containers.<br />
+      <span class="tag">Kept</span> inline composers, colour swatches, scope toggle (owner only),
+      hover row actions (rename/archive/delete), archived toggle.
+    </p>
+  </body>
+</html>

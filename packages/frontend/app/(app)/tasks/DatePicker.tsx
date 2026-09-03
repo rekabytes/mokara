@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import { popoverVariants } from "@/lib/motion";
 import { cn } from "@/lib/cn";
 
 // Single-date picker used for a task's due date. There is deliberately no
@@ -89,26 +91,36 @@ export function DatePicker({
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-  const [baseMonth, setBaseMonth] = useState(() => {
-    const d = fromIso(value) ?? new Date();
-    return new Date(d.getFullYear(), d.getMonth(), 1);
-  });
+  // Which month to show is an OFFSET from the month the value falls in, not an
+  // absolute month. Storing the absolute month meant the panel kept showing
+  // task A's month after you opened it for task B — and the obvious "fix"
+  // (an effect mirroring `value` into state) is exactly what the no-mirror
+  // rule forbids. Deriving it instead re-anchors for free; prev/next changes
+  // the offset, and opening resets it from the click handler.
+  const [monthOffset, setMonthOffset] = useState(0);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const placeBelow = () => {
+  const placeBelow = useCallback(() => {
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
     setPos({ top: r.bottom + 6, left: r.left });
-  };
+  }, []);
 
+  // Outside-React sync, so this is the rare effect that stays: document/window
+  // listeners plus a getBoundingClientRect measurement. `placeBelow` is in the
+  // deps now (it was missing, which is why the menu could land on a stale
+  // position after the trigger moved).
   useEffect(() => {
     if (!open) return;
     placeBelow();
     const onClick = (e: MouseEvent) => {
-      const t = e.target as Node;
+      const t = e.target;
+      // Narrowed, not cast: `e.target` is an EventTarget and contains() only
+      // accepts a Node.
+      if (!(t instanceof Node)) return;
       if (triggerRef.current?.contains(t)) return;
-      if ((t as HTMLElement).closest("[data-date-menu]")) return;
+      if (t instanceof HTMLElement && t.closest("[data-date-menu]")) return;
       setOpen(false);
     };
     const onKey = (e: globalThis.KeyboardEvent) => {
@@ -125,10 +137,11 @@ export function DatePicker({
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onScroll);
     };
-  }, [open]);
+  }, [open, placeBelow]);
 
   const selected = fromIso(value);
   const today = startOfDay(new Date());
+  const baseMonth = addMonths(selected ?? today, monthOffset);
   const summary = selected ? formatShort(selected) : "Due date";
 
   // One click commits and dismisses — there is nothing else to pick.
@@ -139,10 +152,15 @@ export function DatePicker({
 
   const panel =
     open && pos ? (
-      <div
+      <motion.div
+        key="date-panel"
         data-date-menu
         role="dialog"
         aria-label="Pick due date"
+        variants={popoverVariants}
+        initial="hidden"
+        animate="visible"
+        exit="hidden"
         style={{ position: "fixed", top: pos.top, left: pos.left }}
         className="z-[60] w-[300px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-white shadow-[var(--shadow-lift)]"
       >
@@ -150,7 +168,7 @@ export function DatePicker({
         <div className="flex items-center justify-between border-b border-[var(--color-border-soft)] px-3 py-2">
           <button
             type="button"
-            onClick={() => setBaseMonth((m) => addMonths(m, -1))}
+            onClick={() => setMonthOffset((n) => n - 1)}
             aria-label="Previous month"
             className="grid size-6 cursor-pointer place-items-center rounded-md text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
           >
@@ -161,7 +179,7 @@ export function DatePicker({
           </div>
           <button
             type="button"
-            onClick={() => setBaseMonth((m) => addMonths(m, 1))}
+            onClick={() => setMonthOffset((n) => n + 1)}
             aria-label="Next month"
             className="grid size-6 cursor-pointer place-items-center rounded-md text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
           >
@@ -225,7 +243,7 @@ export function DatePicker({
             No date
           </button>
         </div>
-      </div>
+      </motion.div>
     ) : null;
 
   return (
@@ -234,7 +252,10 @@ export function DatePicker({
         ref={triggerRef}
         type="button"
         onClick={() => {
-          if (!open) placeBelow();
+          if (!open) {
+            placeBelow();
+            setMonthOffset(0);
+          }
           setOpen((o) => !o);
         }}
         aria-haspopup="dialog"
@@ -243,7 +264,12 @@ export function DatePicker({
       >
         {trigger(open, summary)}
       </button>
-      {typeof document !== "undefined" && panel && createPortal(panel, document.body)}
+      {/* AnimatePresence wraps the portal itself: an ancestor further up the DOM
+          can't see a child that lives in document.body, so no exit animation
+          would run. `pos` is deliberately never cleared on close — the exiting
+          frame reuses the last measurement instead of flashing at 0,0. */}
+      {typeof document !== "undefined" &&
+        createPortal(<AnimatePresence>{panel}</AnimatePresence>, document.body)}
     </>
   );
 }

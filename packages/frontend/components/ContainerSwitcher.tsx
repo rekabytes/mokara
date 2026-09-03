@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useContainers } from "@/lib/containers";
+import { DUR, popoverVariants, backdropVariants, sheetVariants, snap } from "@/lib/motion";
 import { cn } from "@/lib/cn";
 
 // PRD-06: Linear-style container switcher. Lists every container the user
@@ -45,21 +47,37 @@ export function ContainerSwitcher() {
         <span className="min-w-0 flex-1 truncate">
           {selected?.name ?? (error ? "Containers" : "Loading…")}
         </span>
-        <ChevronIcon />
+        <ChevronIcon open={open} />
       </button>
 
       {error && <p className="mt-1.5 text-[0.72rem] text-[var(--color-danger)]">{error.message}</p>}
 
+      {/* Backdrop closes the menu — no outside-click listener needed. It's
+          transparent, so only the panel below is worth animating. */}
       {open && (
-        <>
-          {/* Backdrop closes the menu — no outside-click listener needed. */}
-          <button
-            type="button"
-            aria-label="Close container menu"
-            onClick={() => setOpen(false)}
-            className="fixed inset-0 z-[15] cursor-default border-0 bg-transparent p-0"
-          />
-          <div className="absolute left-0 right-0 z-[16] mt-1 overflow-hidden rounded-[12px] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] shadow-[var(--shadow-lift)]">
+        <button
+          type="button"
+          aria-label="Close container menu"
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-[15] cursor-default border-0 bg-transparent p-0"
+        />
+      )}
+
+      {/* Presence, not a mount flag: the panel fades + lifts out on close
+          instead of vanishing between two renders. */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            key="container-menu"
+            variants={popoverVariants}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            // The `relative mb-3` wrapper above stays the positioning ancestor
+            // — an element with a transform between them would size this popover
+            // against itself (see the 2026-09-02 switcher width bug).
+            className="absolute left-0 right-0 z-[16] mt-1 overflow-hidden rounded-[12px] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] shadow-[var(--shadow-lift)]"
+          >
             <div className="max-h-[260px] overflow-y-auto py-1">
               {containers.map((c) => (
                 <button
@@ -99,87 +117,98 @@ export function ContainerSwitcher() {
               <PlusIcon />
               New workspace / team
             </button>
-          </div>
-        </>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {modalOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Create a workspace or team"
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setModalOpen(false);
-          }}
-          className="fixed inset-0 z-50 grid place-items-center px-4"
-        >
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={() => setModalOpen(false)}
-            className="absolute inset-0 cursor-default border-0 bg-[rgba(15,23,42,0.75)] backdrop-blur-[2px]"
-          />
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void submit();
+      <AnimatePresence>
+        {modalOpen && (
+          <motion.div
+            key="container-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Create a workspace or team"
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setModalOpen(false);
             }}
-            className="relative z-10 w-full max-w-[420px] rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] p-5 shadow-[var(--shadow-lift)]"
+            className="fixed inset-0 z-50 grid place-items-center px-4"
           >
-            <h2 className="m-0 mb-1 text-[1rem] font-bold tracking-[-0.01em]">
-              Create a container
-            </h2>
-            <p className="m-0 mb-4 text-[0.8rem] text-[var(--color-ink-muted)]">
-              A <b>workspace</b> is private to you. A <b>team</b> is shared — you become its leader
-              and can add team projects and KPIs right away.
-            </p>
-            <input
-              autoFocus
-              type="text"
-              required
-              maxLength={50}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Name"
-              className="field mb-3 w-full"
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={() => setModalOpen(false)}
+              className="absolute inset-0 cursor-default border-0 bg-[rgba(15,23,42,0.75)] backdrop-blur-[2px]"
             />
-            <div className="mb-4 grid grid-cols-2 gap-2">
-              <KindChoice
-                active={kind === "workspace"}
-                icon={<KindIcon kind="workspace" />}
-                title="Individual"
-                subtitle="Just me — private"
-                onClick={() => setKind("workspace")}
+            <motion.form
+              // No initial/animate: it inherits the parent's variant labels, so
+              // the card lifts in while the scrim fades and both reverse on
+              // close from one presence check.
+              variants={sheetVariants}
+              onSubmit={(e) => {
+                e.preventDefault();
+                void submit();
+              }}
+              className="relative z-10 w-full max-w-[420px] rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] p-5 shadow-[var(--shadow-lift)]"
+            >
+              <h2 className="m-0 mb-1 text-[1rem] font-bold tracking-[-0.01em]">
+                Create a container
+              </h2>
+              <p className="m-0 mb-4 text-[0.8rem] text-[var(--color-ink-muted)]">
+                A <b>workspace</b> is private to you. A <b>team</b> is shared — you become its
+                leader and can add team projects and KPIs right away.
+              </p>
+              <input
+                autoFocus
+                type="text"
+                required
+                maxLength={50}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Name"
+                className="field mb-3 w-full"
               />
-              <KindChoice
-                active={kind === "team"}
-                icon={<KindIcon kind="team" />}
-                title="Team"
-                subtitle="Shared with others"
-                onClick={() => setKind("team")}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="btn-base btn-ghost"
-                style={{ padding: "0.45rem 0.85rem", fontSize: "0.82rem" }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!name.trim() || busy}
-                className="btn-base btn-primary"
-                style={{ padding: "0.45rem 0.95rem", fontSize: "0.82rem" }}
-              >
-                {busy ? "Creating…" : "Create"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+              <div className="mb-4 grid grid-cols-2 gap-2">
+                <KindChoice
+                  active={kind === "workspace"}
+                  icon={<KindIcon kind="workspace" />}
+                  title="Individual"
+                  subtitle="Just me — private"
+                  onClick={() => setKind("workspace")}
+                />
+                <KindChoice
+                  active={kind === "team"}
+                  icon={<KindIcon kind="team" />}
+                  title="Team"
+                  subtitle="Shared with others"
+                  onClick={() => setKind("team")}
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="btn-base btn-ghost"
+                  style={{ padding: "0.45rem 0.85rem", fontSize: "0.82rem" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!name.trim() || busy}
+                  className="btn-base btn-primary"
+                  style={{ padding: "0.45rem 0.95rem", fontSize: "0.82rem" }}
+                >
+                  {busy ? "Creating…" : "Create"}
+                </button>
+              </div>
+            </motion.form>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -259,9 +288,12 @@ function KindIcon({ kind }: { kind: "workspace" | "team" }) {
   );
 }
 
-function ChevronIcon() {
+function ChevronIcon({ open }: { open: boolean }) {
   return (
-    <svg
+    <motion.svg
+      // Rotation is derived from `open` in render — no effect, no class toggle.
+      animate={{ rotate: open ? 180 : 0 }}
+      transition={snap(DUR.fast)}
       width="12"
       height="12"
       viewBox="0 0 24 24"
@@ -274,7 +306,7 @@ function ChevronIcon() {
       className="shrink-0 text-[var(--color-ink-faint)]"
     >
       <path d="M6 9l6 6 6-6" />
-    </svg>
+    </motion.svg>
   );
 }
 

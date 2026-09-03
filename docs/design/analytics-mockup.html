@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mokara — Analytics page mockup (PRD-04)</title>
+    <style>
+      /* Real mokara tokens (from packages/frontend/app/globals.css) */
+      :root {
+        --color-surface: rgba(255, 255, 255, 0.72);
+        --color-surface-2: rgba(255, 255, 255, 0.55);
+        --color-surface-solid: #ffffff;
+        --color-border-soft: rgba(15, 23, 42, 0.07);
+        --color-border-strong: rgba(15, 23, 42, 0.13);
+        --color-ink: #0f172a;
+        --color-ink-muted: #64748b;
+        --color-ink-faint: #94a3b8;
+        --color-accent: #6366f1;
+        --color-accent-soft: rgba(99, 102, 241, 0.12);
+        --color-danger: #ef4444;
+        --color-danger-soft: rgba(239, 68, 68, 0.1);
+        --color-warning: #a16207;
+        --color-warning-soft: rgba(234, 179, 8, 0.16);
+        --color-progress: #4f46e5;
+        --color-created: #0ea5e9; /* proposed new token for the "created" series */
+        --color-created-soft: rgba(14, 165, 233, 0.14);
+        --radius-card: 18px;
+        --radius-pill: 999px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        background: linear-gradient(160deg, #f4f5fb, #eef1f8 60%, #eceff7);
+        color: var(--color-ink);
+        -webkit-font-smoothing: antialiased;
+      }
+      .shell {
+        display: flex;
+        min-height: 100vh;
+      }
+
+      /* ---------- Sidebar (mirrors AppShell) ---------- */
+      .sidebar {
+        width: 220px;
+        flex-shrink: 0;
+        padding: 20px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 10px 18px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .brand .mark {
+        width: 22px;
+        height: 22px;
+        border-radius: 7px;
+        background: var(--color-accent);
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 10px;
+        border-radius: 10px;
+        color: var(--color-ink-muted);
+        font-size: 0.86rem;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+      }
+      .nav-item:hover {
+        background: var(--color-surface-2);
+        color: var(--color-ink);
+      }
+      .nav-item.active {
+        background: var(--color-accent-soft);
+        color: var(--color-progress);
+      }
+      .nav-item svg {
+        width: 15px;
+        height: 15px;
+      }
+
+      /* ---------- Main ---------- */
+      .main {
+        flex: 1;
+        padding: 28px 32px;
+        max-width: 1060px;
+      }
+      .page-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 18px;
+        flex-wrap: wrap;
+      }
+      h1 {
+        font-size: 1.25rem;
+        margin: 0;
+        letter-spacing: -0.015em;
+      }
+      .sub {
+        color: var(--color-ink-muted);
+        font-size: 0.82rem;
+        margin-top: 3px;
+      }
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .pill-select {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 12px;
+        border-radius: var(--radius-pill);
+        background: var(--color-surface-solid);
+        border: 1px solid var(--color-border-soft);
+        font-size: 0.78rem;
+        font-weight: 500;
+        color: var(--color-ink);
+        cursor: pointer;
+      }
+      .seg {
+        display: flex;
+        padding: 3px;
+        border-radius: var(--radius-pill);
+        background: var(--color-surface-2);
+        border: 1px solid var(--color-border-soft);
+      }
+      .seg button {
+        border: 0;
+        background: transparent;
+        font: inherit;
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--color-ink-muted);
+        padding: 3px 10px;
+        border-radius: var(--radius-pill);
+        cursor: pointer;
+      }
+      .seg button.on {
+        background: var(--color-surface-solid);
+        color: var(--color-ink);
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+      }
+
+      .card {
+        background: var(--color-surface-solid);
+        border: 1px solid var(--color-border-soft);
+        border-radius: var(--radius-card);
+        padding: 20px 22px;
+        box-shadow:
+          0 1px 2px rgba(15, 23, 42, 0.04),
+          0 8px 24px -18px rgba(15, 23, 42, 0.25);
+        margin-bottom: 16px;
+      }
+
+      /* ---------- Linear-style segmented progress ---------- */
+      .prog-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+      .prog-title {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--color-ink);
+      }
+      .prog-pct {
+        font-size: 0.78rem;
+        color: var(--color-ink-muted);
+      }
+      .prog-pct b {
+        color: var(--color-ink);
+        font-weight: 600;
+      }
+      .bar {
+        display: flex;
+        height: 10px;
+        border-radius: var(--radius-pill);
+        overflow: hidden;
+        background: rgba(148, 163, 184, 0.18);
+      }
+      .bar > div {
+        height: 100%;
+        transition: width 0.4s ease;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-top: 12px;
+      }
+      .legend .item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.75rem;
+        color: var(--color-ink-muted);
+      }
+      .legend .swatch {
+        width: 8px;
+        height: 8px;
+        border-radius: 3px;
+      }
+      .legend .count {
+        font-weight: 600;
+        color: var(--color-ink);
+      }
+
+      /* ---------- Chart ---------- */
+      .chart-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .chart-title {
+        font-size: 0.8rem;
+        font-weight: 600;
+      }
+      .chart-legend {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .chart-legend .item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.73rem;
+        color: var(--color-ink-muted);
+      }
+      .chart-legend .line {
+        width: 14px;
+        height: 2px;
+        border-radius: 2px;
+      }
+      /* tick-to-compare chips */
+      .chips {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: var(--radius-pill);
+        border: 1px solid var(--color-border-soft);
+        background: var(--color-surface-solid);
+        font: inherit;
+        font-size: 0.72rem;
+        font-weight: 500;
+        color: var(--color-ink);
+        cursor: pointer;
+      }
+      .chip:hover {
+        background: var(--color-surface-2);
+      }
+      .chip .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+      .chip .tick {
+        width: 10px;
+        height: 10px;
+        color: var(--color-ink-faint);
+      }
+      .chip.off {
+        opacity: 0.45;
+      }
+      .chip.off .dot {
+        background: var(--color-ink-faint) !important;
+      }
+      .chart-wrap {
+        position: relative;
+      }
+      svg {
+        display: block;
+        width: 100%;
+      }
+      .tooltip {
+        position: absolute;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.12s ease;
+        background: var(--color-ink);
+        color: #f8fafc;
+        border-radius: 10px;
+        padding: 9px 11px;
+        font-size: 0.72rem;
+        line-height: 1.7;
+        box-shadow: 0 8px 24px -8px rgba(15, 23, 42, 0.45);
+        white-space: nowrap;
+        transform: translate(-50%, 0);
+        z-index: 5;
+      }
+      .tooltip .t-date {
+        font-weight: 600;
+        margin-bottom: 2px;
+        font-size: 0.73rem;
+      }
+      .tooltip .row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .tooltip .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+      }
+      .tooltip .val {
+        margin-left: auto;
+        padding-left: 14px;
+        font-weight: 600;
+      }
+
+      .note {
+        font-size: 0.7rem;
+        color: var(--color-ink-faint);
+        padding: 0 2px;
+      }
+      .mockbanner {
+        margin: 0 0 14px;
+        font-size: 0.7rem;
+        color: var(--color-warning);
+        background: var(--color-warning-soft);
+        border: 1px solid rgba(234, 179, 8, 0.25);
+        padding: 6px 12px;
+        border-radius: 10px;
+        display: inline-block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand"><span class="mark"></span> Mokara</div>
+        <a class="nav-item" href="#">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+          >
+            <path d="M4 6h16M4 12h16M4 18h10" />
+          </svg>
+          Tasks
+        </a>
+        <a class="nav-item active" href="#">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M4 19V5" />
+            <path d="M4 19h16" />
+            <path d="M8 15l3-4 3 2 4-6" />
+          </svg>
+          Analytics
+        </a>
+      </aside>
+
+      <main class="main">
+        <span class="mockbanner"
+          >Design mockup — dummy data, not wired to the API (PRD-04 draft)</span
+        >
+
+        <div class="page-head">
+          <div>
+            <h1>Analytics</h1>
+            <div class="sub">
+              How work flows through <b>Acme</b> — created, started, finished, canceled.
+            </div>
+          </div>
+          <div class="controls">
+            <div class="pill-select">Acme <span style="color: var(--color-ink-faint)">▾</span></div>
+            <div class="seg" id="rangeSeg">
+              <button data-r="7">7d</button>
+              <button data-r="30" class="on">30d</button>
+              <button data-r="90">90d</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Linear-style segmented progress tracker -->
+        <section class="card">
+          <div class="prog-head">
+            <span class="prog-title">Current distribution</span>
+            <span class="prog-pct" id="progPct"></span>
+          </div>
+          <div class="bar" id="segBar"></div>
+          <div class="legend" id="segLegend"></div>
+        </section>
+
+        <!-- Multi-line activity chart -->
+        <section class="card">
+          <div class="chart-head">
+            <span class="chart-title">Activity over time</span>
+            <div class="chips" id="chips"></div>
+          </div>
+          <div class="chart-wrap" id="chartWrap">
+            <svg id="chart" height="300" preserveAspectRatio="none"></svg>
+            <div class="tooltip" id="tip"></div>
+          </div>
+        </section>
+
+        <p class="note">
+          One graph, four smooth lines — daily counts. Tick a series chip to include/exclude it from
+          the comparison; hover for the exact per-day breakdown. No stat cards.
+        </p>
+      </main>
+    </div>
+
+    <script>
+      const SERIES = [
+        { key: "created", label: "Created", color: "var(--color-created)", hex: "#0ea5e9" },
+        { key: "in_progress", label: "In progress", color: "var(--color-warning)", hex: "#a16207" },
+        { key: "completed", label: "Completed", color: "var(--color-accent)", hex: "#6366f1" },
+        { key: "canceled", label: "Canceled", color: "var(--color-danger)", hex: "#ef4444" },
+      ];
+
+      // ---- deterministic mock data (seeded) ----
+      function rng(seed) {
+        return () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+      }
+      function genData(days) {
+        const r = rng(days * 7 + 3);
+        const raw = [];
+        const today = new Date();
+        let momentum = 2.5;
+        for (let i = days - 1; i >= 0; i--) {
+          const d = new Date(today);
+          d.setDate(today.getDate() - i);
+          momentum += (r() - 0.45) * 0.5;
+          momentum = Math.max(1, Math.min(6, momentum));
+          const created = Math.max(0, Math.round(momentum + (r() - 0.5) * 3));
+          const completed = Math.max(0, Math.round(created * (0.55 + r() * 0.5) + (r() - 0.5) * 2));
+          const in_progress = Math.max(0, Math.round(1 + r() * 3 + (created - completed) * 0.2));
+          const canceled = r() < 0.3 ? Math.round(r() * 2) : 0;
+          raw.push({ d, created, in_progress, completed, canceled });
+        }
+        // 3-day centered moving average → Linear-smooth lines, then round.
+        const smooth = (k) =>
+          raw.map((_, i) => {
+            const a = raw[Math.max(0, i - 1)][k],
+              b = raw[i][k],
+              c = raw[Math.min(raw.length - 1, i + 1)][k];
+            return (a + b + c) / 3;
+          });
+        return raw.map((p, i) => ({
+          d: p.d,
+          created: Math.round(smooth("created")[i]),
+          in_progress: Math.round(smooth("in_progress")[i]),
+          completed: Math.round(smooth("completed")[i]),
+          canceled: Math.round(smooth("canceled")[i]),
+        }));
+      }
+
+      let range = 30;
+      let data = genData(range);
+      const visible = { created: true, in_progress: true, completed: true, canceled: true };
+      // ?off=canceled,in_progress — pre-toggle series (for screenshots / demos)
+      const offParam = new URLSearchParams(location.search).get("off");
+      if (offParam)
+        offParam.split(",").forEach((k) => {
+          if (k in visible) visible[k] = false;
+        });
+      const visSeries = () => SERIES.filter((s) => visible[s.key]);
+
+      const fmtDay = (d) => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+      // ---- segmented progress bar (Linear-style) ----
+      function renderProgress() {
+        // snapshot totals derived (mock) from the series
+        const t = data.reduce(
+          (a, p) => ({
+            created: a.created + p.created,
+            in_progress: a.in_progress + p.in_progress,
+            completed: a.completed + p.completed,
+            canceled: a.canceled + p.canceled,
+          }),
+          { created: 0, in_progress: 0, completed: 0, canceled: 0 }
+        );
+        const open = Math.max(3, t.created - t.completed - t.canceled - t.in_progress);
+        const total = open + t.in_progress + t.completed + t.canceled;
+        const pct = total ? Math.round((t.completed / total) * 100) : 0;
+
+        document.getElementById("progPct").innerHTML =
+          `<b>${pct}%</b> of ${total} tasks completed in range`;
+
+        const segs = [
+          { label: "Completed", n: t.completed, color: "var(--color-accent)" },
+          { label: "In progress", n: t.in_progress, color: "var(--color-warning)" },
+          { label: "Open", n: open, color: "rgba(148,163,184,0.55)" },
+          { label: "Canceled", n: t.canceled, color: "var(--color-danger)" },
+        ];
+        document.getElementById("segBar").innerHTML = segs
+          .map((s) => `<div style="width:${(s.n / total) * 100}%;background:${s.color}"></div>`)
+          .join("");
+        document.getElementById("segLegend").innerHTML = segs
+          .map(
+            (s) =>
+              `<span class="item"><span class="swatch" style="background:${s.color}"></span>${s.label} <span class="count">${s.n}</span></span>`
+          )
+          .join("");
+      }
+
+      // ---- multi-line chart (pure SVG, smooth monotone-ish curves) ----
+      const svg = document.getElementById("chart");
+      const wrap = document.getElementById("chartWrap");
+      const tip = document.getElementById("tip");
+      const PAD = { l: 30, r: 12, t: 12, b: 26 };
+
+      // Catmull-Rom → cubic Bézier: smooth line through every point.
+      function smoothPath(pts) {
+        if (pts.length < 3) return "M" + pts.map((p) => p.join(",")).join(" L");
+        let d = `M${pts[0][0]},${pts[0][1]}`;
+        for (let i = 0; i < pts.length - 1; i++) {
+          const p0 = pts[Math.max(0, i - 1)],
+            p1 = pts[i],
+            p2 = pts[i + 1],
+            p3 = pts[Math.min(pts.length - 1, i + 2)];
+          const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+          const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+          d += ` C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${p2[0]},${p2[1]}`;
+        }
+        return d;
+      }
+
+      function renderChart() {
+        const W = wrap.clientWidth,
+          H = 300;
+        svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+        const iw = W - PAD.l - PAD.r,
+          ih = H - PAD.t - PAD.b;
+        const shown = visSeries();
+        if (shown.length === 0) {
+          svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-size="12" fill="#94a3b8">tick a series to compare</text>`;
+          tip.style.opacity = "0";
+          return;
+        }
+        const max = Math.max(4, ...data.flatMap((p) => shown.map((s) => p[s.key])));
+        const yMax = max; // counts are integers — top tick is the max, never fractional
+        const x = (i) => PAD.l + (i / (data.length - 1)) * iw;
+        const y = (v) => PAD.t + ih - (v / yMax) * ih;
+
+        let g = "";
+        // horizontal grid + y labels (integer ticks only)
+        const ticks = yMax <= 6 ? yMax : 4;
+        for (let i = 0; i <= ticks; i++) {
+          const v = Math.round((yMax / ticks) * i),
+            yy = y(v);
+          g += `<line x1="${PAD.l}" x2="${W - PAD.r}" y1="${yy}" y2="${yy}" stroke="rgba(15,23,42,0.06)" stroke-width="1"/>`;
+          g += `<text x="${PAD.l - 8}" y="${yy + 3}" text-anchor="end" font-size="10" fill="#94a3b8">${v}</text>`;
+        }
+        // x labels (~5)
+        const step = Math.ceil(data.length / 5);
+        for (let i = 0; i < data.length; i += step) {
+          g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle" font-size="10" fill="#94a3b8">${fmtDay(data[i].d)}</text>`;
+        }
+        // smooth lines (visible series only)
+        for (const s of shown) {
+          const pts = data.map((p, i) => [
+            Math.round(x(i) * 10) / 10,
+            Math.round(y(p[s.key]) * 10) / 10,
+          ]);
+          g += `<path d="${smoothPath(pts)}" fill="none" stroke="${s.hex}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>`;
+        }
+        // hover artifacts
+        g += `<line id="cross" x1="0" x2="0" y1="${PAD.t}" y2="${PAD.t + ih}" stroke="rgba(15,23,42,0.22)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>`;
+        g += shown
+          .map(
+            (s) =>
+              `<circle id="dot-${s.key}" r="3.2" fill="#fff" stroke="${s.hex}" stroke-width="1.8" opacity="0"/>`
+          )
+          .join("");
+        // capture surface
+        g += `<rect id="cap" x="${PAD.l}" y="${PAD.t}" width="${iw}" height="${ih}" fill="transparent"/>`;
+        svg.innerHTML = g;
+
+        const cap = document.getElementById("cap");
+        cap.addEventListener("mousemove", (e) => {
+          const rect = svg.getBoundingClientRect();
+          const px = ((e.clientX - rect.left) / rect.width) * W;
+          const i = Math.max(
+            0,
+            Math.min(data.length - 1, Math.round(((px - PAD.l) / iw) * (data.length - 1)))
+          );
+          const cx = x(i);
+          const cross = document.getElementById("cross");
+          cross.setAttribute("x1", cx);
+          cross.setAttribute("x2", cx);
+          cross.setAttribute("opacity", "1");
+          for (const s of shown) {
+            const dot = document.getElementById(`dot-${s.key}`);
+            dot.setAttribute("cx", cx);
+            dot.setAttribute("cy", y(data[i][s.key]));
+            dot.setAttribute("opacity", "1");
+          }
+          tip.style.opacity = "1";
+          tip.style.left = `${(cx / W) * rect.width}px`;
+          const rows = shown
+            .map(
+              (s) =>
+                `<div class="row"><span class="dot" style="background:${s.hex}"></span>${s.label}<span class="val">${data[i][s.key]}</span></div>`
+            )
+            .join("");
+          tip.innerHTML = `<div class="t-date">${fmtDay(data[i].d)}</div>${rows}`;
+          const tipH = tip.offsetHeight;
+          tip.style.top = `${Math.max(4, (y(max * 0.6) / H) * rect.height - tipH / 2)}px`;
+        });
+        cap.addEventListener("mouseleave", () => {
+          tip.style.opacity = "0";
+          const cross = document.getElementById("cross");
+          if (cross) cross.setAttribute("opacity", "0");
+          for (const s of shown) {
+            const d = document.getElementById(`dot-${s.key}`);
+            if (d) d.setAttribute("opacity", "0");
+          }
+        });
+      }
+
+      // ---- tick-to-compare chips ----
+      const CHECK = `<svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>`;
+      function renderChips() {
+        document.getElementById("chips").innerHTML = SERIES.map(
+          (s) =>
+            `<button class="chip ${visible[s.key] ? "" : "off"}" data-k="${s.key}">
+          <span class="dot" style="background:${s.hex}"></span>${s.label}${visible[s.key] ? CHECK : ""}
+        </button>`
+        ).join("");
+      }
+      document.getElementById("chips").addEventListener("click", (e) => {
+        const b = e.target.closest(".chip");
+        if (!b) return;
+        visible[b.dataset.k] = !visible[b.dataset.k];
+        renderChips();
+        renderChart();
+      });
+
+      function renderAll() {
+        renderProgress();
+        renderChips();
+        renderChart();
+      }
+
+      document.getElementById("rangeSeg").addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        document.querySelectorAll("#rangeSeg button").forEach((x) => x.classList.remove("on"));
+        b.classList.add("on");
+        range = Number(b.dataset.r);
+        data = genData(range);
+        renderAll();
+      });
+
+      window.addEventListener("resize", renderChart);
+      renderAll();
+    </script>
+  </body>
+</html>

@@ -3,14 +3,17 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, isApiError } from "@/lib/api";
+import { api } from "@/lib/api";
+import { setSessionUser } from "@/lib/session";
+import { useAsyncError } from "@/hooks/useAsyncError";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 export default function SignupPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const { error, setError, run } = useAsyncError();
   const [loading, setLoading] = useState(false);
 
   const usernameValid = /^[a-z0-9_]{3,20}$/.test(username);
@@ -22,31 +25,20 @@ export default function SignupPage() {
     setError(null);
     if (!canSubmit) return;
     setLoading(true);
-    try {
-      await api.signUp({
-        username: username.trim(),
-        password,
-        display_name: displayName.trim() || undefined,
-      });
-      router.push("/tasks");
-      router.refresh();
-    } catch (e: unknown) {
-      if (isApiError(e)) {
-        if (e.error === "username_taken") {
-          setError("That username is already taken.");
-        } else if (e.error === "invalid_username") {
-          setError("Username must be 3-20 chars of a-z, 0-9, or underscore.");
-        } else if (e.error === "weak_password") {
-          setError("Password must be at least 8 characters.");
-        } else {
-          setError(e.message);
-        }
-      } else {
-        setError("Sign up failed");
-      }
-    } finally {
-      setLoading(false);
-    }
+    const res = await run(
+      () =>
+        api.signUp({
+          username: username.trim(),
+          password,
+          display_name: displayName.trim() || undefined,
+        }),
+      { fallback: "Sign up failed" }
+    );
+    setLoading(false);
+    if (!res) return;
+    setSessionUser(res.user);
+    router.push("/tasks");
+    router.refresh();
   }
 
   return (
@@ -124,11 +116,7 @@ export default function SignupPage() {
             )}
           </label>
 
-          {error && (
-            <div className="mb-4 rounded-[var(--radius-btn)] border border-[var(--color-danger-border)] bg-[rgba(239,68,68,0.08)] px-4 py-[0.7rem] text-[0.88rem] text-[var(--color-danger-ink)]">
-              {error}
-            </div>
-          )}
+          <ErrorBanner className="mb-4" message={error?.message} />
 
           <button type="submit" className="btn-base btn-primary mt-2 w-full" disabled={!canSubmit}>
             {loading ? "Creating…" : "Create account"}

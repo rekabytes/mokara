@@ -38,3 +38,10 @@ jobs:
 
       - name: Prettier check
         run: pnpm format
+
+      # The one step the pre-release audit proved belongs here. Typecheck runs
+      # `tsc --noEmit`, so a build script that cannot emit passes CI forever —
+      # which is how the backend's production build stayed broken for weeks. This
+      # builds the artifact the frontend image actually runs.
+      - name: Build frontend (standalone)
+        run: pnpm build:frontend

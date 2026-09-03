@@ -10,31 +10,60 @@ import {
   type KeyboardEvent,
 } from "react";
 import { createPortal } from "react-dom";
-import { DateRangePicker } from "./DateRangePicker";
-import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
+import { useAtom } from "jotai";
+import { DatePicker } from "./DatePicker";
 import {
   api,
-  isApiError,
   type Task,
   type TaskStatus,
   type TaskPriority,
-  type TeamWithRole,
+  type TaskPatch,
+  type BindingDraft,
+  type Comment,
+  type User,
+  type Project,
+  type Kpi,
 } from "@/lib/api";
+import { useAsyncError } from "@/hooks/useAsyncError";
+import { useContainers } from "@/lib/containers";
+import { useContainerMeta } from "@/lib/meta";
 import { useSession } from "@/lib/session";
+import {
+  taskFilterAtom,
+  taskSortAtom,
+  useCollapsedGroups,
+  type GroupId,
+  type TaskFilter,
+  type TaskSort,
+} from "@/lib/tasksView";
+import {
+  DUR,
+  snap,
+  popoverVariants,
+  listItemVariants,
+  collapseVariants,
+  backdropVariants,
+  sheetVariants,
+  bannerVariants,
+  tickVariants,
+} from "@/lib/motion";
+import { ErrorBanner } from "@/components/ErrorBanner";
 import { cn } from "@/lib/cn";
 
-type Filter = "active" | "today" | "week" | "done";
-type Sort = "manual" | "priority" | "due";
-type GroupId = "todo" | "in_progress" | "done";
+// Gap between a trigger and the menu that opens under it, and the same number
+// used by the drawer's width animation. Module scope so `placeBelow`'s
+// useCallback can legitimately depend on nothing.
+const MENU_GAP = 4;
 
-const FILTERS: { id: Filter; label: string }[] = [
+const FILTERS: { id: TaskFilter; label: string }[] = [
   { id: "active", label: "Active" },
   { id: "today", label: "Today" },
   { id: "week", label: "This week" },
   { id: "done", label: "Done" },
 ];
 
-const SORTS: { id: Sort; label: string }[] = [
+const SORTS: { id: TaskSort; label: string }[] = [
   { id: "manual", label: "Manual" },
   { id: "priority", label: "Priority" },
   { id: "due", label: "Due date" },
@@ -44,7 +73,15 @@ const GROUPS: { id: GroupId; name: string }[] = [
   { id: "todo", name: "Todo" },
   { id: "in_progress", name: "In Progress" },
   { id: "done", name: "Done" },
+  { id: "canceled", name: "Canceled" },
 ];
+
+// Derived from the data the page already has, so the dropdowns and the sort
+// loops can list statuses/priorities without re-declaring (and re-casting) the
+// same four/five literals in five places.
+const GROUP_IDS: GroupId[] = GROUPS.map((g) => g.id);
+const STATUS_IDS: TaskStatus[] = GROUP_IDS;
+const PRIORITY_IDS: TaskPriority[] = ["low", "medium", "high"];
 
 const PRIORITY_BAR_COLOR: Record<TaskPriority, string> = {
   high: "bg-[var(--color-prio-high)]",
@@ -121,81 +158,47 @@ function shortId(t: Task): string {
 }
 
 export default function TasksPage() {
-  const router = useRouter();
   const session = useSession();
 
-  const [teamId, setTeamId] = useState<string | null>(null);
-  const [bootError, setBootError] = useState<string | null>(null);
+  // PRD-06: the container comes from the global switcher atoms — no boot
+  // fetch/effect here anymore. Containers failing is a boot-level error.
+  const { selected, error: bootError } = useContainers();
+  const teamId = selected?.id ?? null;
+  const { projects, kpis: containerKpis } = useContainerMeta(selected?.id ?? null);
+  const { error, setError, run } = useAsyncError();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [filter, setFilter] = useState<Filter>("active");
-  const [sort, setSort] = useState<Sort>("manual");
+  // View preferences live in Jotai (lib/tasksView.ts), so they survive a trip
+  // to /teams/x and back instead of resetting on every mount.
+  const [filter, setFilter] = useAtom(taskFilterAtom);
+  const [sort, setSort] = useAtom(taskSortAtom);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const [collapsed, setCollapsed] = useState<Set<GroupId>>(new Set());
+  const { collapsed, toggleGroup } = useCollapsedGroups();
   const [modalOpen, setModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newPriority, setNewPriority] = useState<TaskPriority>("medium");
   const [newStatus, setNewStatus] = useState<TaskStatus>("todo");
-  const [newDateRange, setNewDateRange] = useState<{ start: string | null; end: string | null }>({
-    start: null,
-    end: null,
-  });
+  const [newDueDate, setNewDueDate] = useState<string | null>(null);
+  const [newProjectId, setNewProjectId] = useState<string | null>(null);
+  const [newKpis, setNewKpis] = useState<BindingDraft[]>([]);
   const [creating, setCreating] = useState(false);
-  const titleInputRef = useRef<HTMLInputElement>(null);
 
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-
-  useEffect(() => {
-    if (session.status !== "authed") return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { teams } = await api.listTeams();
-        if (cancelled) return;
-        let team: TeamWithRole | undefined = teams[0];
-        if (!team) {
-          const created = await api.createTeam({ name: "Personal" });
-          if (cancelled) return;
-          team = { ...created.team, role: "owner" };
-        }
-        setTeamId(team.id);
-      } catch (e: unknown) {
-        if (!cancelled) {
-          if (isApiError(e) && e.status === 401) {
-            router.push("/login");
-            return;
-          }
-          setBootError(isApiError(e) ? e.message : "Failed to load workspace");
-          setLoading(false);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [session.status, router]);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const loadTasks = useCallback(async () => {
     if (!teamId) return;
     setLoading(true);
     setError(null);
-    try {
-      const list = await api.listTeamTasks(teamId);
-      setTasks(list);
-    } catch (e: unknown) {
-      if (isApiError(e) && e.status === 401) {
-        router.push("/login");
-        return;
-      }
-      setError(isApiError(e) ? e.message : "Failed to load tasks");
-    } finally {
-      setLoading(false);
-    }
-  }, [teamId, router]);
+    const list = await run(() => api.listTeamTasks(teamId), { fallback: "Failed to load tasks" });
+    setLoading(false);
+    if (list) setTasks(list);
+  }, [teamId, run, setError]);
 
+  // Server state, not app state: the task list belongs to the database, so
+  // refetching when the container changes is outside-React sync (the one kind
+  // this codebase allows). Shared *view* state deliberately lives in Jotai
+  // instead — see lib/tasksView.ts.
   useEffect(() => {
     if (teamId) loadTasks();
   }, [teamId, loadTasks]);
@@ -205,22 +208,23 @@ export default function TasksPage() {
     const title = newTitle.trim();
     if (!title || creating) return;
     setCreating(true);
-    try {
-      const created = await api.createTeamTask(teamId, {
-        title,
-        description: newDescription.trim() || undefined,
-        priority: newPriority,
-        status: newStatus,
-        start_date: newDateRange.start ?? undefined,
-        due_date: newDateRange.end ?? undefined,
-      });
-      setTasks((prev) => [created, ...prev]);
-      resetAndCloseModal();
-    } catch (e: unknown) {
-      setError(isApiError(e) ? e.message : "Failed to create task");
-    } finally {
-      setCreating(false);
-    }
+    const created = await run(
+      () =>
+        api.createTeamTask(teamId, {
+          title,
+          description: newDescription.trim() || undefined,
+          priority: newPriority,
+          status: newStatus,
+          due_date: newDueDate ?? undefined,
+          project_id: newProjectId ?? undefined,
+          kpis: newKpis.length ? newKpis : undefined,
+        }),
+      { fallback: "Failed to create task" }
+    );
+    setCreating(false);
+    if (!created) return;
+    setTasks((prev) => [created, ...prev]);
+    resetAndCloseModal();
   }
 
   function openModal() {
@@ -228,9 +232,10 @@ export default function TasksPage() {
     setNewDescription("");
     setNewPriority("medium");
     setNewStatus("todo");
-    setNewDateRange({ start: null, end: null });
+    setNewDueDate(null);
+    setNewProjectId(null);
+    setNewKpis([]);
     setModalOpen(true);
-    requestAnimationFrame(() => titleInputRef.current?.focus());
   }
 
   function resetAndCloseModal() {
@@ -238,7 +243,9 @@ export default function TasksPage() {
     setNewDescription("");
     setNewPriority("medium");
     setNewStatus("todo");
-    setNewDateRange({ start: null, end: null });
+    setNewDueDate(null);
+    setNewProjectId(null);
+    setNewKpis([]);
     setModalOpen(false);
   }
 
@@ -251,91 +258,77 @@ export default function TasksPage() {
 
   async function toggleTask(t: Task) {
     const next: TaskStatus = t.status === "done" ? "todo" : "done";
-    try {
-      const updated = await api.updateTask(t.id, { status: next });
-      setTasks((prev) => prev.map((x) => (x.id === t.id ? updated : x)));
-    } catch (e: unknown) {
-      setError(isApiError(e) ? e.message : "Failed to update task");
-    }
+    const updated = await run(() => api.updateTask(t.id, { status: next }), {
+      fallback: "Failed to update task",
+    });
+    if (!updated) return;
+    setTasks((prev) => prev.map((x) => (x.id === t.id ? updated : x)));
   }
 
   async function cyclePriority(t: Task) {
-    const order: TaskPriority[] = ["low", "medium", "high"];
-    const next = order[(order.indexOf(t.priority) + 1) % order.length];
-    try {
-      const updated = await api.updateTask(t.id, { priority: next });
-      setTasks((prev) => prev.map((x) => (x.id === t.id ? updated : x)));
-    } catch (e: unknown) {
-      setError(isApiError(e) ? e.message : "Failed to update task");
-    }
+    const next = PRIORITY_IDS[(PRIORITY_IDS.indexOf(t.priority) + 1) % PRIORITY_IDS.length];
+    const updated = await run(() => api.updateTask(t.id, { priority: next }), {
+      fallback: "Failed to update task",
+    });
+    if (!updated) return;
+    setTasks((prev) => prev.map((x) => (x.id === t.id ? updated : x)));
   }
 
   async function toggleFlag(t: Task) {
-    try {
-      const updated = await api.flagTask(t.id);
-      setTasks((prev) => prev.map((x) => (x.id === t.id ? updated : x)));
-    } catch (e: unknown) {
-      setError(isApiError(e) ? e.message : "Failed to update task");
-    }
+    const updated = await run(() => api.flagTask(t.id), { fallback: "Failed to update task" });
+    if (!updated) return;
+    setTasks((prev) => prev.map((x) => (x.id === t.id ? updated : x)));
   }
 
   async function removeTask(id: string) {
-    try {
-      await api.deleteTask(id);
-      setTasks((prev) => prev.filter((x) => x.id !== id));
-    } catch (e: unknown) {
-      setError(isApiError(e) ? e.message : "Failed to delete task");
-    }
+    // deleteTask resolves void → undefined, so test for null, not falsiness.
+    const ok = await run(() => api.deleteTask(id), { fallback: "Failed to delete task" });
+    if (ok === null) return;
+    setTasks((prev) => prev.filter((x) => x.id !== id));
+    // selectedTask is derived from `tasks`, so it goes null here — which is
+    // what triggers the drawer's exit. AnimatePresence keeps the last render
+    // (task and all) on screen while it slides out, so no unmount race.
+    if (selectedTaskId === id) setSelectedTaskId(null);
   }
 
-  function startEdit(t: Task) {
-    setEditingId(t.id);
-    setEditTitle(t.title);
-  }
-
-  async function commitEdit() {
-    if (!editingId) return;
-    const title = editTitle.trim();
-    const id = editingId;
-    setEditingId(null);
-    if (!title) {
-      removeTask(id);
-      return;
-    }
-    const original = tasks.find((x) => x.id === id);
-    if (original && original.title === title) return;
-    try {
-      const updated = await api.updateTask(id, { title });
-      setTasks((prev) => prev.map((x) => (x.id === id ? updated : x)));
-    } catch (e: unknown) {
-      setError(isApiError(e) ? e.message : "Failed to rename task");
-    }
-  }
-
-  function onEditKey(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      commitEdit();
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      setEditingId(null);
-    }
-  }
-
-  function toggleGroup(g: GroupId) {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(g)) next.delete(g);
-      else next.add(g);
-      return next;
+  // Generic field updater for the TaskDetailDrawer. `TaskPatch` is the exact
+  // body PATCH /tasks/:id accepts, so the drawer's patch reaches api.updateTask
+  // with no cast. Flag toggling goes through api.flagTask directly because the
+  // PATCH schema is `.strict()` and would reject `flagged`.
+  async function updateTaskField(id: string, patch: TaskPatch) {
+    const updated = await run(() => api.updateTask(id, patch), {
+      fallback: "Failed to update task",
     });
+    if (!updated) return;
+    setTasks((prev) => prev.map((x) => (x.id === id ? updated : x)));
   }
+
+  async function setTaskKpis(id: string, bindings: BindingDraft[]) {
+    const updated = await run(() => api.setTaskKpis(id, bindings), {
+      fallback: "Failed to update KPI weights",
+    });
+    if (!updated) return;
+    setTasks((prev) => prev.map((x) => (x.id === id ? updated : x)));
+  }
+
+  function openTask(id: string) {
+    setSelectedTaskId(id);
+  }
+
+  function closeDrawer() {
+    setSelectedTaskId(null);
+  }
+
+  const selectedTask = useMemo(
+    () => (selectedTaskId ? (tasks.find((t) => t.id === selectedTaskId) ?? null) : null),
+    [selectedTaskId, tasks]
+  );
 
   const visibleByGroup = useMemo(() => {
-    const buckets: Record<GroupId, Task[]> = { todo: [], in_progress: [], done: [] };
+    const buckets: Record<GroupId, Task[]> = { todo: [], in_progress: [], done: [], canceled: [] };
     let filtered = tasks;
     if (filter === "active") {
-      filtered = filtered.filter((t) => t.status !== "done");
+      filtered = filtered.filter((t) => t.status !== "done" && t.status !== "canceled");
     } else if (filter === "today") {
       filtered = filtered.filter((t) => t.due_date && isToday(t.due_date));
     } else if (filter === "week") {
@@ -347,13 +340,13 @@ export default function TasksPage() {
       buckets[t.status].push(t);
     }
     if (sort === "priority") {
-      for (const k of Object.keys(buckets) as GroupId[]) {
+      for (const k of GROUP_IDS) {
         buckets[k] = [...buckets[k]].sort(
           (a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
         );
       }
     } else if (sort === "due") {
-      for (const k of Object.keys(buckets) as GroupId[]) {
+      for (const k of GROUP_IDS) {
         buckets[k] = [...buckets[k]].sort((a, b) => {
           if (!a.due_date && !b.due_date) return 0;
           if (!a.due_date) return 1;
@@ -380,7 +373,7 @@ export default function TasksPage() {
   if (bootError) {
     return (
       <div className="grid min-h-[60vh] place-items-center">
-        <p className="text-[var(--color-danger-ink)]">{bootError}</p>
+        <p className="text-[var(--color-danger-ink)]">{bootError.message}</p>
       </div>
     );
   }
@@ -390,7 +383,12 @@ export default function TasksPage() {
   }
 
   return (
-    <div className="flex flex-col">
+    // The page lives inside AppShell's <main>, which adds pt-4 + pb-16
+    // (pt-[4rem] on small screens) — so lock to viewport MINUS that
+    // padding instead of raw h-screen, otherwise the body scrolls and
+    // the drawer's bottom lands below the fold. Scroll lives inside the
+    // task list (when many tasks) — not in the drawer, not on the page.
+    <div className="flex h-[calc(100dvh-5rem)] max-[800px]:h-[calc(100dvh-8rem)] flex-col overflow-hidden">
       {/* Top bar: breadcrumb + actions */}
       <div className="flex items-center justify-between border-b border-[var(--color-border-soft)] py-1">
         <div className="flex items-center gap-[0.4rem] text-[0.92rem] font-semibold">
@@ -423,13 +421,23 @@ export default function TasksPage() {
                 key={f.id}
                 onClick={() => setFilter(f.id)}
                 className={cn(
-                  "cursor-pointer rounded-full px-3 py-[0.3rem] text-[0.82rem] font-medium transition-colors duration-[140ms]",
+                  "relative cursor-pointer rounded-full px-3 py-[0.3rem] text-[0.82rem] font-medium transition-colors duration-[140ms]",
                   filter === f.id
-                    ? "bg-white text-[var(--color-ink)] shadow-[0_1px_3px_rgba(15,23,42,0.1)]"
+                    ? "text-[var(--color-ink)]"
                     : "text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
                 )}
               >
-                {f.label}
+                {/* One shared layoutId across the four pills: the white plate
+                    travels to whichever filter is active instead of being
+                    re-painted from scratch on the new one. */}
+                {filter === f.id && (
+                  <motion.span
+                    layoutId="active-filter-plate"
+                    className="absolute inset-0 rounded-full bg-white shadow-[0_1px_3px_rgba(15,23,42,0.1)]"
+                    transition={snap(DUR.base)}
+                  />
+                )}
+                <span className="relative">{f.label}</span>
               </button>
             ))}
           </div>
@@ -449,7 +457,12 @@ export default function TasksPage() {
           <div className="relative">
             <select
               value={sort}
-              onChange={(e) => setSort(e.target.value as Sort)}
+              onChange={(e) => {
+                // Guarded lookup instead of `e.target.value as Sort`: an
+                // unexpected value can't smuggle itself into the atom.
+                const next = SORTS.find((s) => s.id === e.target.value)?.id;
+                if (next) setSort(next);
+              }}
               aria-label="Sort"
               className="cursor-pointer appearance-none rounded-full border border-[var(--color-border-soft)] bg-[var(--color-surface)] py-[0.3rem] pl-3 pr-7 text-[0.82rem] font-medium text-[var(--color-ink-muted)] backdrop-blur-[22px] outline-none hover:text-[var(--color-ink)]"
             >
@@ -481,146 +494,219 @@ export default function TasksPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="mb-3 rounded-[var(--radius-btn)] border border-[var(--color-danger-border)] bg-[rgba(239,68,68,0.08)] px-4 py-[0.7rem] text-[0.88rem] text-[var(--color-danger-ink)]">
-          {error}
-        </div>
-      )}
+      <ErrorBanner className="mb-3" message={error?.message} />
 
-      {/* Tasks card */}
-      <div className="card overflow-hidden p-1.5">
-        {totalTasks === 0 ? (
-          <div className="flex flex-col items-center px-6 py-14 text-center">
-            <div className="relative mx-auto mb-3 block size-12 rounded-full bg-[var(--color-accent-soft)] before:absolute before:inset-[18px] before:rounded-full before:border-2 before:border-[var(--color-accent)] before:content-['']" />
-            <p className="m-0 text-[0.95rem] font-semibold">No tasks yet</p>
-            <p className="m-0 mt-1 text-[0.88rem] text-[var(--color-ink-muted)]">
-              Capture a thought, get it done.
-            </p>
-            <button type="button" onClick={openModal} className="btn-base btn-primary mt-[0.85rem]">
-              Create your first task
-            </button>
-          </div>
-        ) : totalVisible === 0 ? (
-          <div className="flex flex-col items-center px-6 py-12 text-center">
-            <p className="m-0 text-[0.95rem] font-semibold">
-              {filter === "done"
-                ? "Nothing finished yet"
-                : filter === "today"
-                  ? "Nothing due today"
-                  : filter === "week"
-                    ? "Nothing due this week"
-                    : "No open tasks"}
-            </p>
-            <p className="m-0 mt-1 text-[0.88rem] text-[var(--color-ink-muted)]">
-              Try a different filter or add a new one.
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col">
-            {visibleGroups.map((g) => {
-              const items = visibleByGroup[g.id];
-              const isCollapsed = collapsed.has(g.id);
-              if (items.length === 0) return null;
-              return (
-                <div key={g.id} className="flex flex-col">
-                  <div className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-[var(--color-surface-2)]">
-                    <button
-                      type="button"
-                      onClick={() => toggleGroup(g.id)}
-                      className="flex cursor-pointer items-center gap-1.5"
-                    >
-                      <svg
-                        className={cn(
-                          "size-3 text-[var(--color-ink-faint)] transition-transform duration-[140ms]",
-                          isCollapsed && "-rotate-90"
+      {/* Tasks list + task-detail drawer share a horizontal row. The row is
+          a size container (`@container`) so the drawer's `cqw` width
+          resolves against the row — not the animating drawer wrapper.
+          items-start keeps the task card at its natural (capped) height
+          while the drawer wrapper self-stretches to the row bottom.
+          Page is locked to viewport (see <div> above); the row fills the
+          remaining height with flex-1 + min-h-0. The task card has a
+          bounded max-h and scrolls internally. No page-level scroll, no
+          drawer scroll. */}
+      <div className="@container flex min-h-0 flex-1 items-start overflow-hidden">
+        <div className="card flex min-h-0 max-h-[calc(100dvh-12rem)] max-[800px]:max-h-[calc(100dvh-15rem)] flex-1 min-w-0 flex-col overflow-hidden">
+          {/* Inner scrollable surface — only the task area scrolls. */}
+          <div className="flex-1 overflow-y-auto p-1.5">
+            {totalTasks === 0 ? (
+              <div className="flex flex-col items-center px-6 py-14 text-center">
+                <div className="relative mx-auto mb-3 block size-12 rounded-full bg-[var(--color-accent-soft)] before:absolute before:inset-[18px] before:rounded-full before:border-2 before:border-[var(--color-accent)] before:content-['']" />
+                <p className="m-0 text-[0.95rem] font-semibold">No tasks yet</p>
+                <p className="m-0 mt-1 text-[0.88rem] text-[var(--color-ink-muted)]">
+                  Capture a thought, get it done.
+                </p>
+                <button
+                  type="button"
+                  onClick={openModal}
+                  className="btn-base btn-primary mt-[0.85rem]"
+                >
+                  Create your first task
+                </button>
+              </div>
+            ) : totalVisible === 0 ? (
+              <div className="flex flex-col items-center px-6 py-12 text-center">
+                <p className="m-0 text-[0.95rem] font-semibold">
+                  {filter === "done"
+                    ? "Nothing finished yet"
+                    : filter === "today"
+                      ? "Nothing due today"
+                      : filter === "week"
+                        ? "Nothing due this week"
+                        : "No open tasks"}
+                </p>
+                <p className="m-0 mt-1 text-[0.88rem] text-[var(--color-ink-muted)]">
+                  Try a different filter or add a new one.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col">
+                {visibleGroups.map((g) => {
+                  const items = visibleByGroup[g.id];
+                  const isCollapsed = collapsed.has(g.id);
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={g.id} className="flex flex-col">
+                      <div className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-[var(--color-surface-2)]">
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(g.id)}
+                          className="flex cursor-pointer items-center gap-1.5"
+                        >
+                          <svg
+                            className={cn(
+                              "size-3 text-[var(--color-ink-faint)] transition-transform duration-[140ms]",
+                              isCollapsed && "-rotate-90"
+                            )}
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M6 9l6 6 6-6"
+                              stroke="currentColor"
+                              strokeWidth="2.2"
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                          <span className="text-[0.85rem] font-semibold tracking-[-0.005em] text-[var(--color-ink)]">
+                            {g.name}
+                          </span>
+                          <span className="text-[0.82rem] text-[var(--color-ink-faint)]">
+                            {items.length}
+                          </span>
+                        </button>
+                        {g.id === "todo" && (
+                          <button
+                            type="button"
+                            onClick={openModal}
+                            aria-label="New task"
+                            className="grid size-5 cursor-pointer place-items-center text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]"
+                          >
+                            <PlusSmallIcon />
+                          </button>
                         )}
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        aria-hidden="true"
-                      >
-                        <path
-                          d="M6 9l6 6 6-6"
-                          stroke="currentColor"
-                          strokeWidth="2.2"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      <span className="text-[0.85rem] font-semibold tracking-[-0.005em] text-[var(--color-ink)]">
-                        {g.name}
-                      </span>
-                      <span className="text-[0.82rem] text-[var(--color-ink-faint)]">
-                        {items.length}
-                      </span>
-                    </button>
-                    {g.id === "todo" && (
-                      <button
-                        type="button"
-                        onClick={openModal}
-                        aria-label="New task"
-                        className="grid size-5 cursor-pointer place-items-center text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]"
-                      >
-                        <PlusSmallIcon />
-                      </button>
-                    )}
-                  </div>
+                      </div>
 
-                  {!isCollapsed && (
-                    <ul className="m-0 flex list-none flex-col p-0">
-                      {items.map((t) => {
-                        const done = t.status === "done";
-                        return (
-                          <TaskRow
-                            key={t.id}
-                            task={t}
-                            done={done}
-                            isEditing={editingId === t.id}
-                            editTitle={editTitle}
-                            setEditTitle={setEditTitle}
-                            onToggle={() => toggleTask(t)}
-                            onCyclePriority={() => cyclePriority(t)}
-                            onToggleFlag={() => toggleFlag(t)}
-                            onStartEdit={() => startEdit(t)}
-                            onCommitEdit={commitEdit}
-                            onEditKey={onEditKey}
-                            onDelete={() => removeTask(t.id)}
-                          />
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
+                      {/* Collapse is measured by framer-motion (`height: "auto"`
+                          in lib/motion.ts), which is the whole reason this
+                          doesn't need a scrollHeight in an effect. */}
+                      <AnimatePresence initial={false}>
+                        {!isCollapsed && (
+                          <motion.ul
+                            key="rows"
+                            variants={collapseVariants}
+                            initial="hidden"
+                            animate="visible"
+                            exit="hidden"
+                            className="m-0 flex list-none flex-col overflow-hidden p-0"
+                          >
+                            {items.map((t) => {
+                              const done = t.status === "done";
+                              return (
+                                <TaskRow
+                                  key={t.id}
+                                  task={t}
+                                  done={done}
+                                  project={
+                                    t.project_id
+                                      ? (projects.find((p) => p.id === t.project_id) ?? null)
+                                      : null
+                                  }
+                                  onOpen={() => openTask(t.id)}
+                                  onToggle={() => toggleTask(t)}
+                                  onCyclePriority={() => cyclePriority(t)}
+                                  onToggleFlag={() => toggleFlag(t)}
+                                  onDelete={() => removeTask(t.id)}
+                                />
+                              );
+                            })}
+                          </motion.ul>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
+        </div>
+
+        {/* Presence owns the mount lifetime, so `selectedTaskId` is the only
+            drawer state: mount = open, unmount = slide back out. The old rig
+            (a `drawerOpen` mirror, a 220ms unmount timer and a double
+            requestAnimationFrame to make the first transition actually run)
+            is gone — AnimatePresence keeps the last render on screen while it
+            exits, and framer-motion starts from `initial` without a nudge.
+            Width animates in % against the `@container` row, so "40%" is
+            exactly the `40cqw` the inner card is sized in, with max-w-[640px]
+            standing in for the `min()`. The `card` look stays on THIS wrapper:
+            an element's own shadow isn't clipped by its overflow. */}
+        <AnimatePresence>
+          {selectedTask && (
+            <motion.div
+              key="task-drawer"
+              initial="closed"
+              animate="open"
+              exit="closed"
+              variants={{
+                closed: { width: "0%", marginLeft: 0 },
+                open: { width: "40%", marginLeft: 16 },
+              }}
+              transition={snap(DUR.panel)}
+              className="card max-w-[640px] shrink-0 self-stretch overflow-hidden"
+            >
+              <TaskDetailDrawer
+                task={selectedTask}
+                currentUser={session.status === "authed" ? session.user : null}
+                projects={projects}
+                kpis={containerKpis}
+                onClose={closeDrawer}
+                onUpdate={(patch) => updateTaskField(selectedTask.id, patch)}
+                onSetKpis={(bindings) => setTaskKpis(selectedTask.id, bindings)}
+                onToggleFlag={() => toggleFlag(selectedTask)}
+                onDelete={() => removeTask(selectedTask.id)}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      <NewTaskModal
-        open={modalOpen}
-        title={newTitle}
-        setTitle={setNewTitle}
-        description={newDescription}
-        setDescription={setNewDescription}
-        priority={newPriority}
-        setPriority={setNewPriority}
-        status={newStatus}
-        setStatus={setNewStatus}
-        dateRange={newDateRange}
-        setDateRange={setNewDateRange}
-        creating={creating}
-        titleInputRef={titleInputRef}
-        onSubmit={createTaskFromModal}
-        onClose={resetAndCloseModal}
-        onKeyDown={onModalKey}
-      />
+      {/* Presence owns the mount, which is what `if (!open) return null` used
+          to do from inside. One gate, not two, so the modal can animate out. */}
+      <AnimatePresence>
+        {modalOpen && (
+          <NewTaskModal
+            title={newTitle}
+            setTitle={setNewTitle}
+            description={newDescription}
+            setDescription={setNewDescription}
+            priority={newPriority}
+            setPriority={setNewPriority}
+            status={newStatus}
+            setStatus={setNewStatus}
+            dueDate={newDueDate}
+            setDueDate={setNewDueDate}
+            projects={projects}
+            kpis={containerKpis}
+            projectId={newProjectId}
+            setProjectId={setNewProjectId}
+            kpiBindings={newKpis}
+            setKpiBindings={setNewKpis}
+            creating={creating}
+            onSubmit={createTaskFromModal}
+            onClose={resetAndCloseModal}
+            onKeyDown={onModalKey}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 function NewTaskModal({
-  open,
   title,
   setTitle,
   description,
@@ -629,15 +715,19 @@ function NewTaskModal({
   setPriority,
   status,
   setStatus,
-  dateRange,
-  setDateRange,
+  dueDate,
+  setDueDate,
+  projects,
+  kpis,
+  projectId,
+  setProjectId,
+  kpiBindings,
+  setKpiBindings,
   creating,
-  titleInputRef,
   onSubmit,
   onClose,
   onKeyDown,
 }: {
-  open: boolean;
   title: string;
   setTitle: (s: string) => void;
   description: string;
@@ -646,20 +736,28 @@ function NewTaskModal({
   setPriority: (p: TaskPriority) => void;
   status: TaskStatus;
   setStatus: (s: TaskStatus) => void;
-  dateRange: { start: string | null; end: string | null };
-  setDateRange: (r: { start: string | null; end: string | null }) => void;
+  dueDate: string | null;
+  setDueDate: (iso: string | null) => void;
+  projects: Project[];
+  kpis: Kpi[];
+  projectId: string | null;
+  setProjectId: (id: string | null) => void;
+  kpiBindings: BindingDraft[];
+  setKpiBindings: (b: BindingDraft[]) => void;
   creating: boolean;
-  titleInputRef: React.RefObject<HTMLInputElement | null>;
   onSubmit: (e: FormEvent) => void;
   onClose: () => void;
   onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => void;
 }) {
-  if (!open) return null;
   return (
-    <div
+    <motion.div
       role="dialog"
       aria-modal="true"
       aria-labelledby="new-task-title"
+      variants={backdropVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
       onKeyDown={onKeyDown}
       className="fixed inset-0 z-50 grid place-items-center px-4"
     >
@@ -669,7 +767,13 @@ function NewTaskModal({
         onClick={onClose}
         className="absolute inset-0 cursor-default border-0 bg-[rgba(15,23,42,0.75)] backdrop-blur-[2px]"
       />
-      <div className="relative z-10 w-full max-w-[640px] overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-white shadow-[var(--shadow-card)]">
+      {/* No initial/animate: it inherits the scrim's variant labels, so the
+          card lifts into place while the backdrop fades — and both reverse on
+          close from one presence check. */}
+      <motion.div
+        variants={sheetVariants}
+        className="relative z-10 w-full max-w-[640px] overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-white shadow-[var(--shadow-card)]"
+      >
         {/* Top bar: breadcrumb + actions */}
         <div className="flex items-center justify-between border-b border-[var(--color-border-soft)] px-4 py-2.5">
           <div className="flex items-center gap-1.5 text-[0.85rem] font-semibold">
@@ -701,9 +805,12 @@ function NewTaskModal({
           {/* Body: title + description */}
           <div className="px-4 pt-3 pb-2">
             <input
-              ref={titleInputRef}
               type="text"
               required
+              // Declarative focus: the modal now mounts inside AnimatePresence,
+              // so autoFocus replaces the rAF(focus()) that openModal used to
+              // need to wait for a render that no longer exists.
+              autoFocus
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Task title"
@@ -734,7 +841,7 @@ function NewTaskModal({
                 </ChipShell>
               )}
             >
-              {(["todo", "in_progress", "done"] as TaskStatus[]).map((s) => (
+              {STATUS_IDS.map((s) => (
                 <MenuItem
                   key={s}
                   selected={s === status}
@@ -756,7 +863,7 @@ function NewTaskModal({
                 </ChipShell>
               )}
             >
-              {(["low", "medium", "high"] as TaskPriority[]).map((p) => (
+              {PRIORITY_IDS.map((p) => (
                 <MenuItem
                   key={p}
                   selected={p === priority}
@@ -767,20 +874,18 @@ function NewTaskModal({
                 </MenuItem>
               ))}
             </Dropdown>
-            <DateRangePicker
-              value={dateRange}
-              onChange={setDateRange}
+            <DatePicker
+              value={dueDate}
+              onChange={setDueDate}
               trigger={(open, summary) => (
                 <ChipShell open={open}>
                   <CalendarIcon />
-                  <span
-                    className={dateRange.start || dateRange.end ? "text-[var(--color-ink)]" : ""}
-                  >
-                    {summary}
-                  </span>
+                  <span className={dueDate ? "text-[var(--color-ink)]" : ""}>{summary}</span>
                 </ChipShell>
               )}
             />
+            <ProjectChip projects={projects} value={projectId} onChange={setProjectId} />
+            <KpiChip kpis={kpis} value={kpiBindings} onChange={setKpiBindings} />
             <button
               type="button"
               aria-label="More"
@@ -819,8 +924,8 @@ function NewTaskModal({
             </div>
           </div>
         </form>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -868,6 +973,7 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   todo: "Todo",
   in_progress: "In Progress",
   done: "Done",
+  canceled: "Canceled",
 };
 
 function ChipShell({ open = false, children }: { open?: boolean; children: React.ReactNode }) {
@@ -938,22 +1044,26 @@ function Dropdown({
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const margin = 4;
 
   const placeBelow = useCallback(() => {
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setPos({ top: r.bottom + margin, left: r.left });
+    setPos({ top: r.bottom + MENU_GAP, left: r.left });
   }, []);
 
+  // Outside-React sync — document/window listeners plus a rect measurement —
+  // so this is one of the effects that legitimately stays. It only owns
+  // "where is the trigger" and "who clicked elsewhere"; the menu's appearance
+  // is framer-motion's problem, not a re-render's.
   useEffect(() => {
     if (!open) return;
     placeBelow();
     const onClick = (e: MouseEvent) => {
-      const target = e.target as Node;
+      const target = e.target;
+      if (!(target instanceof Node)) return;
       if (triggerRef.current?.contains(target)) return;
-      if ((target as HTMLElement).closest("[data-dropdown-menu]")) return;
+      if (target instanceof Element && target.closest("[data-dropdown-menu]")) return;
       setOpen(false);
     };
     const onKey = (e: globalThis.KeyboardEvent) => {
@@ -972,16 +1082,24 @@ function Dropdown({
     };
   }, [open, placeBelow]);
 
+  // `pos` is left set when the menu closes: the exiting frame reuses the last
+  // measurement, which is what keeps the fade from flashing at the top-left
+  // corner. Nulling it here would move the element mid-exit.
   const menu =
     open && pos ? (
-      <div
+      <motion.div
+        key="dropdown-menu"
         data-dropdown-menu
         role="listbox"
+        variants={popoverVariants}
+        initial="hidden"
+        animate="visible"
+        exit="hidden"
         style={{ position: "fixed", top: pos.top, left: pos.left }}
         className="z-[60] overflow-hidden rounded-lg border border-[var(--color-border-soft)] bg-white py-1 whitespace-nowrap shadow-[var(--shadow-lift)]"
       >
         {children}
-      </div>
+      </motion.div>
     ) : null;
 
   return (
@@ -999,7 +1117,11 @@ function Dropdown({
       >
         {trigger(open)}
       </button>
-      {typeof document !== "undefined" && menu && createPortal(menu, document.body)}
+      {/* AnimatePresence has to wrap the portal call itself: the menu is not a
+          DOM descendant of this component, so no ancestor presence-check can
+          see it unmount. */}
+      {typeof document !== "undefined" &&
+        createPortal(<AnimatePresence>{menu}</AnimatePresence>, document.body)}
     </>
   );
 }
@@ -1044,66 +1166,281 @@ function MenuItem({
         <span>{children}</span>
       </span>
       <span className="flex items-center justify-center">
-        {selected && (
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-            className="text-[var(--color-accent)]"
-          >
-            <path
-              d="M5 12.5l4.5 4.5L19 7"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        )}
+        {/* The 18px checkmark column is reserved on every row (see the grid
+            comment above), so the tick can scale in without shifting text. */}
+        <AnimatePresence>
+          {selected && (
+            <motion.svg
+              key="tick"
+              variants={tickVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              className="text-[var(--color-accent)]"
+            >
+              <path
+                d="M5 12.5l4.5 4.5L19 7"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </motion.svg>
+          )}
+        </AnimatePresence>
       </span>
     </button>
+  );
+}
+
+// ---- PRD-06 binding chips -------------------------------------------------
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="px-3 pb-0.5 pt-2 text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-[var(--color-ink-faint)]">
+      {children}
+    </div>
+  );
+}
+
+function ProjectChip({
+  projects,
+  value,
+  onChange,
+}: {
+  projects: Project[];
+  value: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  const current = projects.find((p) => p.id === value);
+  // Archived projects are picked nowhere; they're managed on the team page.
+  const live = projects.filter((p) => !p.archived);
+  const team = live.filter((p) => p.scope === "team");
+  const personal = live.filter((p) => p.scope === "personal");
+  return (
+    <Dropdown
+      trigger={(open) => (
+        <ChipShell open={open}>
+          <MinWidthChip icon={<ProjectIcon />} longestLabel="Project">
+            <span>{current?.name ?? "Project"}</span>
+          </MinWidthChip>
+          <ChevronIcon />
+        </ChipShell>
+      )}
+    >
+      <MenuItem selected={!value} onClick={() => onChange(null)}>
+        No project
+      </MenuItem>
+      {team.length > 0 && <SectionLabel>Team</SectionLabel>}
+      {team.map((p) => (
+        <MenuItem key={p.id} selected={p.id === value} onClick={() => onChange(p.id)}>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span
+              className="size-2 shrink-0 rounded-full"
+              style={{ background: p.color ?? "var(--color-ink-faint)" }}
+            />
+            {p.name}
+          </span>
+        </MenuItem>
+      ))}
+      {personal.length > 0 && <SectionLabel>Personal</SectionLabel>}
+      {personal.map((p) => (
+        <MenuItem key={p.id} selected={p.id === value} onClick={() => onChange(p.id)}>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span
+              className="size-2 shrink-0 rounded-full"
+              style={{ background: p.color ?? "var(--color-ink-faint)" }}
+            />
+            {p.name} · {p.owner_username}
+          </span>
+        </MenuItem>
+      ))}
+      {projects.length === 0 && (
+        <p className="m-0 px-3 py-2 text-[0.78rem] text-[var(--color-ink-faint)]">
+          No projects yet — create them on the team page.
+        </p>
+      )}
+    </Dropdown>
+  );
+}
+
+function KpiChip({
+  kpis,
+  value,
+  onChange,
+}: {
+  kpis: Kpi[];
+  value: BindingDraft[];
+  onChange: (next: BindingDraft[]) => void;
+}) {
+  const total = value.reduce((s, b) => s + b.weight, 0);
+  return (
+    <Dropdown
+      trigger={(open) => (
+        <ChipShell open={open}>
+          <MinWidthChip icon={<KpiIcon />} longestLabel="KPIs 100%">
+            <span>{value.length > 0 ? `KPIs ${total}%` : "KPIs"}</span>
+          </MinWidthChip>
+          <ChevronIcon />
+        </ChipShell>
+      )}
+    >
+      {kpis.length === 0 && (
+        <p className="m-0 px-3 py-2 text-[0.78rem] text-[var(--color-ink-faint)]">
+          No KPIs yet — create them on the team page.
+        </p>
+      )}
+      {kpis.map((k) => {
+        const binding = value.find((b) => b.kpi_id === k.id);
+        return (
+          <div key={k.id} className="flex items-center gap-2 px-3 py-[0.3rem]">
+            <button
+              type="button"
+              onClick={() =>
+                binding
+                  ? onChange(value.filter((b) => b.kpi_id !== k.id))
+                  : onChange([...value, { kpi_id: k.id, weight: 25 }])
+              }
+              className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 border-0 bg-transparent p-0 text-left text-[0.82rem] text-[var(--color-ink)]"
+            >
+              <span
+                className={cn(
+                  "grid size-[14px] shrink-0 place-items-center rounded-[3px] border-[1.5px] text-transparent",
+                  binding
+                    ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
+                    : "border-[var(--color-border-strong)]"
+                )}
+              >
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M5 12.5l4.5 4.5L19 7"
+                    stroke="currentColor"
+                    strokeWidth="3.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+              <span className="truncate">
+                {k.name}
+                <span className="text-[var(--color-ink-faint)]"> · {k.owner_username}</span>
+              </span>
+            </button>
+            {binding && (
+              <input
+                key={`${k.id}:${binding.weight}`}
+                type="number"
+                min={1}
+                max={100}
+                defaultValue={binding.weight}
+                onBlur={(e) => {
+                  const w = Math.min(100, Math.max(1, Number(e.target.value) || 1));
+                  onChange(value.map((b) => (b.kpi_id === k.id ? { ...b, weight: w } : b)));
+                }}
+                aria-label={`Weight for ${k.name}`}
+                className="w-14 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-1.5 py-0.5 text-right font-mono text-[0.76rem] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+              />
+            )}
+          </div>
+        );
+      })}
+      {value.length > 0 && (
+        <div
+          className={cn(
+            "border-t border-[var(--color-border-soft)] px-3 py-1.5 text-[0.72rem]",
+            total > 100
+              ? "font-semibold text-[var(--color-danger)]"
+              : "text-[var(--color-ink-faint)]"
+          )}
+        >
+          {total}% of 100%{total > 100 ? " — over budget" : ""}
+        </div>
+      )}
+    </Dropdown>
+  );
+}
+
+function ProjectIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2h9a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 19.5 18h-15A1.5 1.5 0 0 1 3 16.5z" />
+    </svg>
+  );
+}
+
+function KpiIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M12 4v2.5M12 17.5V20" strokeLinecap="round" />
+    </svg>
   );
 }
 
 function TaskRow({
   task,
   done,
-  isEditing,
-  editTitle,
-  setEditTitle,
+  project,
+  onOpen,
   onToggle,
   onCyclePriority,
   onToggleFlag,
-  onStartEdit,
-  onCommitEdit,
-  onEditKey,
   onDelete,
 }: {
   task: Task;
   done: boolean;
-  isEditing: boolean;
-  editTitle: string;
-  setEditTitle: (s: string) => void;
+  project: Project | null;
+  onOpen: () => void;
   onToggle: () => void;
   onCyclePriority: () => void;
   onToggleFlag: () => void;
-  onStartEdit: () => void;
-  onCommitEdit: () => void;
-  onEditKey: (e: KeyboardEvent<HTMLInputElement>) => void;
   onDelete: () => void;
 }) {
   return (
-    <li
+    <motion.li
+      onClick={onOpen}
+      // `position`, not `layout`: rows glide to their new slot when the sort
+      // or filter changes (today they teleport) without projecting a size,
+      // which is what goes wrong inside an overflow-clipped scroll area.
+      layout="position"
+      variants={listItemVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
       className={cn(
-        "group mx-1 flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors duration-[120ms]",
-        "hover:bg-[var(--color-surface-2)]",
-        isEditing && "bg-[var(--color-surface-2)]"
+        "group mx-1 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors duration-[120ms] hover:bg-[var(--color-surface-2)]"
       )}
     >
+      {/* Checkbox — own click handler, stopPropagation so it doesn't open the drawer */}
       <button
-        onClick={onToggle}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
         aria-label={done ? "Mark as not done" : "Mark as done"}
         aria-pressed={done}
         className={cn(
@@ -1122,9 +1459,13 @@ function TaskRow({
         </svg>
       </button>
 
+      {/* Priority — own click handler, stopPropagation */}
       <button
         type="button"
-        onClick={onCyclePriority}
+        onClick={(e) => {
+          e.stopPropagation();
+          onCyclePriority();
+        }}
         aria-label={`Priority: ${task.priority}. Click to cycle.`}
         title={`Priority: ${task.priority} — click to cycle`}
         className="cursor-pointer rounded-md px-1 py-0.5 -mx-1 transition-colors hover:bg-[rgba(99,102,241,0.06)]"
@@ -1138,40 +1479,58 @@ function TaskRow({
 
       <StatusGlyph status={task.status} />
 
+      {/* Title is now a static span — clicking the row opens the drawer */}
       <div className="min-w-0 flex-1">
-        {isEditing ? (
-          <input
-            autoFocus
-            value={editTitle}
-            onChange={(e) => setEditTitle(e.target.value)}
-            onBlur={onCommitEdit}
-            onKeyDown={onEditKey}
-            className="w-full border-0 bg-transparent text-[0.92rem] font-medium text-[var(--color-ink)] outline-none"
-          />
-        ) : (
-          <button
-            onClick={onStartEdit}
-            className={cn(
-              "block w-full cursor-text truncate text-left text-[0.92rem] font-medium tracking-[-0.005em] transition-colors duration-[140ms]",
-              done ? "text-[var(--color-ink-faint)] line-through" : "text-[var(--color-ink)]"
-            )}
-          >
-            {task.title}
-          </button>
-        )}
+        <span
+          className={cn(
+            "block w-full truncate text-[0.92rem] font-medium tracking-[-0.005em] transition-colors duration-[140ms]",
+            done ? "text-[var(--color-ink-faint)] line-through" : "text-[var(--color-ink)]"
+          )}
+        >
+          {task.title}
+        </span>
       </div>
 
-      {task.due_date && !isEditing && (
+      {(task.project_id || task.kpis.length > 0) && (
+        <span className="flex shrink-0 max-w-[320px] items-center gap-2 text-[0.72rem] text-[var(--color-ink-faint)] max-[900px]:hidden">
+          {project && (
+            <span
+              className="inline-flex min-w-0 items-center gap-1"
+              title={`Project: ${project.name}`}
+            >
+              <span
+                className="size-2 shrink-0 rounded-full"
+                style={{ background: project.color ?? "var(--color-ink-faint)" }}
+              />
+              <span className="truncate">{project.name}</span>
+            </span>
+          )}
+          {task.kpis.map((k) => (
+            <span
+              key={k.kpi_id}
+              className="inline-flex min-w-0 items-center gap-1"
+              title={`${k.name}: ${k.weight}%`}
+            >
+              <KpiIcon />
+              <span className="truncate">
+                {k.name} {k.weight}%
+              </span>
+            </span>
+          ))}
+        </span>
+      )}
+
+      {task.due_date && (
         <span className="shrink-0 font-mono text-[0.74rem] text-[var(--color-ink-faint)]">
           {formatDate(task.due_date)}
         </span>
       )}
 
       {/* Flag: always visible when active (so the red badge persists),
-          otherwise hidden until row hover. No transition, no focus-within
-          linger — click should feel decisive and the icon disappears
-          immediately. */}
+          otherwise hidden until row hover. The wrapper stops click
+          propagation so toggling the flag doesn't open the drawer. */}
       <div
+        onClick={(e) => e.stopPropagation()}
         className={cn(
           "shrink-0",
           task.flagged ? "opacity-100" : "opacity-0 group-hover:opacity-100"
@@ -1187,12 +1546,15 @@ function TaskRow({
       </div>
 
       {/* Trash: always row-hover/focus-only. */}
-      <div className="flex shrink-0 items-center gap-[1px] opacity-0 transition-opacity duration-[120ms] group-hover:opacity-100 focus-within:opacity-100">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="flex shrink-0 items-center gap-[1px] opacity-0 transition-opacity duration-[120ms] group-hover:opacity-100 focus-within:opacity-100"
+      >
         <SmallIconButton label="Delete" onClick={onDelete} danger>
           <TrashIcon />
         </SmallIconButton>
       </div>
-    </li>
+    </motion.li>
   );
 }
 
@@ -1208,6 +1570,21 @@ function StatusGlyph({ status }: { status: TaskStatus }) {
             strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+    );
+  }
+  if (status === "canceled") {
+    return (
+      <span className="grid size-[14px] shrink-0 place-items-center text-[var(--color-danger)]">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+          <path
+            d="M8.5 8.5l7 7M15.5 8.5l-7 7"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
           />
         </svg>
       </span>
@@ -1443,6 +1820,915 @@ function TrashIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  );
+}
+
+// PATCH-safe patch shape lives in lib/api.ts as `TaskPatch` — it mirrors the
+// backend's updateTaskSchema keys and is what api.updateTask now accepts, so
+// the drawer and the client can no longer disagree about `description: null`.
+
+function TaskDetailDrawer({
+  task,
+  currentUser,
+  projects,
+  kpis,
+  onClose,
+  onUpdate,
+  onSetKpis,
+  onToggleFlag,
+  onDelete,
+}: {
+  task: Task;
+  currentUser: User | null;
+  projects: Project[];
+  kpis: Kpi[];
+  onClose: () => void;
+  onUpdate: (patch: TaskPatch) => void;
+  onSetKpis: (bindings: BindingDraft[]) => void;
+  onToggleFlag: () => void;
+  onDelete: () => void;
+}) {
+  // ---- Title rename (double-click in drawer) ----
+  // `titleEditing` is the only state here; the read-only branch renders
+  // `task.title` and `startRename()` seeds the draft on the way in. The mirror
+  // effect that used to copy `task.title` into `titleDraft` therefore only ever
+  // ran while the draft was invisible — it was a useState->useState chain, not
+  // a sync with anything outside React.
+  const [titleEditing, setTitleEditing] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(task.title);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  // ---- Due date: read straight off the task, persisted via PATCH on every
+  //      change. DatePicker is fully controlled by `task.due_date`, so a
+  //      server-side change lands on the chip with no mirroring (and no local
+  //      copy to fall out of step). There is no start date: work starts when
+  //      the status moves to in_progress. ----
+
+  // ---- Global ESC closes the drawer, but only when no input/textarea is
+  //      focused — inputs handle their own ESC semantics locally. A document
+  //      keydown listener is outside React, so this effect stays. ----
+  useEffect(() => {
+    function onKey(e: globalThis.KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      const active = document.activeElement;
+      if (
+        active &&
+        (active.tagName === "INPUT" ||
+          active.tagName === "TEXTAREA" ||
+          // instanceof, not `as HTMLElement`: activeElement can be a node where
+          // the cast would simply lie about isContentEditable existing.
+          (active instanceof HTMLElement && active.isContentEditable))
+      ) {
+        return;
+      }
+      onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  function startRename() {
+    setTitleDraft(task.title);
+    setTitleEditing(true);
+    requestAnimationFrame(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    });
+  }
+
+  function commitRename() {
+    setTitleEditing(false);
+    const t = titleDraft.trim();
+    if (!t || t === task.title) {
+      setTitleDraft(task.title);
+      return;
+    }
+    onUpdate({ title: t });
+  }
+
+  function cancelRename() {
+    setTitleDraft(task.title);
+    setTitleEditing(false);
+  }
+
+  function onTitleKey(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitRename();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelRename();
+    }
+  }
+
+  return (
+    <aside
+      role="complementary"
+      aria-label="Task detail"
+      // Fixed width in container units (resolves against the row, not the
+      // animating wrapper) + ml-auto pins the card to the wrapper's right
+      // edge, so as the wrapper's width animates 0 → full the card slides
+      // in from the right instead of squishing. Body is flex-1 +
+      // overflow-hidden + line-clamped title/description — the drawer
+      // never scrolls, regardless of task count. Visual card look (bg,
+      // border, radius, shadow) comes from the wrapper.
+      className="ml-auto flex h-full w-[min(40cqw,640px)] shrink-0 flex-col overflow-hidden"
+    >
+      {/* Top bar */}
+      <div className="flex items-center justify-between border-b border-[var(--color-border-soft)] px-4 py-2.5">
+        <div className="flex items-center gap-2 text-[0.85rem]">
+          <span className="block size-2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_4px_var(--color-accent-soft)]" />
+          <span className="text-[var(--color-ink-muted)]">Task</span>
+          <span className="font-mono text-[0.76rem] tracking-[0.02em] text-[var(--color-ink-faint)]">
+            {shortId(task)}
+          </span>
+        </div>
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
+          className="grid size-6 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+        >
+          <CloseSmallIcon />
+        </button>
+      </div>
+
+      {/* Body — flex column: fixed title/description/chips up top, comments
+          section takes the remaining height (its list is the drawer's only
+          scroll region). Title/description stay line-clamped. */}
+      <div className="flex flex-1 flex-col overflow-hidden px-5 py-4">
+        {/* Title — double-click to rename inline */}
+        {titleEditing ? (
+          <input
+            ref={titleInputRef}
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={onTitleKey}
+            className="block w-full rounded-md border border-[var(--color-border-soft)] bg-white px-2 py-1.5 text-[1.3rem] font-semibold tracking-[-0.012em] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+          />
+        ) : (
+          <h2
+            onDoubleClick={startRename}
+            title="Double-click to rename"
+            className={cn(
+              "cursor-text rounded-md px-1 py-0.5 -mx-1 text-[1.3rem] font-semibold tracking-[-0.012em] transition-colors duration-150 hover:bg-[var(--color-surface-2)] line-clamp-2",
+              task.status === "done"
+                ? "text-[var(--color-ink-faint)] line-through"
+                : "text-[var(--color-ink)]"
+            )}
+          >
+            {task.title}
+          </h2>
+        )}
+
+        {/* Description — click to edit */}
+        <DescriptionField
+          value={task.description ?? ""}
+          onSave={(text) => {
+            const trimmed = text.trim();
+            if (trimmed === (task.description ?? "")) return;
+            onUpdate({ description: trimmed || null });
+          }}
+        />
+
+        {/* Chip row: status / priority / date / flag */}
+        <div className="mt-5 flex flex-wrap items-center gap-1.5">
+          <Dropdown
+            trigger={(open) => (
+              <ChipShell open={open}>
+                <StatusGlyph status={task.status} />
+                <span>{STATUS_LABEL[task.status]}</span>
+                <ChevronIcon />
+              </ChipShell>
+            )}
+          >
+            {STATUS_IDS.map((s) => (
+              <MenuItem
+                key={s}
+                selected={s === task.status}
+                icon={<StatusGlyph status={s} />}
+                onClick={() => onUpdate({ status: s })}
+              >
+                {STATUS_LABEL[s]}
+              </MenuItem>
+            ))}
+          </Dropdown>
+
+          <Dropdown
+            trigger={(open) => (
+              <ChipShell open={open}>
+                <PriorityBars priority={task.priority} />
+                <span className="capitalize">{task.priority}</span>
+                <ChevronIcon />
+              </ChipShell>
+            )}
+          >
+            {PRIORITY_IDS.map((p) => (
+              <MenuItem
+                key={p}
+                selected={p === task.priority}
+                icon={<PriorityBars priority={p} />}
+                onClick={() => onUpdate({ priority: p })}
+              >
+                <span className="capitalize">{p}</span>
+              </MenuItem>
+            ))}
+          </Dropdown>
+
+          <DatePicker
+            value={task.due_date ?? null}
+            onChange={(iso) =>
+              // null clears the due date (undefined would be dropped by
+              // JSON.stringify and leave the old value in place).
+              onUpdate({ due_date: iso })
+            }
+            trigger={(open, summary) => (
+              <ChipShell open={open}>
+                <CalendarIcon />
+                <span>{summary}</span>
+                <ChevronIcon />
+              </ChipShell>
+            )}
+          />
+
+          <ProjectChip
+            projects={projects}
+            value={task.project_id}
+            onChange={(id) => onUpdate({ project_id: id })}
+          />
+          <KpiChip
+            kpis={kpis}
+            value={task.kpis}
+            onChange={(next) =>
+              onSetKpis(next.map((b) => ({ kpi_id: b.kpi_id, weight: b.weight })))
+            }
+          />
+
+          {/* Flag chip — uses onToggleFlag (POST /tasks/:id/flag), since
+                PATCH /tasks/:id is .strict() and rejects `flagged`. */}
+          <button
+            type="button"
+            onClick={onToggleFlag}
+            aria-pressed={task.flagged}
+            className={cn(
+              "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.78rem] font-medium transition-colors duration-150",
+              task.flagged
+                ? "border-[var(--color-danger-border)] bg-[var(--color-danger-soft)] text-[var(--color-danger)]"
+                : "border-[var(--color-border-soft)] bg-[var(--color-surface)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+            )}
+          >
+            <FlagIcon filled={task.flagged} />
+            <span>{task.flagged ? "Flagged" : "Flag"}</span>
+          </button>
+        </div>
+
+        {/* Comments — fills remaining drawer height (PRD-03 Phase 1) */}
+        <CommentsSection taskId={task.id} currentUser={currentUser} />
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between border-t border-[var(--color-border-soft)] px-5 py-3">
+        <span className="text-[0.74rem] text-[var(--color-ink-faint)]">
+          Press{" "}
+          <kbd className="rounded border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-1 font-mono text-[0.7rem]">
+            Esc
+          </kbd>{" "}
+          to close
+        </span>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-transparent px-2.5 py-1 text-[0.78rem] font-medium text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)]"
+        >
+          <TrashIcon />
+          Delete
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+function DescriptionField({ value, onSave }: { value: string; onSave: (text: string) => void }) {
+  // Read-only branch shows `value`, `startEdit()` seeds the draft — so nothing
+  // has to copy `value` into `draft` behind the scenes.
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  function startEdit() {
+    setDraft(value);
+    setEditing(true);
+  }
+
+  function commit() {
+    setEditing(false);
+    if (draft !== value) onSave(draft);
+    else setDraft(value);
+  }
+
+  if (editing) {
+    return (
+      <textarea
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            setDraft(value);
+            setEditing(false);
+          } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            commit();
+          }
+        }}
+        rows={3}
+        placeholder="Add description…"
+        className="mt-3 w-full resize-none rounded-md border border-[var(--color-border-soft)] bg-white px-2.5 py-2 text-[0.92rem] leading-[1.5] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+      />
+    );
+  }
+
+  return (
+    <div
+      onClick={startEdit}
+      // line-clamp-3 keeps a long description from pushing the compact
+      // drawer taller than its content-allocated height (no internal scroll).
+      className={cn(
+        "mt-3 min-h-[2.25rem] cursor-text rounded-md px-2.5 py-1.5 -mx-2 text-[0.92rem] leading-[1.5] transition-colors duration-150 hover:bg-[var(--color-surface-2)] line-clamp-3",
+        value ? "text-[var(--color-ink)]" : "text-[var(--color-ink-faint)]"
+      )}
+    >
+      {value || "Add description…"}
+    </div>
+  );
+}
+
+// ============================================================================
+// Comments (PRD-03). Phase 1 is REST-only; Phase 3 layers live SSE updates
+// onto CommentsSection without changing its public surface.
+// ============================================================================
+
+const AVATAR_COLORS = [
+  "bg-indigo-100 text-indigo-700",
+  "bg-emerald-100 text-emerald-700",
+  "bg-amber-100 text-amber-700",
+  "bg-rose-100 text-rose-700",
+  "bg-sky-100 text-sky-700",
+  "bg-violet-100 text-violet-700",
+];
+
+function avatarClass(username: string): string {
+  let h = 0;
+  for (let i = 0; i < username.length; i++) h = (h * 31 + username.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+function timeAgo(iso: string, now: number): string {
+  const mins = Math.floor(Math.max(0, now - Date.parse(iso)) / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return formatDate(iso);
+}
+
+function wasEdited(c: Comment): boolean {
+  return Math.abs(Date.parse(c.updated_at) - Date.parse(c.created_at)) > 1000;
+}
+
+function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser: User | null }) {
+  const [comments, setComments] = useState<Comment[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const { error: actionError, setError: setActionError, run } = useAsyncError();
+  const [now, setNow] = useState(() => Date.now());
+  const [replyTo, setReplyTo] = useState<Comment | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Relative timestamps need a clock, so this is a real outside-React sync:
+  // one 60s tick keeps "3m ago" honest without refetching. Both timers in this
+  // component are of that kind — nothing here is a state-mirroring chain.
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // A failed comment action announces itself for 4s. Timer again, so it stays;
+  // it lives here rather than in ErrorBanner because this surface is the
+  // drawer's compact inline notice, not one of the full-width block banners.
+  useEffect(() => {
+    if (!actionError) return;
+    const id = setTimeout(() => setActionError(null), 4_000);
+    return () => clearTimeout(id);
+  }, [actionError, setActionError]);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await api.listComments(taskId);
+      setComments(res.comments);
+      setLoadFailed(false);
+    } catch {
+      setLoadFailed(true);
+    }
+  }, [taskId]);
+
+  // Server sync: (re)load the thread when the task changes. Clearing `comments`
+  // first is what makes the drawer show "Loading…" for the new task rather than
+  // the previous task's discussion.
+  useEffect(() => {
+    setComments(null);
+    load();
+  }, [load]);
+
+  // Keep the newest comment in view as the list grows. Writing scrollHeight is
+  // imperative DOM work with no declarative equivalent, so this effect stays.
+  const count = comments?.length ?? 0;
+  useEffect(() => {
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [count]);
+
+  async function submit(body: string, parentId?: string) {
+    if (!currentUser) return;
+    setReplyTo(null);
+    const iso = new Date().toISOString();
+    // Optimistic insert — feels instant; reconciled (or rolled back) when the
+    // request settles.
+    const temp: Comment = {
+      id: `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      task_id: taskId,
+      author_id: currentUser.id,
+      author: currentUser,
+      parent_id: parentId ?? null,
+      body,
+      created_at: iso,
+      updated_at: iso,
+    };
+    setComments((cs) => [...(cs ?? []), temp]);
+    const res = await run(() => api.createComment(taskId, body, parentId), {
+      fallback: "Failed to post comment",
+      // Undo the optimistic insert; the hook already surfaced the failure.
+      onError: () => setComments((cs) => (cs ?? []).filter((c) => c.id !== temp.id)),
+    });
+    if (res) setComments((cs) => (cs ?? []).map((c) => (c.id === temp.id ? res.comment : c)));
+  }
+
+  async function saveEdit(id: string, prevBody: string, body: string) {
+    setComments((cs) => (cs ?? []).map((c) => (c.id === id ? { ...c, body } : c)));
+    const res = await run(() => api.updateComment(id, body), {
+      fallback: "Failed to save comment",
+      onError: () =>
+        setComments((cs) => (cs ?? []).map((c) => (c.id === id ? { ...c, body: prevBody } : c))),
+    });
+    if (res) setComments((cs) => (cs ?? []).map((c) => (c.id === id ? res.comment : c)));
+  }
+
+  async function remove(id: string) {
+    const prev = comments ?? [];
+    setReplyTo((r) => (r && (r.id === id || r.parent_id === id) ? null : r));
+    // Mirror the DB cascade locally: deleting a comment drops its replies.
+    setComments(prev.filter((c) => c.id !== id && c.parent_id !== id));
+    await run(() => api.deleteComment(id), {
+      fallback: "Failed to delete comment",
+      onError: () => setComments(prev),
+    });
+  }
+
+  // One level of threading: roots in arrival order, replies grouped under
+  // their parent (the backend already flattens replies-to-replies to roots).
+  const threads = useMemo(() => {
+    const cs = comments ?? [];
+    const roots = cs.filter((c) => c.parent_id === null);
+    const repliesByParent = new Map<string, Comment[]>();
+    for (const c of cs) {
+      if (!c.parent_id) continue;
+      const arr = repliesByParent.get(c.parent_id);
+      if (arr) arr.push(c);
+      else repliesByParent.set(c.parent_id, [c]);
+    }
+    return { roots, repliesByParent };
+  }, [comments]);
+
+  return (
+    <section className="mt-5 flex min-h-0 flex-1 flex-col" aria-label="Comments">
+      <div className="flex items-center gap-2">
+        <h3 className="text-[0.74rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-muted)]">
+          Comments
+        </h3>
+        {count > 0 && (
+          <span className="rounded-full bg-[var(--color-surface-2)] px-1.5 py-px text-[0.68rem] font-medium text-[var(--color-ink-faint)]">
+            {count}
+          </span>
+        )}
+      </div>
+
+      {/* The drawer's only scroll region — the discussion can grow without
+          bound while title/description/chips stay fixed above. */}
+      <div ref={listRef} className="mt-2 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+        {loadFailed && comments === null ? (
+          <p className="text-[0.8rem] text-[var(--color-ink-faint)]">
+            Couldn&apos;t load comments.{" "}
+            <button
+              type="button"
+              onClick={load}
+              className="cursor-pointer text-[var(--color-accent)] underline"
+            >
+              Retry
+            </button>
+          </p>
+        ) : comments !== null && comments.length === 0 ? (
+          <p className="text-[0.8rem] text-[var(--color-ink-faint)]">
+            No comments yet. Start the conversation.
+          </p>
+        ) : (
+          <AnimatePresence initial={false}>
+            {threads.roots.map((c) => {
+              const replies = threads.repliesByParent.get(c.id) ?? [];
+              return (
+                <motion.div
+                  key={c.id}
+                  variants={listItemVariants}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                >
+                  <CommentRow
+                    comment={c}
+                    now={now}
+                    isOwn={currentUser?.id === c.author_id}
+                    onSave={(body) => saveEdit(c.id, c.body, body)}
+                    onDelete={() => remove(c.id)}
+                    onReply={() => setReplyTo(c)}
+                  />
+                  {/* Replies fade in under their parent as a block; no `layout`
+                      here — nested layout nodes inside this force-scrolled,
+                      overflow-clipped list is where motion gets smeared. */}
+                  <AnimatePresence initial={false}>
+                    {replies.length > 0 && (
+                      <motion.div
+                        key="replies"
+                        variants={listItemVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit="exit"
+                        className="ml-3 mt-3 space-y-3 border-l border-[var(--color-border-soft)] pl-3.5"
+                      >
+                        {replies.map((r) => (
+                          <CommentRow
+                            key={r.id}
+                            comment={r}
+                            now={now}
+                            isOwn={currentUser?.id === r.author_id}
+                            replyToUsername={c.author.username}
+                            onSave={(body) => saveEdit(r.id, r.body, body)}
+                            onDelete={() => remove(r.id)}
+                            onReply={() => setReplyTo(r)}
+                          />
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        )}
+      </div>
+
+      {/* Same failure the drawer used to print as a bare <p>, now with an exit:
+          AnimatePresence owns unmounting, so `setActionError(null)` (the 4s
+          timer above) fades it out instead of blanking it. */}
+      <AnimatePresence initial={false}>
+        {actionError && (
+          <motion.p
+            key="comment-error"
+            variants={bannerVariants}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            className="mt-1.5 overflow-hidden text-[0.74rem] text-[var(--color-danger)]"
+          >
+            <span className="block">{actionError.message}</span>
+          </motion.p>
+        )}
+      </AnimatePresence>
+
+      {currentUser && (
+        // `key` is what makes the composer's prefill declarative: changing the
+        // reply target remounts it, so the @mention is its initial value and
+        // autoFocus re-fires — no change-detecting effect.
+        <CommentComposer
+          key={replyTo?.id ?? "root"}
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
+          onSubmit={submit}
+        />
+      )}
+    </section>
+  );
+}
+
+function CommentComposer({
+  replyTo,
+  onCancelReply,
+  onSubmit,
+}: {
+  replyTo: Comment | null;
+  onCancelReply: () => void;
+  onSubmit: (body: string, parentId?: string) => void;
+}) {
+  const [draft, setDraft] = useState(() =>
+    // The mention is the initial value, not a value copied in later. Combined
+    // with the `key` at the call site (which remounts this composer whenever
+    // the reply target changes), that replaces an effect whose whole job was
+    // "when replyTo changes, overwrite the draft and focus".
+    replyTo ? `@${replyTo.author.username} ` : ""
+  );
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  function submit() {
+    const body = draft.trim();
+    if (!body) return;
+    // Threading is one level deep — replying to a reply targets the root.
+    onSubmit(body, replyTo ? (replyTo.parent_id ?? replyTo.id) : undefined);
+    setDraft("");
+  }
+
+  function cancelReply() {
+    onCancelReply();
+    setDraft("");
+  }
+
+  return (
+    <div className="mt-2.5 border-t border-[var(--color-border-soft)] pt-2.5">
+      {replyTo && (
+        <div className="mb-1.5 flex items-center justify-between rounded-md bg-[var(--color-surface)] px-2.5 py-1.5">
+          <span className="truncate text-[0.72rem] text-[var(--color-ink-muted)]">
+            Replying to{" "}
+            <span className="font-medium text-[var(--color-accent)]">
+              @{replyTo.author.username}
+            </span>
+          </span>
+          <button
+            type="button"
+            aria-label="Cancel reply"
+            onClick={cancelReply}
+            className="grid size-5 shrink-0 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+          >
+            <CloseSmallIcon />
+          </button>
+        </div>
+      )}
+      <textarea
+        ref={taRef}
+        // Only when replying — otherwise opening a task drawer would yank
+        // focus into the comment box. Caret lands at the end of the seeded
+        // mention, which is where the old setSelectionRange put it.
+        autoFocus={replyTo !== null}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            submit();
+          } else if (e.key === "Escape" && replyTo) {
+            e.preventDefault();
+            cancelReply();
+          }
+        }}
+        rows={2}
+        placeholder={replyTo ? `Reply to @${replyTo.author.username}…` : "Add a comment…"}
+        className="w-full resize-none rounded-md border border-[var(--color-border-soft)] bg-white px-2.5 py-2 text-[0.85rem] leading-[1.5] text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-faint)] focus:border-[var(--color-accent)]"
+      />
+      <div className="mt-1.5 flex items-center justify-between">
+        <span className="text-[0.7rem] text-[var(--color-ink-faint)]">
+          <kbd className="rounded border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-1 font-mono text-[0.66rem]">
+            ⌘
+          </kbd>
+          +Enter to post
+        </span>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!draft.trim()}
+          className="cursor-pointer rounded-full bg-[var(--color-accent)] px-3 py-1 text-[0.76rem] font-medium text-white disabled:cursor-default disabled:opacity-40"
+        >
+          Comment
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CommentRow({
+  comment,
+  now,
+  isOwn,
+  replyToUsername,
+  onSave,
+  onDelete,
+  onReply,
+}: {
+  comment: Comment;
+  now: number;
+  isOwn: boolean;
+  replyToUsername?: string;
+  onSave: (body: string) => void;
+  onDelete: () => void;
+  onReply: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(comment.body);
+  const [confirming, setConfirming] = useState(false);
+
+  const name = comment.author.display_name || comment.author.username;
+  const initial = name.trim().charAt(0).toUpperCase() || "?";
+
+  function startEdit() {
+    setDraft(comment.body);
+    setEditing(true);
+  }
+
+  function commitEdit() {
+    const body = draft.trim();
+    setEditing(false);
+    if (body && body !== comment.body) onSave(body);
+    else setDraft(comment.body);
+  }
+
+  return (
+    <article className="group flex gap-2.5">
+      <span
+        aria-hidden
+        className={cn(
+          "mt-0.5 grid size-6 shrink-0 place-items-center rounded-full text-[0.68rem] font-semibold",
+          avatarClass(comment.author.username)
+        )}
+      >
+        {initial}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <span className="truncate text-[0.8rem] font-medium text-[var(--color-ink)]">{name}</span>
+          <span className="shrink-0 text-[0.7rem] text-[var(--color-ink-faint)]">
+            {timeAgo(comment.created_at, now)}
+            {wasEdited(comment) && " (edited)"}
+          </span>
+          {/* Row actions — revealed on hover, no fade (decisive). Reply is
+              for everyone; edit/delete only on own comments. */}
+          {!editing && (
+            <span className="ml-auto flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
+              {confirming ? (
+                <span className="flex items-center gap-1 text-[0.7rem] text-[var(--color-danger)]">
+                  Delete?
+                  <button
+                    type="button"
+                    onClick={onDelete}
+                    className="cursor-pointer font-medium underline"
+                  >
+                    Yes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirming(false)}
+                    className="cursor-pointer text-[var(--color-ink-muted)] underline"
+                  >
+                    No
+                  </button>
+                </span>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Reply to comment"
+                    onClick={onReply}
+                    className="grid size-5 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+                  >
+                    <ReplyIcon />
+                  </button>
+                  {isOwn && (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="Edit comment"
+                        onClick={startEdit}
+                        className="grid size-5 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+                      >
+                        <PencilIcon />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Delete comment"
+                        onClick={() => setConfirming(true)}
+                        className="grid size-5 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)]"
+                      >
+                        <TrashIcon />
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
+            </span>
+          )}
+        </div>
+
+        {editing ? (
+          <div className="mt-1">
+            <textarea
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setDraft(comment.body);
+                  setEditing(false);
+                } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  commitEdit();
+                }
+              }}
+              rows={2}
+              className="w-full resize-none rounded-md border border-[var(--color-border-soft)] bg-white px-2 py-1.5 text-[0.83rem] leading-[1.5] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+            />
+            <div className="mt-1 flex gap-2">
+              <button
+                type="button"
+                onClick={commitEdit}
+                disabled={!draft.trim()}
+                className="cursor-pointer rounded-full bg-[var(--color-accent)] px-2.5 py-0.5 text-[0.72rem] font-medium text-white disabled:cursor-default disabled:opacity-40"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDraft(comment.body);
+                  setEditing(false);
+                }}
+                className="cursor-pointer rounded-full px-2.5 py-0.5 text-[0.72rem] font-medium text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-2)]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Linkage chip — makes the reply's parent explicit, not just
+                implied by indentation. */}
+            {replyToUsername && (
+              <p className="mt-0.5 text-[0.7rem] text-[var(--color-ink-faint)]">
+                ↳ replying to{" "}
+                <span className="font-medium text-[var(--color-accent)]">@{replyToUsername}</span>
+              </p>
+            )}
+            <p className="mt-0.5 whitespace-pre-wrap break-words text-[0.83rem] leading-[1.5] text-[var(--color-ink)]">
+              {comment.body}
+            </p>
+          </>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function ReplyIcon() {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <polyline points="9 17 4 12 9 7" />
+      <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
     </svg>
   );
 }

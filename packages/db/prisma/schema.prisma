@@ -17,10 +17,15 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  ownedTeams        Team[]            @relation("TeamOwner")
+  ownedTeams        Team[]           @relation("TeamOwner")
   memberships       TeamMember[]
-  invitationsSent   TeamInvitation[]  @relation("Inviter")
-  invitationsTarget TeamInvitation[]  @relation("Invitee")
+  invitationsSent   TeamInvitation[] @relation("Inviter")
+  invitationsTarget TeamInvitation[] @relation("Invitee")
+  comments          Comment[]
+  taskEvents        TaskEvent[]      @relation("TaskEventActor")
+  taskDueChanges    TaskDueChange[]  @relation("TaskDueChangeActor")
+  projects          Project[]        @relation("ProjectOwner")
+  kpis              Kpi[]            @relation("KpiOwner")
 
   @@map("users")
 }
@@ -30,6 +35,7 @@ model Team {
   name      String
   slug      String   @unique
   ownerId   String   @map("owner_id") @db.Uuid
+  kind      String   @default("team") // "workspace" (private, solo) | "team"
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -37,6 +43,9 @@ model Team {
   members     TeamMember[]
   invitations TeamInvitation[]
   tasks       Task[]
+  taskEvents  TaskEvent[]
+  projects    Project[]
+  kpis        Kpi[]
 
   @@map("teams")
 }
@@ -56,14 +65,14 @@ model TeamMember {
 }
 
 model TeamInvitation {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId         String    @map("team_id") @db.Uuid
-  inviterId      String    @map("inviter_id") @db.Uuid
-  inviteeUsername String   @map("invitee_username") @db.Citext
-  status         String    @default("pending")
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  expiresAt      DateTime  @default(dbgenerated("(now() + interval '7 days')")) @map("expires_at") @db.Timestamptz(3)
-  respondedAt    DateTime? @map("responded_at") @db.Timestamptz(3)
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId          String    @map("team_id") @db.Uuid
+  inviterId       String    @map("inviter_id") @db.Uuid
+  inviteeUsername String    @map("invitee_username") @db.Citext
+  status          String    @default("pending")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt       DateTime  @default(dbgenerated("(now() + interval '7 days')")) @map("expires_at") @db.Timestamptz(3)
+  respondedAt     DateTime? @map("responded_at") @db.Timestamptz(3)
 
   team    Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
   inviter User @relation("Inviter", fields: [inviterId], references: [id])
@@ -77,19 +86,131 @@ model TeamInvitation {
 model Task {
   id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   teamId      String    @map("team_id") @db.Uuid
+  projectId   String?   @map("project_id") @db.Uuid
   title       String
   description String?
   status      String    @default("todo")
   priority    String    @default("medium")
-  startDate   DateTime? @map("start_date") @db.Timestamptz(3)
   dueDate     DateTime? @map("due_date") @db.Timestamptz(3)
   flagged     Boolean   @default(false)
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team       Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  project    Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  comments   Comment[]
+  events     TaskEvent[]
+  dueChanges TaskDueChange[]
+  kpiBindings TaskKpi[]
 
   @@index([teamId, status])
   @@index([status])
+  @@index([projectId])
   @@map("tasks")
+}
+
+model Comment {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId    String   @map("task_id") @db.Uuid
+  authorId  String   @map("author_id") @db.Uuid
+  parentId  String?  @map("parent_id") @db.Uuid
+  body      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  task    Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author  User      @relation(fields: [authorId], references: [id])
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies Comment[] @relation("CommentReplies")
+
+  @@index([taskId, createdAt])
+  @@index([parentId])
+  @@map("comments")
+}
+
+model TaskEvent {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId     String   @map("team_id") @db.Uuid
+  taskId     String   @map("task_id") @db.Uuid
+  actorId    String   @map("actor_id") @db.Uuid
+  fromStatus String?  @map("from_status")
+  toStatus   String   @map("to_status")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  team  Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  task  Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor User @relation("TaskEventActor", fields: [actorId], references: [id])
+
+  @@index([teamId, createdAt])
+  @@index([taskId])
+  @@map("task_events")
+}
+
+// Due-date history: one row per actual due_date edit, so progress
+// analytics can show "extra time was added" (deadline revisions).
+model TaskDueChange {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId    String    @map("task_id") @db.Uuid
+  fromDue   DateTime? @map("from_due") @db.Timestamptz(3)
+  toDue     DateTime? @map("to_due") @db.Timestamptz(3)
+  actorId   String    @map("actor_id") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  task  Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor User @relation("TaskDueChangeActor", fields: [actorId], references: [id])
+
+  @@index([taskId, createdAt])
+  @@map("task_due_changes")
+}
+
+// PRD-06: Projects group tasks; scope "team" (owner-created, shared) or
+// "personal" (any member, visible to the team). No linking between them.
+model Project {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId    String   @map("team_id") @db.Uuid
+  ownerId   String   @map("owner_id") @db.Uuid
+  scope     String   @default("personal") // "team" | "personal"
+  name      String
+  color     String?
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  team  Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  owner User   @relation("ProjectOwner", fields: [ownerId], references: [id])
+  tasks Task[]
+
+  @@index([teamId, scope])
+  @@map("projects")
+}
+
+// KPIs are measured via weighted task bindings (TaskKpi), progress =
+// Σ(weight × status fraction) ÷ Σ(weight) — see routes/kpis.ts.
+model Kpi {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId    String   @map("team_id") @db.Uuid
+  ownerId   String   @map("owner_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  team     Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  owner    User      @relation("KpiOwner", fields: [ownerId], references: [id])
+  bindings TaskKpi[]
+
+  @@index([teamId])
+  @@map("kpis")
+}
+
+model TaskKpi {
+  taskId String @map("task_id") @db.Uuid
+  kpiId  String @map("kpi_id") @db.Uuid
+  weight Int    // percent 1–100; per-task total ≤ 100 enforced in the route
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  kpi  Kpi  @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, kpiId])
+  @@index([kpiId])
+  @@map("task_kpis")
 }

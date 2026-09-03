@@ -9,6 +9,7 @@
     "migrate:deploy": "prisma migrate deploy",
     "migrate:reset": "prisma migrate reset",
     "generate": "prisma generate",
+    "bootstrap": "prisma migrate deploy && prisma generate",
     "seed": "prisma generate && prisma db seed",
     "studio": "prisma studio",
     "typecheck": "prisma generate && tsc --noEmit"

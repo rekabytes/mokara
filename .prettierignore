@@ -18,6 +18,9 @@ packages/*/.next
 *.log
 pnpm-debug.log*
 
+# Agent memory (gitignored, not project code)
+.pi
+
 # Lockfile + env
 pnpm-lock.yaml
 .env

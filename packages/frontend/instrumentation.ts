@@ -8,15 +8,20 @@
 //
 // After the first ping, subsequent pings only log on state change (up→down or
 // down→up), so a healthy connection stays quiet.
+//
+// The target is BACKEND_URL (see lib/backend-url.ts), so this works unchanged
+// inside a container, where the browser-facing /api proxy would be meaningless.
 
 const PING_INTERVAL_MS = 30_000;
 const PING_TIMEOUT_MS = 5_000;
 
+import { getBackendUrl } from "./lib/backend-url";
+
 function getHealthUrl(): string {
-  // NEXT_PUBLIC_API_BASE_URL is something like http://localhost:4200/api.
-  // /health is served at the root, not under /api, so strip the suffix.
-  const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4200/api";
-  return base.replace(/\/api\/?$/, "") + "/health";
+  // Absolute and server-side on purpose: this runs in the Next process, not the
+  // browser, so it talks to the backend directly over the container network
+  // rather than through the /api proxy (which would resolve only in a browser).
+  return getBackendUrl() + "/health";
 }
 
 type State = "unknown" | "up" | "down";

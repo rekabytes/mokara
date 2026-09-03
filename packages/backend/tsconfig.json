@@ -4,15 +4,21 @@
     "lib": ["ES2023"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "outDir": "./dist",
-    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
+    // Source imports carry `.ts` extensions (Prisma's generated client is .ts too),
+    // which requires this flag — and this flag forbids emitting.
     "allowImportingTsExtensions": true,
-    "noEmit": false,
-    "declaration": false,
+    // The backend is never compiled for production. The container runs the same
+    // TypeScript source that dev runs, through `tsx` (see scripts/start.sh). Two
+    // reasons: `allowImportingTsExtensions` cannot emit at all, and even with
+    // `rewriteRelativeImportExtensions` the output still died on
+    // `@mokara/db/prisma/generated/client`, because Prisma's `prisma-client`
+    // generator emits a `.ts` file that plain Node cannot import from a package
+    // subpath. So `tsc` is the type gate here and nothing more.
+    "noEmit": true,
     "types": ["node"]
   },
   "include": ["src/**/*.ts"]

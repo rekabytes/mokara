@@ -151,9 +151,9 @@
 
 @utility field {
   width: 100%;
-  padding: 0.8rem 0.95rem;
+  padding: 0.4rem 0.75rem;
   font: inherit;
-  font-size: 0.97rem;
+  font-size: 0.9rem;
   color: var(--color-ink);
   background: var(--color-surface-2);
   border: 1px solid var(--color-border-soft);

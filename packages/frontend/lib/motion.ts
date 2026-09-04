@@ -88,3 +88,39 @@ export const tickVariants: Variants = {
   visible: { opacity: 1, scale: 1, transition: snap(DUR.fast) },
   exit: { opacity: 0, scale: 0.6, transition: { duration: 0.08, ease: EASE_SNAP } },
 };
+
+// ---- Landing: hero entrance, scroll reveal, tilt ----------------------------
+// All one-shot (load / whileInView once) — the page's identity is calm, so
+// nothing loops. MotionConfig reducedMotion="user" strips the transforms for
+// reduced-motion users, leaving opacity-only fades.
+
+/** Stagger parent for the hero text block. */
+export const heroContainer: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.07, delayChildren: 0.05 } },
+};
+
+/** One hero child rising in. */
+export const heroItem: Variants = {
+  hidden: { opacity: 0, y: 18 },
+  show: { opacity: 1, y: 0, transition: snap(DUR.panel) },
+};
+
+/** Hero media sliding in from the right, just after the text starts. */
+export const heroMedia: Variants = {
+  hidden: { opacity: 0, x: 28 },
+  show: { opacity: 1, x: 0, transition: snap(DUR.panel + 0.08) },
+};
+
+/** Scroll-reveal for below-the-fold sections (whileInView, once). */
+export const reveal: Variants = {
+  hidden: { opacity: 0, y: 24 },
+  show: { opacity: 1, y: 0, transition: snap(DUR.panel + 0.08) },
+};
+
+/** Spring for the pointer-tilt panel — soft, settles without wobble. */
+export const tiltSpring: Transition & { stiffness: number; damping: number; mass: number } = {
+  stiffness: 180,
+  damping: 24,
+  mass: 0.6,
+};

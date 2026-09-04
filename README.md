@@ -1,5 +1,7 @@
 # Mokara — Task Management (v1)
 
+![Mokara — the tasks board](packages/frontend/public/landing/og.jpg)
+
 Basic task management web app. pnpm workspace monorepo: Hono (TypeScript) backend sharing the workspace with a Next.js (TypeScript) frontend, plus a Prisma-managed `db` package (schema + migrations + generated client). PostgreSQL + Redis run in Docker; backend and frontend run on the host for fast dev loops.
 
 See [`docs/development/PRD-01.md`](docs/development/PRD-01.md) and [`docs/development/PRD-02.md`](docs/development/PRD-02.md) for the full spec (tasks + auth + teams + invitations).

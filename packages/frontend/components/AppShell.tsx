@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { redirect, usePathname, useRouter } from "next/navigation";
+import { redirect, usePathname } from "next/navigation";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useSession } from "@/lib/session";
+import { signOutServer, useSession } from "@/lib/session";
 import { useContainers } from "@/lib/containers";
 import { ContainerSwitcher } from "./ContainerSwitcher";
 import { DUR, snap } from "@/lib/motion";
@@ -12,7 +12,6 @@ import { cn } from "@/lib/cn";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const session = useSession();
-  const router = useRouter();
   const pathname = usePathname();
   const { selected } = useContainers();
 
@@ -130,8 +129,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={async () => {
-              await session.logout();
-              router.push("/login");
+              // Deliberate sign-out: endpoint, then a hard exit to the front
+              // door. No client transition — flipping the shared atom here
+              // would race AppShell's expiry redirect during it (the
+              // "Rendered more hooks" rollback, 2026-09-04).
+              await signOutServer();
+              window.location.assign("/");
             }}
             className="btn-base btn-ghost w-full"
           >

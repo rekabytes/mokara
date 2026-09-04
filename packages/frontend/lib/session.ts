@@ -33,14 +33,21 @@ function markAnonymous() {
   store().set(sessionAtom, { status: "anonymous" });
 }
 
-/** Clears the shared state without an API call (the server already cleared the cookie — PRD-08 revoke-all). */
-export function forgetSessionUser() {
-  markAnonymous();
+/** Server-side sign-out only — no shared state change. Deliberate sign-outs
+ * hard-navigate to `/` right after (PRD-08), so the document reload resets the
+ * atom anyway; flipping it here would only race AppShell's expiry redirect
+ * ("Rendered more hooks than during the previous render" — two navigators in
+ * one transition, learned 2026-09-04). */
+export async function signOutServer(): Promise<void> {
+  try {
+    await api.logout();
+  } catch {
+    /* the endpoint clears the cookie; nothing to recover */
+  }
 }
 
 export function useSession(): SessionState & {
   refresh: () => Promise<void>;
-  logout: () => Promise<void>;
 } {
   const [state] = useAtom(sessionAtom);
 
@@ -57,15 +64,6 @@ export function useSession(): SessionState & {
     }
   }, []);
 
-  const logout = useCallback(async () => {
-    try {
-      await api.logout();
-    } catch {
-      /* the cookie is cleared client-side anyway */
-    }
-    markAnonymous();
-  }, []);
-
   // Bootstrap probe — once per app lifetime, not once per page mount. This is
   // the canonical allowed effect: a one-time read of something outside React
   // (the session cookie), guarded by a module flag so it never re-runs.
@@ -78,5 +76,5 @@ export function useSession(): SessionState & {
   // Memoised so `session` is safe to put in a consumer's dependency array —
   // spreading `...state` into a fresh object every render made every mount of
   // a hook consumer re-run anything that (correctly) depended on it.
-  return useMemo(() => ({ ...state, refresh, logout }), [state, refresh, logout]);
+  return useMemo(() => ({ ...state, refresh }), [state, refresh]);
 }

@@ -1,12 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { api, type SessionInfo } from "@/lib/api";
 import { manualError } from "@/lib/errors";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { ErrorBanner } from "@/components/ErrorBanner";
-import { forgetSessionUser, setSessionUser, useSession } from "@/lib/session";
+import { setSessionUser, signOutServer, useSession } from "@/lib/session";
 
 // PRD-08: the settings page — account (display name), security (password) and
 // devices (live session registry). One shared useAsyncError channel per page;
@@ -55,7 +54,6 @@ function timeAgo(iso: string): string {
 
 export default function SettingsPage() {
   const session = useSession();
-  const router = useRouter();
   const { error, setError, clearError, run } = useAsyncError();
   const user = session.status === "authed" ? session.user : null;
 
@@ -129,8 +127,10 @@ export default function SettingsPage() {
     });
     if (ok === null) return;
     if (row?.current) {
-      await session.logout();
-      router.replace("/login");
+      // Revoking yourself is a sign-out: clear the now-dead cookie and exit
+      // hard to the front door — no client transition to race (2026-09-04).
+      await signOutServer();
+      window.location.assign("/");
       return;
     }
     void loadDevices();
@@ -141,8 +141,8 @@ export default function SettingsPage() {
       fallback: "Couldn't sign out your sessions. Try again.",
     });
     if (ok === null) return;
-    forgetSessionUser();
-    router.replace("/login");
+    // The endpoint already cleared the cookie — just leave, hard.
+    window.location.assign("/");
   };
 
   return (

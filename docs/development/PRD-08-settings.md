@@ -69,20 +69,24 @@ stays inline.
 
 ## 5. Frontend
 
-- **`/settings`** (`app/(app)/settings/page.tsx`, client) — the verbatim
-  breadcrumb header (star + size-8 bell included), then a single narrow column
-  with three analytics-style cards: **Account** (read-only username, editable
-  display name), **Security** (password form) and **Devices** (the registry:
-  "This device" tag, added/active relative times, per-row logout,
-  sign-out-everywhere footer). One shared `useAsyncError` channel; its banner
-  sits above the cards so a failure is never rendered twice.
+- **`/settings`** — server shell (`page.tsx`) + client view (`settings-view.tsx`):
+  a **12-column bento grid** (approved mockup: `settings-redesign-mockup.html`)
+  — identity tile (64px avatar, editable display name, @username chip,
+  member-since, live stat tiles: device count / session length / container
+  count) top-left · **password** as a tall right rail (row-span 2) ·
+  **devices** keeps the 7-row capped list under identity · a slim **danger
+  strip** at the bottom — "Delete account — not self-service yet", with a
+  mailto wired from the server shell because `LEG_CONTACT_EMAIL` is
+  server-only; the button hides when the operator hasn't set an address.
+  Collapses to one column under 961px. The verbatim breadcrumb header stays;
+  one shared `useAsyncError` channel above the grid.
 - **Entry point** — the sidebar's own avatar/handle row becomes the link to
   `/settings` (hover tint added; visuals otherwise unchanged).
 - **Proxy guard** — `/settings` joins `PROTECTED_PREFIXES`.
 - **State** — form fields are ephemeral `useState`; device revocations refresh
   the list; display-name saves call `setSessionUser(updated.user)` (the same
   path login uses). Revoking the current device runs the ordinary logout path
-  and replaces to `/login`.
+  and hard-navigates to `/` (see the 2026-09-04 race fix).
 
 ## 6. Decisions made (owner may veto)
 

@@ -23,6 +23,7 @@ import {
 } from "@/lib/api";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { useContainers } from "@/lib/containers";
+import { NotificationBell } from "@/components/NotificationBell";
 
 // PRD-04 phase 3 — team activity chart. Lines plot cumulative running
 // totals (created, started, finished, canceled) so the line never drops
@@ -34,6 +35,11 @@ import { useContainers } from "@/lib/containers";
 type SeriesKey = keyof Omit<AnalyticsSeriesItem, "date">;
 
 const WINDOW_DAYS = 14;
+
+// PRD-09: both capped lists (heatmap rows, KPI rows) show this many entries
+// before their internal vertical scroll takes over. The payloads are already
+// complete — the cap is a viewport, not a query.
+const LIST_VISIBLE_ROWS = 7;
 
 // One YYYY-MM-DD per day of the window, oldest first, today last.
 // Local date math throughout — round-tripping through toISOString()
@@ -99,7 +105,8 @@ export default function AnalyticsPage() {
   const teamId = selected?.id ?? null;
   // Trailing window: today is the right edge, `WINDOW_DAYS` - 1 days ago
   // is the left edge. Sent as the API `range`, which already counts days
-  // back from today.
+  // back from today. (The PRD-09 range control was dropped by owner
+  // decision — the chart stays fixed at 14.)
   const windowDates = useMemo(() => trailingDates(new Date(), WINDOW_DAYS), []);
   const [data, setData] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -227,13 +234,7 @@ export default function AnalyticsPage() {
             <StarIcon />
           </button>
         </div>
-        <button
-          type="button"
-          aria-label="Notifications"
-          className="grid size-8 cursor-pointer place-items-center rounded-md text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
-        >
-          <BellIcon />
-        </button>
+        <NotificationBell />
       </div>
 
       {/* Progress card */}
@@ -267,8 +268,133 @@ export default function AnalyticsPage() {
         </section>
       )}
 
+      {/* Progress card — day-cell heatmap per task */}
+      <section className="mt-4 rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-18px_rgba(15,23,42,0.25)]">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[0.8rem] font-semibold">
+            Progress{" "}
+            <span className="font-normal text-[var(--color-ink-faint)]">
+              · {progress?.tasks.length ?? 0} tasks
+            </span>
+          </span>
+          <select
+            // Uncontrolled: the only thing this dropdown does is scroll a DOM
+            // node, which it can do straight from onChange. It used to write a
+            // `jumpMonth` state that an effect watched — state whose sole
+            // purpose was to be noticed by an effect.
+            defaultValue=""
+            onChange={(e) => {
+              const el = ganttScrollRef.current;
+              if (!el) return;
+              const month = e.target.value;
+              if (month === "") return;
+              el.scrollLeft = Math.max(0, monthStartPx(new Date().getFullYear(), Number(month)));
+            }}
+            aria-label="Jump to month"
+            className="cursor-pointer rounded-[999px] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] px-3 py-1.5 text-[0.78rem] font-medium text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+          >
+            <option value="" disabled>
+              Jump to month…
+            </option>
+            {MONTH_NAMES.map((name, i) => (
+              <option key={name} value={i}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {progressLoading && !progress ? (
+          <div className="grid h-[120px] place-items-center text-[0.8rem] text-[var(--color-ink-faint)]">
+            Loading…
+          </div>
+        ) : progressError ? (
+          <div className="grid h-[120px] place-items-center text-[0.8rem] text-[var(--color-ink-faint)]">
+            {progressError.message}
+            <button
+              type="button"
+              onClick={loadProgress}
+              className="ml-2 cursor-pointer text-[var(--color-accent)] underline"
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <ProgressGantt tasks={progress?.tasks ?? []} scrollRef={ganttScrollRef} />
+        )}
+      </section>
+
+      {/* KPI progress card — weighted: Σ(weight × status) ÷ Σ(weight) */}
+      <section className="mt-4 rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-18px_rgba(15,23,42,0.25)]">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[0.8rem] font-semibold">
+            KPI progress{" "}
+            <span className="font-normal text-[var(--color-ink-faint)]">
+              · {kpiProgress?.length ?? 0} KPIs
+            </span>
+          </span>
+          <span className="text-[0.7rem] text-[var(--color-ink-faint)]">
+            Σ(weight × status) ÷ Σ(weight) · canceled excluded
+          </span>
+        </div>
+        {kpiLoading && !kpiProgress ? (
+          <div className="grid h-[80px] place-items-center text-[0.8rem] text-[var(--color-ink-faint)]">
+            Loading…
+          </div>
+        ) : kpiError ? (
+          <div className="grid h-[80px] place-items-center text-[0.8rem] text-[var(--color-ink-faint)]">
+            {kpiError.message}
+            <button
+              type="button"
+              onClick={loadKpiProgress}
+              className="ml-2 cursor-pointer text-[var(--color-accent)] underline"
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <div className="relative">
+            {/* PRD-09: 7 KPIs visible, the rest behind the card's own
+                vertical scrollbar — same cap as the heatmap above. */}
+            <ul className="m-0 flex max-h-[252px] list-none flex-col gap-0.5 overflow-y-auto p-0">
+              {(kpiProgress ?? []).map((k) => (
+                <li key={k.id} className="flex items-center gap-3 py-1.5">
+                  <span className="w-[180px] shrink-0 truncate text-[0.8rem] font-medium text-[var(--color-ink)]">
+                    {k.name}
+                  </span>
+                  <span className="pill shrink-0">{k.owner_username}</span>
+                  <span className="flex h-2 flex-1 overflow-hidden rounded-[999px] bg-[rgba(148,163,184,0.18)]">
+                    <span
+                      className="h-full rounded-[999px] bg-[var(--color-accent)] transition-[width] duration-300"
+                      style={{ width: `${k.progress}%` }}
+                    />
+                  </span>
+                  <span className="w-[42px] shrink-0 text-right font-mono text-[0.76rem] text-[var(--color-ink)]">
+                    {k.progress}%
+                  </span>
+                  <span className="w-[92px] shrink-0 text-right text-[0.72rem] text-[var(--color-ink-faint)]">
+                    {k.task_count} tied · Σ{k.weight_sum}
+                  </span>
+                </li>
+              ))}
+              {(kpiProgress ?? []).length === 0 && (
+                <li className="py-2 text-[0.78rem] text-[var(--color-ink-faint)]">
+                  No KPIs in this container yet — create them on the team page, then weight tasks
+                  toward them from the task drawer.
+                </li>
+              )}
+            </ul>
+            {kpiProgress !== null && kpiProgress.length > LIST_VISIBLE_ROWS && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
+                <span className="rounded-[999px] bg-[var(--color-surface-solid)]/90 px-3 py-1 text-[0.72rem] text-[var(--color-ink-faint)] shadow-[var(--shadow-card)]">
+                  {kpiProgress.length - LIST_VISIBLE_ROWS} more KPIs below
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
       {/* Chart card */}
-      <section className="rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-18px_rgba(15,23,42,0.25)]">
+      <section className="mt-4 rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-18px_rgba(15,23,42,0.25)]">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <span className="text-[0.8rem] font-semibold">Activity over time</span>
           <div className="flex flex-wrap gap-1.5">
@@ -385,111 +511,6 @@ export default function AnalyticsPage() {
           and new events.
         </p>
       </section>
-
-      {/* Progress card — day-cell heatmap per task */}
-      <section className="mt-4 rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-18px_rgba(15,23,42,0.25)]">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-[0.8rem] font-semibold">Progress</span>
-          <select
-            // Uncontrolled: the only thing this dropdown does is scroll a DOM
-            // node, which it can do straight from onChange. It used to write a
-            // `jumpMonth` state that an effect watched — state whose sole
-            // purpose was to be noticed by an effect.
-            defaultValue=""
-            onChange={(e) => {
-              const el = ganttScrollRef.current;
-              if (!el) return;
-              const month = e.target.value;
-              if (month === "") return;
-              el.scrollLeft = Math.max(0, monthStartPx(new Date().getFullYear(), Number(month)));
-            }}
-            aria-label="Jump to month"
-            className="cursor-pointer rounded-[999px] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] px-3 py-1.5 text-[0.78rem] font-medium text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
-          >
-            <option value="" disabled>
-              Jump to month…
-            </option>
-            {MONTH_NAMES.map((name, i) => (
-              <option key={name} value={i}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </div>
-        {progressLoading && !progress ? (
-          <div className="grid h-[120px] place-items-center text-[0.8rem] text-[var(--color-ink-faint)]">
-            Loading…
-          </div>
-        ) : progressError ? (
-          <div className="grid h-[120px] place-items-center text-[0.8rem] text-[var(--color-ink-faint)]">
-            {progressError.message}
-            <button
-              type="button"
-              onClick={loadProgress}
-              className="ml-2 cursor-pointer text-[var(--color-accent)] underline"
-            >
-              Retry
-            </button>
-          </div>
-        ) : (
-          <ProgressGantt tasks={progress?.tasks ?? []} scrollRef={ganttScrollRef} />
-        )}
-      </section>
-
-      {/* KPI progress card — weighted: Σ(weight × status) ÷ Σ(weight) */}
-      <section className="mt-4 rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-18px_rgba(15,23,42,0.25)]">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-[0.8rem] font-semibold">KPI progress</span>
-          <span className="text-[0.7rem] text-[var(--color-ink-faint)]">
-            Σ(weight × status) ÷ Σ(weight) · canceled excluded
-          </span>
-        </div>
-        {kpiLoading && !kpiProgress ? (
-          <div className="grid h-[80px] place-items-center text-[0.8rem] text-[var(--color-ink-faint)]">
-            Loading…
-          </div>
-        ) : kpiError ? (
-          <div className="grid h-[80px] place-items-center text-[0.8rem] text-[var(--color-ink-faint)]">
-            {kpiError.message}
-            <button
-              type="button"
-              onClick={loadKpiProgress}
-              className="ml-2 cursor-pointer text-[var(--color-accent)] underline"
-            >
-              Retry
-            </button>
-          </div>
-        ) : (
-          <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
-            {(kpiProgress ?? []).map((k) => (
-              <li key={k.id} className="flex items-center gap-3 py-1.5">
-                <span className="w-[180px] shrink-0 truncate text-[0.8rem] font-medium text-[var(--color-ink)]">
-                  {k.name}
-                </span>
-                <span className="pill shrink-0">{k.owner_username}</span>
-                <span className="flex h-2 flex-1 overflow-hidden rounded-[999px] bg-[rgba(148,163,184,0.18)]">
-                  <span
-                    className="h-full rounded-[999px] bg-[var(--color-accent)] transition-[width] duration-300"
-                    style={{ width: `${k.progress}%` }}
-                  />
-                </span>
-                <span className="w-[42px] shrink-0 text-right font-mono text-[0.76rem] text-[var(--color-ink)]">
-                  {k.progress}%
-                </span>
-                <span className="w-[92px] shrink-0 text-right text-[0.72rem] text-[var(--color-ink-faint)]">
-                  {k.task_count} tied · Σ{k.weight_sum}
-                </span>
-              </li>
-            ))}
-            {(kpiProgress ?? []).length === 0 && (
-              <li className="py-2 text-[0.78rem] text-[var(--color-ink-faint)]">
-                No KPIs in this container yet — create them on the team page, then weight tasks
-                toward them from the task drawer.
-              </li>
-            )}
-          </ul>
-        )}
-      </section>
     </div>
   );
 }
@@ -509,7 +530,6 @@ const TITLE_COL = 160;
 const AXIS_HEIGHT = 44;
 const ROW_H = 38;
 const CELL_H = 26;
-
 type HeatState = "waiting" | "upcoming" | "active" | "done" | "late" | "ghost";
 
 const HEAT_CLASS: Record<HeatState, string> = {
@@ -559,6 +579,34 @@ function ProgressGantt({
   const [hover, setHover] = useState<{ rowId: string; col: number; x: number; y: number } | null>(
     null
   );
+  const hThumbRef = useRef<HTMLDivElement | null>(null);
+  const vThumbRef = useRef<HTMLDivElement | null>(null);
+
+  // PRD-09: the native scrollbars are hidden; these thumbs stand in for them
+  // and fade in while the card is hovered (the fade is pure CSS group-hover —
+  // no JS in the animation). Thumb math is 1:1: within a track as wide as the
+  // visible area, a thumb sized to the visible fraction moves exactly
+  // scrollLeft px, so position and size come straight off the live values.
+  const syncIndicators = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (hThumbRef.current) {
+      hThumbRef.current.style.width = `${(el.clientWidth / el.scrollWidth) * el.clientWidth}px`;
+      hThumbRef.current.style.transform = `translateX(${el.scrollLeft}px)`;
+    }
+    if (vThumbRef.current) {
+      vThumbRef.current.style.height = `${(el.clientHeight / el.scrollHeight) * el.clientHeight}px`;
+      vThumbRef.current.style.transform = `translateY(${el.scrollTop}px)`;
+    }
+  }, [scrollRef]);
+
+  // Size the thumbs when the first layout exists and whenever a payload
+  // changes the scroll extents; every scroll afterwards keeps them live via
+  // onScroll. Outside-React DOM sync — the documented allowed effect.
+  useEffect(() => {
+    if (tasks.length === 0) return;
+    syncIndicators();
+  }, [tasks, syncIndicators]);
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef({ startX: 0, startScroll: 0 });
 
@@ -741,17 +789,24 @@ function ProgressGantt({
   }
 
   return (
-    <div className="min-w-0">
+    <div className="group relative min-w-0">
       <div
         ref={scrollRef}
-        className={`relative overflow-x-auto min-w-0 max-w-full rounded-[6px] ${
+        // Native scrollbars off (both axes) — the hover-fading thumbs below
+        // are the only scroll affordance. The capped body keeps the page from
+        // stretching with the task count (PRD-09); the axis row pins to the
+        // top and task titles stay pinned left.
+        className={`relative overflow-auto min-w-0 max-w-full rounded-[6px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
           dragging ? "cursor-grabbing select-none" : "cursor-grab"
         }`}
+        style={{ maxHeight: AXIS_HEIGHT + LIST_VISIBLE_ROWS * ROW_H }}
+        onScroll={syncIndicators}
         onMouseDown={onMouseDown}
       >
         <div style={{ width: `${TITLE_COL + trackWidth}px` }}>
-          {/* Axis row: sticky-blank + month/day header */}
-          <div className="flex">
+          {/* Axis row: pins to the top of the capped scroller (PRD-09); its
+              blank corner is already sticky-left, so it pins both ways. */}
+          <div className="sticky top-0 z-20 flex bg-[var(--color-surface-solid)]">
             <div
               className="sticky left-0 z-10 flex-none bg-[var(--color-surface-solid)] border-r border-[var(--color-border-soft)]"
               style={{ width: `${TITLE_COL}px`, height: `${AXIS_HEIGHT}px` }}
@@ -826,6 +881,27 @@ function ProgressGantt({
           </div>
         </div>
       </div>
+
+      {/* PRD-09: overflow affordance — only while the payload exceeds the
+          cap. Static (no scroll listeners); pointer-events-none so cell hover
+          and drag-scroll pass through. */}
+      {tasks.length > LIST_VISIBLE_ROWS && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center">
+          <span className="rounded-[999px] bg-[var(--color-surface-solid)]/90 px-3 py-1 text-[0.72rem] text-[var(--color-ink-faint)] shadow-[var(--shadow-card)]">
+            {tasks.length - LIST_VISIBLE_ROWS} more tasks below
+          </span>
+        </div>
+      )}
+
+      {/* Hover-revealed scroll thumbs — see syncIndicators above. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-1 z-30 h-1 opacity-0 transition-opacity duration-200 ease-[var(--ease-snap)] group-hover:opacity-100">
+        <div ref={hThumbRef} className="h-full rounded-[999px] bg-[rgba(15,23,42,0.22)]" />
+      </div>
+      {tasks.length > LIST_VISIBLE_ROWS && (
+        <div className="pointer-events-none absolute bottom-1 right-1 top-1 z-30 w-1 opacity-0 transition-opacity duration-200 ease-[var(--ease-snap)] group-hover:opacity-100">
+          <div ref={vThumbRef} className="w-full rounded-[999px] bg-[rgba(15,23,42,0.22)]" />
+        </div>
+      )}
 
       <AnimatePresence>
         {hover &&
@@ -1068,20 +1144,6 @@ function StarIcon() {
         strokeWidth="1.6"
         strokeLinejoin="round"
       />
-    </svg>
-  );
-}
-
-function BellIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M6 16V11a6 6 0 1112 0v5l1.5 2H4.5L6 16z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <path d="M10 21h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }

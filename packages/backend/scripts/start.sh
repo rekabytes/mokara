@@ -26,7 +26,7 @@
 
 set -e
 
-echo "[start] applying database migrations…"
+echo "[start] applying database migrations… (forward-only: pending ones are applied, already-applied ones are skipped — nothing is deleted)"
 cd /app/packages/db && ./node_modules/.bin/prisma migrate deploy
 
 echo "[start] launching backend…"

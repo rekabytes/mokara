@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "../db.ts";
 import { commentSchema, createCommentSchema } from "../lib/validation.ts";
 import { validate } from "../lib/validate.ts";
+import { notify } from "../lib/notifications.ts";
 import { getTeamRole } from "../lib/team-membership.ts";
 import { toComment } from "../lib/types.ts";
 import type { Vars } from "../middleware/auth.ts";
@@ -80,6 +81,25 @@ commentRoutes.post("/tasks/:id/comments", validate("json", createCommentSchema),
     data: { taskId, authorId: userId, parentId, body: input.body },
     include: authorInclude,
   });
+
+  // PRD-05: a reply notifies the thread root's author (never yourself).
+  if (parentId) {
+    const [parent, task, username] = await Promise.all([
+      prisma.comment.findUnique({ where: { id: parentId }, select: { authorId: true } }),
+      prisma.task.findUnique({ where: { id: taskId }, select: { title: true, teamId: true } }),
+      Promise.resolve(c.get("username")),
+    ]);
+    if (parent && parent.authorId !== userId && task) {
+      await notify(parent.authorId, "comment_reply", {
+        actor_username: username,
+        task_id: taskId,
+        task_title: task.title,
+        team_id: task.teamId,
+        snippet: input.body.length > 80 ? input.body.slice(0, 77) + "..." : input.body,
+      });
+    }
+  }
+
   return c.json({ comment: toComment(comment) }, 201);
 });
 

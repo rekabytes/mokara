@@ -16,6 +16,7 @@ import { useAsyncError } from "@/hooks/useAsyncError";
 import { useContainerMeta } from "@/lib/meta";
 import { useSession } from "@/lib/session";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { NotificationBell } from "@/components/NotificationBell";
 import { collapseVariants, snap, DUR } from "@/lib/motion";
 import { cn } from "@/lib/cn";
 
@@ -611,20 +612,6 @@ function StarIcon() {
   );
 }
 
-function BellIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M6 16V11a6 6 0 1112 0v5l1.5 2H4.5L6 16z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <path d="M10 21h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 function ScopeToggle({
   active,
   label,
@@ -727,13 +714,7 @@ export default function TeamDetailPage() {
             <StarIcon />
           </button>
         </div>
-        <button
-          type="button"
-          aria-label="Notifications"
-          className="grid size-8 cursor-pointer place-items-center rounded-md text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
-        >
-          <BellIcon />
-        </button>
+        <NotificationBell />
       </div>
 
       <ErrorBanner className="mb-4" message={error?.message} />

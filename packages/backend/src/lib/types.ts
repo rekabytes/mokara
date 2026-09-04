@@ -12,6 +12,7 @@ import type {
   TeamMember as PrismaTeamMember,
   TeamInvitation as PrismaTeamInvitation,
   Comment as PrismaComment,
+  Notification as PrismaNotification,
 } from "@mokara/db/prisma/generated/client";
 
 export type UserResponse = {
@@ -63,6 +64,8 @@ export type TaskResponse = {
   priority: string;
   project_id: string | null;
   kpis: TaskKpiResponse[];
+  creator: UserRefResponse | null;
+  assignee: UserRefResponse | null;
   due_date: string | null;
   flagged: boolean;
   created_at: string;
@@ -126,6 +129,26 @@ export type AnalyticsResponse = {
     canceled: number;
   };
 };
+
+export function toNotification(
+  n: Pick<PrismaNotification, "id" | "type" | "payload" | "readAt" | "createdAt">
+): NotificationResponse {
+  return {
+    id: n.id,
+    type: n.type,
+    payload: n.payload,
+    read_at: n.readAt ? n.readAt.toISOString() : null,
+    created_at: n.createdAt.toISOString(),
+  };
+}
+
+export interface NotificationResponse {
+  id: string;
+  type: string;
+  payload: unknown; // the drawer renders optional fields off it
+  read_at: string | null;
+  created_at: string;
+}
 
 export function toUser(
   u: Pick<PrismaUser, "id" | "username" | "displayName" | "createdAt">
@@ -207,7 +230,23 @@ export function toAnalytics(
   return a;
 }
 
-export function toTask(t: PrismaTask, kpis: TaskKpiResponse[] = []): TaskResponse {
+export type UserRefResponse = {
+  id: string;
+  username: string;
+  display_name: string | null;
+};
+
+export function toUserRef(u: Pick<PrismaUser, "id" | "username" | "displayName">): UserRefResponse {
+  return { id: u.id, username: u.username, display_name: u.displayName };
+}
+
+export function toTask(
+  t: PrismaTask & {
+    creator?: Pick<PrismaUser, "id" | "username" | "displayName"> | null;
+    assignee?: Pick<PrismaUser, "id" | "username" | "displayName"> | null;
+  },
+  kpis: TaskKpiResponse[] = []
+): TaskResponse {
   return {
     id: t.id,
     team_id: t.teamId,
@@ -217,6 +256,8 @@ export function toTask(t: PrismaTask, kpis: TaskKpiResponse[] = []): TaskRespons
     priority: t.priority,
     project_id: t.projectId,
     kpis,
+    creator: t.creator ? toUserRef(t.creator) : null,
+    assignee: t.assignee ? toUserRef(t.assignee) : null,
     due_date: t.dueDate ? t.dueDate.toISOString() : null,
     flagged: t.flagged,
     created_at: t.createdAt.toISOString(),

@@ -98,7 +98,7 @@ pnpm dev
 
 ## API
 
-All routes are mounted under `/api`. Auth uses an HS256 JWT in the `mokara_token` httpOnly cookie (same name the frontend `proxy.ts` route guard reads).
+All routes are mounted under `/api`. Auth uses an HS256 JWT in the `mokara_token` httpOnly cookie (`__Host-mokara_token` in production; same name the frontend `proxy.ts` route guard reads).
 
 ### Auth
 
@@ -143,7 +143,7 @@ All routes are mounted under `/api`. Auth uses an HS256 JWT in the `mokara_token
 Releases are tag-driven; images are built **only** by CI, never on the deploy host.
 
 ```bash
-git tag v0.1.1 && git push origin v0.1.1
+git tag v0.1.2 && git push origin v0.1.2
 ```
 
 The tag must equal `version` in the root `package.json` (and in every workspace
@@ -156,17 +156,17 @@ frontend build · every migration applied to an empty Postgres · tag matches
 `package.json`), then publishes:
 
 ```
-ghcr.io/<owner>/mokara-frontend:0.1.1   (+ :0.1, :latest)
-ghcr.io/<owner>/mokara-backend:0.1.1    (+ :0.1, :latest)
+ghcr.io/<owner>/mokara-frontend:0.1.2   (+ :0.1, :latest)
+ghcr.io/<owner>/mokara-backend:0.1.2    (+ :0.1, :latest)
 ```
 
 Coolify runs both as **Docker Image** services and pulls them. Full design and the
 reasoning behind each choice: `docs/development/PRD-07.md`.
 
-| Service  | Port | Reads                                                        |
-| -------- | ---- | ------------------------------------------------------------ |
-| frontend | 4701 | `BACKEND_URL` (runtime — the browser only ever calls `/api`) |
-| backend  | 4700 | `DATABASE_URL`, `AUTH_SECRET`, `ENV=production`, `PORT`      |
+| Service  | Port | Reads                                                                |
+| -------- | ---- | -------------------------------------------------------------------- |
+| frontend | 4701 | `BACKEND_URL` (runtime — the browser only ever calls `/api`)         |
+| backend  | 4700 | `DATABASE_URL`, `REDIS_URL`, `AUTH_SECRET`, `ENV=production`, `PORT` |
 
 The backend container applies pending migrations on start (`packages/backend/
 scripts/start.sh`) before the server binds, so it can never come up against a
@@ -177,10 +177,11 @@ them in the same release.
 ## Notes
 
 - **DB schema + migrations** are managed by **Prisma 7** in `packages/db`. Schema lives in `prisma/schema.prisma`; CLI config (datasource URL, migrations, seed) lives in `prisma.config.ts`. The generated client (`prisma generate`) outputs to `prisma/generated/` (gitignored). The Hono backend imports the client via deep path `@mokara/db/prisma/generated/client` — no separate codegen. Migrations use `prisma migrate` (`migrate dev` locally, `migrate deploy` to apply). Seed runs via `tsx prisma/seed.ts`.
+- **Migration workflow contract** — the database only ever changes by applying committed migration SQL, forward-only. `pnpm dev` (and the backend container's start) run `db:bootstrap`: `migrate deploy` (pending applied, already-applied skipped, fail-closed on error — nothing deleted) + `prisma generate`. Editing `schema.prisma` alone is inert. New migrations are dated SQL folders under `prisma/migrations/` (hand-write them; `migrate dev` is interactive and hangs without a TTY). Check state anytime with `pnpm db:status`.
 - **Password hashing** is `bcryptjs` (cost 10). The seed file uses Go-compatible `$2a$10$…` hashes; both `bcryptjs` and `golang.org/x/crypto/bcrypt` accept the same format, so seeded users log in unchanged.
-- **Auth cookie** is `mokara_token` (HS256, httpOnly, SameSite=Lax). The frontend `proxy.ts` middleware checks the same cookie name when gating protected routes. Changing this name requires updating both sides.
+- **Auth cookie** is `mokara_token` in dev, `__Host-mokara_token` in production (HS256, httpOnly, SameSite=Lax). The name is environment-gated on both sides: backend `lib/jwt.ts` (`COOKIE_NAME`, on `ENV`) and frontend `lib/cookies.ts` (`AUTH_COOKIE`, on `NODE_ENV`) — keep the two conditions in step, and never pair a prod-built frontend with a backend running `ENV=development`.
 - **The 3-member team cap** is enforced by a Postgres trigger (`enforce_max_team_members`) that raises `team_full`. The backend catches this and returns a friendly 409 — same as it does for the partial unique index on pending invitations (`team_invitations_team_pending_unique`).
-- **Redis** is provisioned in Docker but unused in v1 (reserved for sessions/cache/rate-limiting).
+- **Redis** backs the session-revocation denylist: signing out (or any revocation) marks the token's `jti` invalid server-side until its natural expiry, so a copied cookie stops working the moment the user logs out. Provisioned by docker-compose in dev; production deployments must provide `REDIS_URL` (the backend fails fast at startup and fails closed per-request without it).
 - Package Dockerfiles use the repository root as their build context:
   - `docker build -f packages/backend/Dockerfile -t mokara-backend .`
   - `docker build -f packages/frontend/Dockerfile -t mokara-frontend .`

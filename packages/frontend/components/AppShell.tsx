@@ -1,18 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { redirect, usePathname, useRouter } from "next/navigation";
+import { redirect, usePathname } from "next/navigation";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useSession } from "@/lib/session";
+import { signOutServer, useSession } from "@/lib/session";
 import { useContainers } from "@/lib/containers";
 import { ContainerSwitcher } from "./ContainerSwitcher";
+import { NotificationDrawer } from "./NotificationDrawer";
 import { DUR, snap } from "@/lib/motion";
 import { cn } from "@/lib/cn";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const session = useSession();
-  const router = useRouter();
   const pathname = usePathname();
   const { selected } = useContainers();
 
@@ -114,7 +114,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="flex flex-col gap-[0.6rem] border-t border-[var(--color-border-soft)] pt-[0.85rem]">
-          <div className="flex items-center gap-[0.65rem] rounded-[11px] px-[0.5rem] py-[0.45rem]">
+          <Link
+            href="/settings"
+            aria-label="Account settings"
+            className="flex items-center gap-[0.65rem] rounded-[11px] px-[0.5rem] py-[0.45rem] hover:bg-[var(--color-surface-2)]"
+          >
             <div className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--color-accent)] text-[0.85rem] font-semibold text-white">
               {handle.slice(0, 1).toUpperCase()}
             </div>
@@ -122,12 +126,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="truncate text-[0.9rem] font-semibold">{handle}</span>
               <span className="text-[0.76rem] text-[var(--color-ink-faint)]">@{user.username}</span>
             </div>
-          </div>
+          </Link>
           <button
             type="button"
             onClick={async () => {
-              await session.logout();
-              router.push("/login");
+              // Deliberate sign-out: endpoint, then a hard exit to the front
+              // door. No client transition — flipping the shared atom here
+              // would race AppShell's expiry redirect during it (the
+              // "Rendered more hooks" rollback, 2026-09-04).
+              await signOutServer();
+              window.location.assign("/");
             }}
             className="btn-base btn-ghost w-full"
           >
@@ -156,6 +164,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="w-full min-w-0 px-[clamp(1.5rem,4vw,3rem)] pt-4 pb-16 max-[800px]:pt-[4rem]">
         {children}
       </main>
+
+      {/* PRD-05: mounted once here so the drawer exists on every page; the
+          bell in each page's breadcrumb bar just opens it. */}
+      <NotificationDrawer />
     </div>
   );
 }

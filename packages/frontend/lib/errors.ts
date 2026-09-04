@@ -42,6 +42,11 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
     message: "Your session has expired — sign in again.",
   },
   invalid_credentials: { kind: "auth", action: "inline", message: "Wrong username or password." },
+  incorrect_password: {
+    kind: "auth",
+    action: "inline",
+    message: "That's not your current password.",
+  },
 
   // --- access ---
   forbidden: { kind: "permission", action: "inline", message: "You don't have access to this." },
@@ -70,6 +75,12 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
     kind: "missing",
     action: "inline",
     message: "That KPI isn't in this container.",
+  },
+  // PRD-10
+  assignee_not_member: {
+    kind: "input",
+    action: "inline",
+    message: "Assignee must be a member of this container.",
   },
 
   // --- we asked for something wrong ---
@@ -128,6 +139,11 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
     kind: "server",
     action: "retry",
     message: "Something broke on our side. Try again.",
+  },
+  service_unavailable: {
+    kind: "server",
+    action: "retry",
+    message: "The service is briefly unavailable — try again in a moment.",
   },
   lookup_failed: {
     kind: "server",

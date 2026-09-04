@@ -23,6 +23,27 @@ export const loginSchema = z.object({
   password: z.string().min(1, "password is required"),
 });
 
+// PRD-08: the confirm-new-password match is checked client-side; the server
+// only needs the two values it actually verifies.
+export const changePasswordSchema = z
+  .object({
+    current_password: z.string().min(1, "current password is required"),
+    new_password: passwordSchema,
+  })
+  .strict();
+
+// PRD-08: display name is always present — null clears it, same rule as
+// sign-up's optional field.
+export const updateMeSchema = z
+  .object({
+    display_name: z
+      .string()
+      .trim()
+      .max(50, "display name must be 50 characters or fewer")
+      .nullable(),
+  })
+  .strict();
+
 export const createTeamSchema = z.object({
   name: z
     .string()
@@ -79,6 +100,8 @@ export const createTaskSchema = z.object({
   priority: taskPrioritySchema.optional(),
   due_date: isoDate,
   project_id: z.uuid().nullish(),
+  // PRD-10: must be a member of the task's container — route-enforced.
+  assignee_id: z.uuid().nullish(),
   kpis: taskKpiBindings.optional(),
 });
 
@@ -90,6 +113,7 @@ export const updateTaskSchema = z
     priority: taskPrioritySchema.optional(),
     due_date: isoDate,
     project_id: z.uuid().nullish(),
+    assignee_id: z.uuid().nullish(),
   })
   .strict();
 

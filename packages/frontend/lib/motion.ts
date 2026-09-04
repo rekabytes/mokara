@@ -50,6 +50,14 @@ export const sheetVariants: Variants = {
   exit: { opacity: 0, y: 10, scale: 0.985, transition: snap(DUR.fast) },
 };
 
+// ---- Notification drawer (right side, PRD-05) ------------------------------
+// Slides in from the right edge — the sibling of the tasks drawer's surface.
+export const notifDrawerVariants: Variants = {
+  hidden: { opacity: 0, x: 32 },
+  visible: { opacity: 1, x: 0, transition: snap(DUR.panel) },
+  exit: { opacity: 0, x: 32, transition: snap(DUR.fast) },
+};
+
 // ---- Inline lists (comments, layers, archived sections) ---------------------
 // Enter from above (the row appeared where the last one ended), leave sideways
 // so a deletion reads as "removed" rather than "scrolled away".

@@ -3,7 +3,9 @@ import { Hono } from "hono";
 import { corsMiddleware } from "./middleware/cors.ts";
 import { requestLogger } from "./middleware/request-log.ts";
 import { authRequired, type Vars } from "./middleware/auth.ts";
-import { authRoutes, meHandler } from "./routes/auth.ts";
+import { authRoutes, meHandler, updateMe } from "./routes/auth.ts";
+import { notificationRoutes } from "./routes/notifications.ts";
+import { mountEventsRoute } from "./routes/events.ts";
 import { teamRoutes } from "./routes/teams.ts";
 import { invitationRoutes } from "./routes/invitations.ts";
 import { taskRoutes } from "./routes/tasks.ts";
@@ -11,8 +13,11 @@ import { projectRoutes } from "./routes/projects.ts";
 import { kpiRoutes } from "./routes/kpis.ts";
 import { commentRoutes } from "./routes/comments.ts";
 import { analyticsRoutes } from "./routes/analytics.ts";
+import { validate } from "./lib/validate.ts";
+import { updateMeSchema } from "./lib/validation.ts";
 import { env } from "./env.ts";
 import { connectDB, disconnectDB } from "./db.ts";
+import { connectRedis, disconnectRedis } from "./redis.ts";
 import { log } from "./lib/logger.ts";
 
 // Dev-time restart hardening: tsx watch spawns the next child before the old
@@ -34,7 +39,14 @@ async function main() {
     process.exit(1);
   }
 
-  // 2) App
+  // 2) Redis — the session-revocation denylist; same fail-fast posture.
+  try {
+    await connectRedis();
+  } catch {
+    process.exit(1);
+  }
+
+  // 3) App
   const app = new Hono<{ Variables: Vars }>();
 
   app.onError((err, c) => {
@@ -53,6 +65,11 @@ async function main() {
   const authed = new Hono<{ Variables: Vars }>();
   authed.use("*", authRequired);
   authed.get("/me", meHandler);
+  authed.patch("/me", validate("json", updateMeSchema), async (c) =>
+    c.json({ user: await updateMe(c.get("userId"), c.req.valid("json").display_name) })
+  );
+  authed.route("/notifications", notificationRoutes);
+  mountEventsRoute(authed);
   authed.route("/teams", teamRoutes);
   authed.route("/invitations", invitationRoutes);
   authed.route("/", taskRoutes);
@@ -96,6 +113,7 @@ async function main() {
     // Narrowed: the Http2 variant of ServerType lacks closeAllConnections.
     if (s && "closeIdleConnections" in s) s.closeIdleConnections();
     if (s && "closeAllConnections" in s) s.closeAllConnections();
+    await disconnectRedis();
     await disconnectDB();
     log.ok("Stopped");
     process.exit(0);

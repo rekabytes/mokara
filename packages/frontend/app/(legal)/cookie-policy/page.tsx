@@ -34,7 +34,8 @@ const SECTIONS: LegalSection[] = [
           items={[
             <>
               <Strong>We set one cookie.</Strong> It is called{" "}
-              <Code key="mokara_token">mokara_token</Code>, it keeps you signed in, and it lasts
+              <Code key="mokara_token">mokara_token</Code> — prefixed{" "}
+              <Code key="host">__Host-</Code> in production — it keeps you signed in, and it lasts
               seven days.
             </>,
             <>
@@ -116,6 +117,13 @@ const SECTIONS: LegalSection[] = [
               "Scoped to this site only — it is never sent to any other domain.",
             ],
             [
+              <span key="prefix">
+                <Code>__Host-</Code> name prefix
+              </span>,
+              "production only",
+              "Browsers refuse to store the cookie at all unless it is marked Secure, scoped to Path=/, and shared with no parent domain — so the guarantees in the rows above are enforced by the browser, not promised by us.",
+            ],
+            [
               "Signature",
               "HS256, server secret",
               "The token is cryptographically signed with a secret held by the server, so a client cannot forge or extend one.",
@@ -126,7 +134,7 @@ const SECTIONS: LegalSection[] = [
         <L
           items={[
             "Created when you sign up or log in successfully.",
-            "Deleted immediately when you sign out.",
+            "Invalidated immediately when you sign out — the cookie is deleted and the token itself is revoked server-side, so a copy captured earlier stops working too.",
             "Expires by itself seven days after it was issued; signing in again issues a fresh one.",
             "Removable by you at any time through your browser’s site-data controls — see section 7.",
           ]}
@@ -289,11 +297,12 @@ const SECTIONS: LegalSection[] = [
     body: (
       <P>
         Seven days, from the moment the token is issued — not seven days from your last visit, so an
-        idle session does end and you will be asked to sign in again. Logging out ends it at once
-        and deletes the cookie server-side and in the browser. We chose a week rather than a
-        single-tab-session cookie because a task board is something you return to during the day
-        over several days; if you would prefer shorter, that is a browser-level control (clear on
-        exit, or private mode) rather than a setting we need to build.
+        idle session does end and you will be asked to sign in again. Logging out ends it at once:
+        your browser deletes the cookie and the server simultaneously invalidates the token itself,
+        so even a previously captured copy stops working the moment you sign out. We chose a week
+        rather than a single-tab-session cookie because a task board is something you return to
+        during the day over several days; if you would prefer shorter, that is a browser-level
+        control (clear on exit, or private mode) rather than a setting we need to build.
       </P>
     ),
   },

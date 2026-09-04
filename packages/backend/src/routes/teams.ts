@@ -6,6 +6,7 @@ import { validate } from "../lib/validate.ts";
 import { slugify, ensureUniqueSlug } from "../lib/slug.ts";
 import { getTeamRole } from "../lib/team-membership.ts";
 import { toTeam, toTeamMember, toInvitation } from "../lib/types.ts";
+import { notify } from "../lib/notifications.ts";
 import type { Vars } from "../middleware/auth.ts";
 
 const MAX_TEAM_MEMBERS = 3;
@@ -169,6 +170,14 @@ teamRoutes.post("/:id/invitations", validate("json", inviteSchema), async (c) =>
   try {
     const inv = await prisma.teamInvitation.create({
       data: { teamId, inviterId: userId, inviteeUsername },
+    });
+    // PRD-05: tell the invitee (best-effort — see notify).
+    const team = await prisma.team.findUnique({ where: { id: teamId }, select: { name: true } });
+    await notify(invitee.id, "invitation", {
+      actor_username: username,
+      team_name: team?.name,
+      team_id: teamId,
+      invitation_id: inv.id,
     });
     return c.json({ invitation: toInvitation(inv) }, 201);
   } catch (e) {

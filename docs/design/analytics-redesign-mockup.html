@@ -1,0 +1,843 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mokara — Analytics redesign mockup (PRD-09 proposal)</title>
+    <style>
+      /* Real mokara tokens (from packages/frontend/app/globals.css) */
+      :root {
+        --color-surface: rgba(255, 255, 255, 0.72);
+        --color-surface-2: rgba(255, 255, 255, 0.55);
+        --color-surface-solid: #ffffff;
+        --color-border-soft: rgba(15, 23, 42, 0.07);
+        --color-border-strong: rgba(15, 23, 42, 0.13);
+        --color-ink: #0f172a;
+        --color-ink-muted: #64748b;
+        --color-ink-faint: #94a3b8;
+        --color-accent: #6366f1;
+        --color-accent-soft: rgba(99, 102, 241, 0.12);
+        --color-danger: #ef4444;
+        --color-danger-soft: rgba(239, 68, 68, 0.1);
+        --color-warning: #a16207;
+        --color-warning-soft: rgba(234, 179, 8, 0.16);
+        --color-progress: #4f46e5;
+        --color-created: #0ea5e9;
+        --color-created-soft: rgba(14, 165, 233, 0.14);
+        --radius-card: 18px;
+        --radius-pill: 999px;
+        --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -18px rgba(15, 23, 42, 0.25);
+        --shadow-lift: 0 12px 32px -12px rgba(15, 23, 42, 0.18);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: linear-gradient(160deg, #f4f5fb, #eef1f8 60%, #eceff7);
+        color: var(--color-ink);
+        -webkit-font-smoothing: antialiased;
+      }
+      .shell {
+        display: flex;
+        min-height: 100vh;
+      }
+
+      /* ---------- Proposal banner ---------- */
+      .proposal {
+        margin: 14px 18px 0;
+        padding: 10px 14px;
+        border: 1px dashed var(--color-border-strong);
+        border-radius: 12px;
+        background: rgba(99, 102, 241, 0.06);
+        font-size: 12.5px;
+        color: var(--color-ink-muted);
+      }
+      .proposal b {
+        color: var(--color-ink);
+      }
+
+      /* ---------- Sidebar (mirrors AppShell) ---------- */
+      .sidebar {
+        width: 220px;
+        flex-shrink: 0;
+        padding: 20px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 6px 10px;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+      }
+      .brand .mark {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--color-accent);
+        box-shadow: 0 0 0 4px var(--color-accent-soft);
+      }
+      .side-sep {
+        margin: 10px 6px;
+        border: none;
+        border-top: 1px solid var(--color-border-soft);
+      }
+      .side-label {
+        padding: 2px 10px;
+        font-size: 10.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.09em;
+        color: var(--color-ink-faint);
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 7px 10px;
+        border-radius: 10px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--color-ink-muted);
+        text-decoration: none;
+      }
+      .nav-item:hover {
+        background: var(--color-surface-2);
+      }
+      .nav-item.active {
+        background: var(--color-surface-solid);
+        color: var(--color-ink);
+        box-shadow: var(--shadow-card);
+      }
+      .nav-item svg {
+        width: 15px;
+        height: 15px;
+        opacity: 0.75;
+      }
+      .side-foot {
+        margin-top: auto;
+        padding: 10px;
+        border-top: 1px solid var(--color-border-soft);
+      }
+      .me-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 4px 6px 10px;
+      }
+      .avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        background: var(--color-accent);
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .me-row .who {
+        min-width: 0;
+      }
+      .me-row .who b {
+        display: block;
+        font-size: 13px;
+      }
+      .me-row .who span {
+        font-size: 11.5px;
+        color: var(--color-ink-faint);
+      }
+      .ghost-btn {
+        width: 100%;
+        padding: 7px 10px;
+        border: 1px solid var(--color-border-soft);
+        border-radius: 10px;
+        background: transparent;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--color-ink-muted);
+        cursor: pointer;
+      }
+
+      /* ---------- Main ---------- */
+      .main {
+        flex: 1;
+        min-width: 0;
+        padding: 14px 18px 28px;
+      }
+      .page-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--color-border-soft);
+        padding-bottom: 4px;
+      }
+      .crumb {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .crumb .dim {
+        color: var(--color-ink-muted);
+        font-weight: 700;
+      }
+      .crumb .sep {
+        color: var(--color-ink-faint);
+      }
+      .crumb .star {
+        margin-left: 4px;
+        color: var(--color-ink-faint);
+        font-size: 12px;
+      }
+      .bell {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        border: none;
+        background: transparent;
+        color: var(--color-ink-muted);
+        font-size: 15px;
+        cursor: pointer;
+      }
+      .bell:hover {
+        background: var(--color-surface-2);
+      }
+
+      /* ---------- Shared range control (new) ---------- */
+      .range-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 14px;
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--color-border-soft);
+        border-radius: 999px;
+        background: var(--color-surface-solid);
+        overflow: hidden;
+      }
+      .seg button {
+        border: none;
+        background: transparent;
+        padding: 6px 14px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--color-ink-muted);
+        cursor: pointer;
+      }
+      .seg button + button {
+        border-left: 1px solid var(--color-border-soft);
+      }
+      .seg button.on {
+        background: var(--color-accent-soft);
+        color: var(--color-accent);
+      }
+      .range-note {
+        font-size: 11.5px;
+        color: var(--color-ink-faint);
+      }
+
+      /* ---------- Cards ---------- */
+      .card {
+        margin-top: 14px;
+        border: 1px solid var(--color-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--color-surface-solid);
+        padding: 18px;
+        box-shadow: var(--shadow-card);
+      }
+      .card-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .card-title {
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .card-sub {
+        font-size: 11.5px;
+        color: var(--color-ink-faint);
+      }
+      .pill {
+        padding: 2px 9px;
+        border-radius: var(--radius-pill);
+        border: 1px solid var(--color-border-soft);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--color-ink-muted);
+        white-space: nowrap;
+      }
+      .count {
+        font-size: 11.5px;
+        color: var(--color-ink-faint);
+      }
+
+      /* ---------- Distribution (linear-style segmented bar) ---------- */
+      .bar {
+        display: flex;
+        height: 12px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(148, 163, 184, 0.18);
+      }
+      .bar i {
+        display: block;
+        height: 100%;
+      }
+      .bar .done {
+        background: #16a34a;
+      }
+      .bar .inp {
+        background: rgba(99, 102, 241, 0.88);
+      }
+      .bar .todo {
+        background: rgba(148, 163, 184, 0.5);
+      }
+      .bar .canc {
+        background: repeating-linear-gradient(
+          -45deg,
+          rgba(148, 163, 184, 0.4),
+          rgba(148, 163, 184, 0.4) 3px,
+          transparent 3px,
+          transparent 7px
+        );
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-top: 10px;
+        font-size: 11.5px;
+        color: var(--color-ink-muted);
+      }
+      .legend i {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        margin-right: 6px;
+        vertical-align: -1px;
+      }
+
+      /* ---------- Heatmap (capped, both-axis scroll) ---------- */
+      .heat-scroller {
+        overflow: auto;
+        max-height: 346px; /* 44px axis + 7 × 38px rows + breathing room */
+        border: 1px solid var(--color-border-soft);
+        border-radius: 10px;
+        position: relative;
+      }
+      .heat-inner {
+        width: max-content;
+        min-width: 100%;
+        position: relative;
+      }
+      .h-months,
+      .h-days {
+        display: flex;
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        background: var(--color-surface-solid);
+      }
+      .h-months {
+        border-bottom: 1px solid var(--color-border-soft);
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--color-ink-faint);
+        height: 20px;
+      }
+      .h-days {
+        border-bottom: 1px solid var(--color-border-soft);
+        font-size: 10px;
+        color: var(--color-ink-faint);
+        height: 24px;
+        align-items: center;
+      }
+      .h-corner {
+        position: sticky;
+        left: 0;
+        z-index: 4;
+        width: 160px;
+        flex: none;
+        background: var(--color-surface-solid);
+        border-right: 1px solid var(--color-border-soft);
+      }
+      .h-title {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        width: 160px;
+        flex: none;
+        background: var(--color-surface-solid);
+        border-right: 1px solid var(--color-border-soft);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 0 10px;
+        height: 38px;
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .h-title .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        flex: none;
+      }
+      .h-row {
+        display: flex;
+        height: 38px;
+        align-items: center;
+        position: relative;
+      }
+      .h-track {
+        position: relative;
+        height: 38px;
+        flex: none;
+      }
+      .h-cell {
+        position: absolute;
+        top: 6px;
+        height: 26px;
+        border-radius: 5px;
+      }
+      .h-col {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+      }
+      .h-weekend {
+        background: rgba(15, 23, 42, 0.02);
+      }
+      .c-waiting {
+        background: rgba(148, 163, 184, 0.13);
+        box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.45);
+      }
+      .c-upcoming {
+        border: 1px dashed rgba(148, 163, 184, 0.55);
+      }
+      .c-active {
+        background: rgba(99, 102, 241, 0.88);
+      }
+      .c-done {
+        background: rgba(21, 128, 61, 0.92);
+      }
+      .c-late {
+        background: rgba(239, 68, 68, 0.9);
+      }
+      .h-due {
+        box-shadow: 0 0 0 2px var(--color-surface-solid), 0 0 0 3.5px var(--color-ink);
+      }
+      .h-moved::after {
+        content: "";
+        position: absolute;
+        top: -2px;
+        left: 2px;
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-top: 6px solid #f59e0b;
+      }
+      .h-donecheck::before {
+        content: "✓";
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 800;
+      }
+      .heat-fade {
+        position: absolute;
+        left: 1px;
+        right: 14px;
+        bottom: 1px;
+        height: 42px;
+        border-radius: 0 0 9px 9px;
+        background: linear-gradient(rgba(255, 255, 255, 0), #fff 85%);
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        pointer-events: none;
+      }
+      .heat-fade span {
+        font-size: 11px;
+        color: var(--color-ink-faint);
+        padding-bottom: 3px;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 999px;
+        padding: 1px 10px 3px;
+        margin-bottom: 5px;
+      }
+
+      /* ---------- KPI progress (capped) ---------- */
+      .kpi-scroller {
+        max-height: 266px; /* 7 × 38px rows */
+        overflow-y: auto;
+        position: relative;
+      }
+      .kpi-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 7px 2px;
+        border-top: 1px solid var(--color-border-soft);
+      }
+      .kpi-row:first-child {
+        border-top: none;
+      }
+      .kpi-name {
+        width: 170px;
+        flex: none;
+        font-size: 12.5px;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .kpi-owner {
+        flex: none;
+        padding: 1px 8px;
+        border-radius: var(--radius-pill);
+        background: var(--color-accent-soft);
+        color: var(--color-accent);
+        font-size: 10.5px;
+        font-weight: 700;
+      }
+      .kpi-track {
+        flex: 1;
+        height: 8px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.18);
+        overflow: hidden;
+      }
+      .kpi-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: var(--color-accent);
+      }
+      .kpi-pct {
+        width: 44px;
+        flex: none;
+        text-align: right;
+        font-family: ui-monospace, "IBM Plex Mono", monospace;
+        font-size: 12px;
+      }
+      .kpi-meta {
+        width: 96px;
+        flex: none;
+        text-align: right;
+        font-size: 11px;
+        color: var(--color-ink-faint);
+      }
+
+      /* ---------- Activity chart ---------- */
+      .series-toggles {
+        display: flex;
+        gap: 8px;
+      }
+      .series-toggles .pill.on {
+        color: var(--color-ink);
+        background: var(--color-accent-soft);
+        border-color: var(--color-accent-soft);
+      }
+      .chart svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <!-- ============ Sidebar ============ -->
+      <aside class="sidebar">
+        <div class="brand"><span class="mark"></span> MOKARA</div>
+        <a class="nav-item" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18"/></svg>
+          Tasks
+        </a>
+        <a class="nav-item active" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20h-20"/></svg>
+          Analytics
+        </a>
+        <hr class="side-sep" />
+        <div class="side-label">Containers</div>
+        <a class="nav-item" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 5-9 5-9-5 9-5z"/></svg>
+          Atlas Studio
+        </a>
+        <div class="side-foot">
+          <div class="me-row">
+            <div class="avatar">M</div>
+            <div class="who"><b>Mira</b><span>@mira</span></div>
+          </div>
+          <button class="ghost-btn">Log out</button>
+        </div>
+      </aside>
+
+      <!-- ============ Main ============ -->
+      <div class="main">
+        <div class="page-head">
+          <div class="crumb">
+            <span class="dim">Mokara</span><span class="sep">›</span><span>Analytics</span>
+            <span class="star">☆</span>
+          </div>
+          <button class="bell">🔔</button>
+        </div>
+
+        <div class="range-row">
+          <div class="seg">
+            <button>7d</button>
+            <button class="on">14d</button>
+            <button>30d</button>
+            <button>92d</button>
+          </div>
+          <span class="range-note">range drives the activity chart · heatmap always spans the year</span>
+        </div>
+
+        <div class="proposal">
+          <b>What this mockup proposes:</b>
+          ① shared range control in the page head (chart window) ·
+          ② card order: distribution → heatmap → KPI progress → activity ·
+          ③ heatmap shows <b>7 tasks</b>, scrolls vertically inside the card (dates + titles stay pinned) ·
+          ④ KPI progress gets the same 7-row cap · ⑤ counts + “more below” hints.
+        </div>
+
+        <!-- ============ Distribution ============ -->
+        <section class="card">
+          <div class="card-head">
+            <span class="card-title">Current distribution</span>
+            <span class="card-sub"><b>62%</b> of 21 tasks completed</span>
+          </div>
+          <div class="bar">
+            <i class="done" style="width: 52%"></i><i class="inp" style="width: 10%"></i><i class="todo" style="width: 28%"></i><i class="canc" style="width: 10%"></i>
+          </div>
+          <div class="legend">
+            <span><i class="done"></i>Completed 11</span>
+            <span><i class="inp"></i>In progress 2</span>
+            <span><i class="todo"></i>Open 6</span>
+            <span><i class="canc"></i>Canceled 2</span>
+          </div>
+        </section>
+
+        <!-- ============ Progress heatmap (capped) ============ -->
+        <section class="card">
+          <div class="card-head">
+            <span class="card-title">Progress</span>
+            <span class="count">16 tasks · scroll for more</span>
+          </div>
+          <div class="heat-scroller" id="heat">
+            <div class="heat-inner" id="heatInner"></div>
+          </div>
+          <div class="legend" style="margin-top: 12px">
+            <span><i class="c-waiting"></i>Not started</span>
+            <span><i style="border: 1px dashed rgba(148, 163, 184, 0.55)"></i>Upcoming</span>
+            <span><i class="c-active"></i>In progress</span>
+            <span><i class="c-done"></i>Completed</span>
+            <span><i class="c-late"></i>Overdue</span>
+            <span><i style="box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--color-ink); background: #fff"></i>Deadline</span>
+            <span><i style="border-top: 6px solid #f59e0b; border-left: 4px solid transparent; border-right: 4px solid transparent; background: none; height: 0; width: 0"></i>Moved deadline</span>
+          </div>
+        </section>
+
+        <!-- ============ KPI progress (capped) ============ -->
+        <section class="card">
+          <div class="card-head">
+            <span class="card-title">KPI progress</span>
+            <span class="count">12 KPIs · scroll for more</span>
+          </div>
+          <div class="kpi-scroller" id="kpiList"></div>
+        </section>
+
+        <!-- ============ Activity chart ============ -->
+        <section class="card">
+          <div class="card-head">
+            <span class="card-title">Activity — last 14 days</span>
+            <div class="series-toggles">
+              <span class="pill on">Created</span>
+              <span class="pill on">In progress</span>
+              <span class="pill on">Completed</span>
+              <span class="pill">Canceled</span>
+            </div>
+          </div>
+          <div class="chart" id="chart"></div>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      // ---------- heatmap ----------
+      const DAY_W = 60,
+        TITLE = 160,
+        TODAY = new Date(2026, 8, 4), // 2026-09-04 (fixed for the mockup)
+        YEAR_START = new Date(2026, 0, 1);
+      const TOTAL = Math.round((new Date(2027, 0, 1) - YEAR_START) / 86400000);
+      const col = (d) => Math.round((d - YEAR_START) / 86400000);
+      const addD = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+
+      // title, status dot colour, created col, deadline col, finished col|null, moved deadline col|null
+      const TASKS = [
+        ["Extract invoice parser", "#ef4444", col(addD(TODAY, -40)), col(addD(TODAY, -6)), null, col(addD(TODAY, -14))],
+        ["Q3 vendor renewal", "#ef4444", col(addD(TODAY, -30)), col(addD(TODAY, -2)), null, null],
+        ["Onboarding checklist", "#6366f1", col(addD(TODAY, -12)), col(addD(TODAY, 9)), null, null],
+        ["Refactor slug registry", "#6366f1", col(addD(TODAY, -9)), col(addD(TODAY, 21)), null, null],
+        ["Draft API changelog", "#6366f1", col(addD(TODAY, -5)), col(addD(TODAY, 15)), null, null],
+        ["Atlas brand refresh", "#94a3b8", col(addD(TODAY, -3)), col(addD(TODAY, 30)), null, null],
+        ["Migrate backups to nightly", "#94a3b8", col(addD(TODAY, -2)), col(addD(TODAY, 40)), null, null],
+        ["Fix double-submit on invite", "#16a34a", col(addD(TODAY, -50)), col(addD(TODAY, -20)), col(addD(TODAY, -22)), null],
+        ["Ship legal docs v2", "#16a34a", col(addD(TODAY, -35)), col(addD(TODAY, -10)), col(addD(TODAY, -12)), null],
+        ["Timeout retries for SSE", "#16a34a", col(addD(TODAY, -60)), col(addD(TODAY, -15)), col(addD(TODAY, -16)), col(addD(TODAY, -30))],
+        ["Quarterly KPI review", "#94a3b8", col(addD(TODAY, -1)), col(addD(TODAY, 50)), null, null],
+        ["Prepare demo dataset", "#94a3b8", col(addD(TODAY, 0)), col(addD(TODAY, 25)), null, null],
+        ["Rate-limit the public API", "#94a3b8", col(addD(TODAY, 2)), col(addD(TODAY, 45)), null, null],
+        ["Fonts subset audit", "#94a3b8", col(addD(TODAY, 4)), col(addD(TODAY, 60)), null, null],
+        ["Coolify runbook", "#94a3b8", col(addD(TODAY, 6)), col(addD(TODAY, 70)), null, null],
+        ["Archive stale workspaces", "#94a3b8", col(addD(TODAY, 8)), col(addD(TODAY, 80)), null, null],
+      ];
+
+      const TRACK_W = TOTAL * DAY_W;
+      let html = "";
+
+      // months
+      html += `<div class="h-months"><div class="h-corner"></div>`;
+      let m = new Date(YEAR_START);
+      while (m < new Date(2027, 0, 1)) {
+        const nxt = new Date(m.getFullYear(), m.getMonth() + 1, 1);
+        const w = Math.round((nxt - m) / 86400000) * DAY_W;
+        html += `<div style="width:${w}px;overflow:hidden">${m.toLocaleString("en", { month: "short" })}</div>`;
+        m = nxt;
+      }
+      html += `</div>`;
+
+      // days axis
+      html += `<div class="h-days"><div class="h-corner"></div>`;
+      for (let i = 0; i < TOTAL; i++) {
+        const d = addD(YEAR_START, i);
+        const dom = d.getDate();
+        const show = dom === 1 || dom % 7 === 3;
+        html += `<div style="width:${DAY_W}px;overflow:hidden">${show ? dom : ""}</div>`;
+      }
+      html += `</div>`;
+
+      // column tints (weekends) — only for the first screenful + today band
+      const tints = (rowOffset) => {
+        let t = "";
+        for (let i = rowOffset; i < Math.min(rowOffset + 14, TOTAL); i++) {
+          const wd = addD(YEAR_START, i).getDay();
+          if (wd === 0 || wd === 6)
+            t += `<div class="h-col h-weekend" style="left:${i * DAY_W}px;width:${DAY_W}px"></div>`;
+        }
+        const tCol = col(TODAY);
+        t += `<div class="h-col" style="left:${tCol * DAY_W}px;width:${DAY_W}px;background:rgba(99,102,241,0.06)"><div style="position:absolute;top:0;bottom:0;left:50%;border-left:1px dashed rgba(15,23,42,0.35)"></div></div>`;
+        return t;
+      };
+
+      const dayIdx = (c) => c; // created-col .. deadline-col runway
+      for (const [title, dotColor, created, deadline, finished, moved] of TASKS) {
+        html += `<div class="h-row"><div class="h-title"><span class="dot" style="background:${dotColor}"></span>${title}</div>`;
+        html += `<div class="h-track" style="width:${TRACK_W}px">`;
+        html += tints(0);
+        const start = Math.max(created, 0);
+        // A finished task's runway ends on its finish day — no dashed future.
+        const end = finished ?? deadline;
+        for (let i = start; i <= end; i++) {
+          const d = addD(YEAR_START, i);
+          let cls = "";
+          if (finished) cls = "c-done" + (i === col(finished) ? " h-donecheck" : "");
+          else if (d < TODAY && i === deadline) cls = "c-late h-due";
+          else if (d < TODAY) cls = "c-late";
+          else if (i === deadline) cls = "c-active h-due";
+          else if (i === col(TODAY)) cls = "c-active";
+          else if (d > TODAY) cls = "c-upcoming";
+          else cls = "c-waiting";
+          if (moved && i === moved) cls += " h-moved";
+          html += `<div class="h-cell ${cls}" style="left:${i * DAY_W + 4}px;width:${DAY_W - 8}px"></div>`;
+        }
+        html += `</div></div>`;
+      }
+
+      document.getElementById("heatInner").innerHTML = html;
+
+      // "N more below" fade
+      const scroller = document.getElementById("heat");
+      const fade = document.createElement("div");
+      fade.className = "heat-fade";
+      fade.innerHTML = `<span>9 more tasks below</span>`;
+      scroller.appendChild(fade);
+      scroller.scrollTop = 0;
+
+      // ---------- KPI progress ----------
+      const KPIS = [
+        ["Delivery rate", "mira", 82, "6 tied"],
+        ["Cycle time", "jonas", 71, "5 tied"],
+        ["Review coverage", "priya", 64, "4 tied"],
+        ["Estimate accuracy", "mira", 58, "3 tied"],
+        ["Reopen rate", "jonas", 41, "2 tied"],
+        ["Backlog age", "priya", 37, "3 tied"],
+        ["SLA hits", "mira", 33, "2 tied"],
+        ["Automation share", "jonas", 25, "2 tied"],
+        ["Handoff latency", "priya", 19, "1 tied"],
+        ["Doc freshness", "mira", 12, "1 tied"],
+        ["Incident load", "jonas", 8, "1 tied"],
+        ["Churn of scope", "priya", 4, "1 tied"],
+      ];
+      document.getElementById("kpiList").innerHTML =
+        KPIS.map(
+          ([name, owner, pct, meta]) =>
+            `<div class="kpi-row"><span class="kpi-name">${name}</span><span class="kpi-owner">${owner}</span><span class="kpi-track"><span class="kpi-fill" style="width:${pct}%"></span></span><span class="kpi-pct">${pct}%</span><span class="kpi-meta">${meta} · Σ100</span></div>`
+        ).join("") +
+        `<div class="heat-fade" style="position:sticky;bottom:0"><span>5 more KPIs below</span></div>`;
+
+      // ---------- activity chart (static cumulative lines) ----------
+      const W = 900,
+        H = 220,
+        PAD = { l: 34, r: 12, t: 12, b: 26 };
+      const days = 14;
+      const x = (i) => PAD.l + (i / (days - 1)) * (W - PAD.l - PAD.r);
+      const y = (v, max) => PAD.t + (1 - v / max) * (H - PAD.t - PAD.b);
+      const series = [
+        { key: "Completed", color: "#16a34a", vals: [3, 4, 4, 5, 6, 7, 7, 8, 9, 10, 11, 11, 12, 13] },
+        { key: "In progress", color: "#6366f1", vals: [0, 1, 1, 2, 2, 2, 3, 3, 4, 4, 4, 5, 5, 6] },
+        { key: "Created", color: "#0ea5e9", vals: [8, 10, 12, 14, 16, 19, 20, 22, 25, 27, 28, 30, 31, 33] },
+      ];
+      const max = 35;
+      let svg = `<svg viewBox="0 0 ${W} ${H}">`;
+      for (let g = 0; g <= 4; g++) {
+        const gy = y((g * max) / 4, max);
+        svg += `<line x1="${PAD.l}" y1="${gy}" x2="${W - PAD.r}" y2="${gy}" stroke="rgba(15,23,42,0.06)"/>`;
+        svg += `<text x="${PAD.l - 6}" y="${gy + 3}" text-anchor="end" font-size="9" fill="#94a3b8">${g * 8}</text>`;
+      }
+      for (let i = 0; i < days; i += 2) {
+        const d = addD(TODAY, -(days - 1 - i));
+        svg += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle" font-size="9" fill="#94a3b8">${d.getDate()}/${d.getMonth() + 1}</text>`;
+      }
+      for (const s of series) {
+        const pts = s.vals.map((v, i) => `${x(i)},${y(v, max)}`).join(" ");
+        svg += `<polyline points="${pts}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+      }
+      const todayX = x(days - 1);
+      svg += `<line x1="${todayX}" y1="${PAD.t}" x2="${todayX}" y2="${H - PAD.b}" stroke="rgba(99,102,241,0.4)" stroke-dasharray="3 3"/>`;
+      svg += `</svg>`;
+      document.getElementById("chart").innerHTML = svg;
+    </script>
+  </body>
+</html>

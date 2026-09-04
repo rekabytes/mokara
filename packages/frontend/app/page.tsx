@@ -99,6 +99,7 @@ export default async function LandingPage() {
         image={shotDrawer}
         alt="A task drawer with status, priority and due-date chips, a project chip, weighted KPIs and a threaded comment"
         flip
+        eager
       />
       <Row
         index="02"
@@ -190,6 +191,7 @@ function Row({
   image,
   alt,
   flip = false,
+  eager = false,
 }: {
   index: string;
   kicker: string;
@@ -199,6 +201,11 @@ function Row({
   image: StaticImageData;
   alt: string;
   flip?: boolean;
+  // The first row's screenshot is Chrome's LCP element on this page — the hero
+  // image starts at opacity 0 (its entrance animation), so invisible elements
+  // are skipped and this one wins. Eager-loading it still satisfies LCP; the
+  // lower rows stay lazy.
+  eager?: boolean;
 }) {
   return (
     <section className="border-t border-[var(--color-border-soft)]">
@@ -229,7 +236,13 @@ function Row({
         <div className={flip ? "md:order-1 md:col-span-7" : "md:col-span-7"}>
           <Reveal>
             <TiltPanel className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] shadow-[var(--shadow-card)] transition-[box-shadow] duration-200 ease-[var(--ease-snap)] hover:shadow-[var(--shadow-lift)]">
-              <Image src={image} alt={alt} className="h-auto w-full" unoptimized />
+              <Image
+                src={image}
+                alt={alt}
+                className="h-auto w-full"
+                unoptimized
+                loading={eager ? "eager" : undefined}
+              />
             </TiltPanel>
           </Reveal>
         </div>

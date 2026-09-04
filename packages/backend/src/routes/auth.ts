@@ -2,12 +2,22 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { isUniqueViolation } from "../lib/db-error.ts";
 import { prisma } from "../db.ts";
-import { signUpSchema, loginSchema, changePasswordSchema } from "../lib/validation.ts";
+import {
+  signUpSchema,
+  loginSchema,
+  changePasswordSchema,
+  updateMeSchema,
+} from "../lib/validation.ts";
 import { validate } from "../lib/validate.ts";
 import { hashPassword, verifyPassword } from "../lib/password.ts";
 import { issueToken, parseToken } from "../lib/jwt.ts";
 import { setAuthCookie, clearAuthCookie, readAuthCookie } from "../lib/cookies.ts";
-import { revokeToken, revokeAllSessions } from "../lib/sessions.ts";
+import {
+  revokeToken,
+  revokeAllSessions,
+  listSessions,
+  revokeSessionById,
+} from "../lib/sessions.ts";
 import { authRequired } from "../middleware/auth.ts";
 import { getRedis } from "../redis.ts";
 import { log } from "../lib/logger.ts";
@@ -131,6 +141,45 @@ authRoutes.post("/revoke-all", authRequired, async (c) => {
   clearAuthCookie(c);
   return c.body(null, 204);
 });
+
+// PRD-08: the Settings device list. `current` lets the UI tag the calling
+// device; revoking that row behaves like a logout on the caller.
+authRoutes.get("/sessions", authRequired, async (c) => {
+  const userId = c.get("userId");
+  const own = c.get("jti");
+  const rows = await listSessions(getRedis(), userId);
+  return c.json({
+    sessions: rows.map(({ id, record }) => ({
+      id,
+      device: record.ua,
+      created_at: new Date(record.iat * 1000).toISOString(),
+      last_seen_at: new Date(record.seen * 1000).toISOString(),
+      current: id === own,
+    })),
+  });
+});
+
+authRoutes.delete("/sessions/:id", authRequired, async (c) => {
+  const target = c.req.param("id");
+  if (target === undefined) {
+    return c.json({ error: "not_found", message: "session not found" }, 404);
+  }
+  await revokeSessionById(getRedis(), c.get("userId"), target);
+  return c.body(null, 204);
+});
+
+// PRD-08: profile updates ride the authed surface next to GET /me. The route
+// (and its validate middleware) live in index.ts beside the GET mount — a
+// standalone Context parameter cannot carry the validated-json type an inline
+// handler infers — so this data-level helper is what the route calls.
+export async function updateMe(userId: string, displayName: string | null) {
+  const u = await prisma.user.update({
+    where: { id: userId },
+    data: { displayName },
+    select: { id: true, username: true, displayName: true, createdAt: true },
+  });
+  return toUser(u);
+}
 
 // `me` lives on the authed surface; export the handler so index.ts can mount
 // it there without re-fetching through the auth sub-app.

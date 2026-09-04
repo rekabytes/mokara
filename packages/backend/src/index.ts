@@ -3,7 +3,9 @@ import { Hono } from "hono";
 import { corsMiddleware } from "./middleware/cors.ts";
 import { requestLogger } from "./middleware/request-log.ts";
 import { authRequired, type Vars } from "./middleware/auth.ts";
-import { authRoutes, meHandler } from "./routes/auth.ts";
+import { authRoutes, meHandler, updateMe } from "./routes/auth.ts";
+import { validate } from "./lib/validate.ts";
+import { updateMeSchema } from "./lib/validation.ts";
 import { teamRoutes } from "./routes/teams.ts";
 import { invitationRoutes } from "./routes/invitations.ts";
 import { taskRoutes } from "./routes/tasks.ts";
@@ -61,6 +63,9 @@ async function main() {
   const authed = new Hono<{ Variables: Vars }>();
   authed.use("*", authRequired);
   authed.get("/me", meHandler);
+  authed.patch("/me", validate("json", updateMeSchema), async (c) =>
+    c.json({ user: await updateMe(c.get("userId"), c.req.valid("json").display_name) })
+  );
   authed.route("/teams", teamRoutes);
   authed.route("/invitations", invitationRoutes);
   authed.route("/", taskRoutes);

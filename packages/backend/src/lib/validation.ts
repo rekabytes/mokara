@@ -32,6 +32,18 @@ export const changePasswordSchema = z
   })
   .strict();
 
+// PRD-08: display name is always present — null clears it, same rule as
+// sign-up's optional field.
+export const updateMeSchema = z
+  .object({
+    display_name: z
+      .string()
+      .trim()
+      .max(50, "display name must be 50 characters or fewer")
+      .nullable(),
+  })
+  .strict();
+
 export const createTeamSchema = z.object({
   name: z
     .string()

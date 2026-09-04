@@ -232,8 +232,16 @@ const SECTIONS: LegalSection[] = [
         <P>
           See <Internal href="#logs">Server logs</Internal>. In short: request metadata (method,
           path, status code, duration, the authenticated username, and the error code for failures).
-          No IP address, no user-agent string, no device identifier and no geolocation is captured
-          by {OPERATOR.productName} itself.
+          No IP address, no raw user-agent string, no device identifier and no geolocation is
+          captured by {OPERATOR.productName} itself.
+        </P>
+        <P>
+          The only device information kept is for the signed-in devices list in Settings: one
+          server-side record per active session holding a <Strong>coarse device label</Strong>{" "}
+          derived from your browser’s user-agent (for example “Firefox on Windows” — the browser
+          family and operating system, never the raw header, and no unique device identifier), plus
+          the times the session was issued and last seen. It is kept until the session expires or
+          you revoke it — revoking it is what signing a device out means.
         </P>
         <Sub n="3.5">Information from other sources</Sub>
         <P>

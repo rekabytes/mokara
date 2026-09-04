@@ -90,6 +90,16 @@ export type User = {
   created_at: string;
 };
 
+// One row of the Settings device list (PRD-08). `current` marks the calling
+// device; revoking it is a logout.
+export type SessionInfo = {
+  id: string;
+  device: string;
+  created_at: string;
+  last_seen_at: string;
+  current: boolean;
+};
+
 export type Team = {
   id: string;
   name: string;
@@ -302,6 +312,12 @@ export const api = {
   changePassword: (data: { current_password: string; new_password: string }) =>
     req<void>("/auth/password", { method: "POST", body: JSON.stringify(data) }),
   revokeAllSessions: () => req<void>("/auth/revoke-all", { method: "POST" }),
+  // Settings device list: every live session, tagged with `current` for the
+  // calling device. Revoking the current row acts like a logout.
+  listSessions: () => req<{ sessions: SessionInfo[] }>("/auth/sessions"),
+  revokeSession: (id: string) => req<void>(`/auth/sessions/${id}`, { method: "DELETE" }),
+  updateMe: (data: { display_name: string | null }) =>
+    req<{ user: User }>("/me", { method: "PATCH", body: JSON.stringify(data) }),
   me: () => req<{ user: User }>("/me"),
 
   // ---- Teams ----

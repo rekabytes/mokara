@@ -8,6 +8,7 @@ import { Reveal } from "@/components/Reveal";
 import { TiltPanel } from "@/components/TiltPanel";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
+import { AUTH_COOKIE } from "@/lib/cookies";
 import shotDrawer from "../public/landing/shot-drawer.webp";
 import shotTeam from "../public/landing/shot-team.webp";
 import shotAnalytics from "../public/landing/shot-analytics.webp";
@@ -56,7 +57,7 @@ const LEDGER: [string, string][] = [
 ];
 
 export default async function LandingPage() {
-  const hasSession = (await cookies()).has("mokara_token");
+  const hasSession = (await cookies()).has(AUTH_COOKIE);
   const authHref = hasSession ? "/tasks" : "/login";
   const authLabel = hasSession ? "Open app" : "Log in";
 

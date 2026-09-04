@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { OPERATOR } from "@/lib/legal";
+import { AUTH_COOKIE } from "@/lib/cookies";
 
 // Public document shell: the same header and footer as the landing page, a
 // reading column, and one title template so every document is "X · Mokara".
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
 };
 
 export default async function LegalLayout({ children }: { children: React.ReactNode }) {
-  const hasSession = (await cookies()).has("mokara_token");
+  const hasSession = (await cookies()).has(AUTH_COOKIE);
 
   return (
     <div className="flex min-h-dvh flex-col font-body">

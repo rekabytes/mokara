@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { CONTACT, LEGAL_DOCS, LEGAL_LINKS, OPERATOR, siteHost } from "@/lib/legal";
+import { AUTH_COOKIE } from "@/lib/cookies";
 
 const PRODUCT_LINKS = [
   { href: "/login", label: "Log in" },
@@ -13,7 +14,7 @@ const PRODUCT_LINKS = [
  * from any public page. Reads the session cookie only to relabel the app link.
  */
 export async function SiteFooter() {
-  const hasSession = (await cookies()).has("mokara_token");
+  const hasSession = (await cookies()).has(AUTH_COOKIE);
 
   return (
     <footer className="border-t border-[var(--color-border-soft)]">

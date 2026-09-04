@@ -329,11 +329,11 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <P>
-          {OPERATOR.productName} sets exactly one cookie, <Code>mokara_token</Code>, which holds a
-          signed session token so the Service knows you are already logged in. It is{" "}
-          <Code>httpOnly</Code> (invisible to JavaScript on the page), <Code>SameSite=Lax</Code>,
-          scoped to this site, marked <Code>Secure</Code> in production, and expires after seven
-          days. Logging out deletes it immediately.
+          {OPERATOR.productName} sets exactly one cookie, <Code>mokara_token</Code> (prefixed{" "}
+          <Code>__Host-</Code> in production), which holds a signed session token so the Service
+          knows you are already logged in. It is <Code>httpOnly</Code> (invisible to JavaScript on
+          the page), <Code>SameSite=Lax</Code>, scoped to this site, marked <Code>Secure</Code> in
+          production, and expires after seven days. Logging out deletes it immediately.
         </P>
         <P>
           Because that cookie is strictly necessary to provide the feature you asked for, it is

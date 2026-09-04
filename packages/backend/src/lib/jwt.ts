@@ -1,13 +1,19 @@
 import { SignJWT, jwtVerify } from "jose";
 import { env } from "../env.ts";
 
-export const COOKIE_NAME = "mokara_token";
 export const TOKEN_LIFETIME_S = 7 * 24 * 60 * 60; // 7 days
 
 // Dev fallback only — auth fails closed when no secret is set in prod.
 const secret = new TextEncoder().encode(
   env.AUTH_SECRET || "dev-only-insecure-secret-change-me-in-prod-32b!"
 );
+
+// Production uses the __Host- prefix: browsers then reject the cookie outright
+// unless it carries Secure and Path=/ and no Domain attribute, so the
+// guarantees cookies.ts sets become browser-enforced rather than conventional.
+// Dev keeps the plain name because the Secure flag cannot store over plain
+// http. The frontend mirrors this exact condition in lib/cookies.ts.
+export const COOKIE_NAME = env.ENV === "production" ? "__Host-mokara_token" : "mokara_token";
 
 export interface Claims {
   sub: string; // userId

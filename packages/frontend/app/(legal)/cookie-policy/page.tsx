@@ -34,7 +34,8 @@ const SECTIONS: LegalSection[] = [
           items={[
             <>
               <Strong>We set one cookie.</Strong> It is called{" "}
-              <Code key="mokara_token">mokara_token</Code>, it keeps you signed in, and it lasts
+              <Code key="mokara_token">mokara_token</Code> — prefixed{" "}
+              <Code key="host">__Host-</Code> in production — it keeps you signed in, and it lasts
               seven days.
             </>,
             <>
@@ -114,6 +115,13 @@ const SECTIONS: LegalSection[] = [
               <Code key="Path">Path</Code>,
               "/",
               "Scoped to this site only — it is never sent to any other domain.",
+            ],
+            [
+              <span key="prefix">
+                <Code>__Host-</Code> name prefix
+              </span>,
+              "production only",
+              "Browsers refuse to store the cookie at all unless it is marked Secure, scoped to Path=/, and shared with no parent domain — so the guarantees in the rows above are enforced by the browser, not promised by us.",
             ],
             [
               "Signature",

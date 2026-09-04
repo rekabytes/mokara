@@ -2,10 +2,10 @@
 #
 # Triggered by a version tag only:
 #
-#   git tag v0.1.0 && git push origin v0.1.0
+#   git tag v0.1.1 && git push origin v0.1.1
 #
-# Coolify then pulls `ghcr.io/<owner>/mokara-frontend:0.1.0` and
-# `mokara-backend:0.1.0`; nothing is built on the server. Structure follows
+# Coolify then pulls `ghcr.io/<owner>/mokara-frontend:0.1.1` and
+# `mokara-backend:0.1.1`; nothing is built on the server. Structure follows
 # jejak-athlete's release.yml (matrix over services, QEMU + Buildx, GHCR login
 # with the built-in GITHUB_TOKEN, metadata-action tag set, GHA layer caching,
 # provenance disabled). The addition here is the `gate` job — see its comment.

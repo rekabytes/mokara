@@ -19,10 +19,14 @@ pattern rather than re-deriving one. Where this PRD deliberately differs from it
 
 ## 1. Goal
 
-`git tag v0.1.0 && git push origin v0.1.0` produces:
+`git tag v0.1.1 && git push origin v0.1.1` produces:
 
-- `ghcr.io/<owner>/mokara-frontend:0.1.0` (+ `:0.1`, `:latest`, `:main-<sha>`)
-- `ghcr.io/<owner>/mokara-backend:0.1.0` (+ same)
+- `ghcr.io/<owner>/mokara-frontend:0.1.1` (+ `:0.1`, `:latest`)
+- `ghcr.io/<owner>/mokara-backend:0.1.1` (+ same)
+
+The tag has to match the `version` in the root `package.json` — the gate job
+fails otherwise (verified: a `v0.1.1` tag pushed while the manifests still said
+`0.1.0` was rejected before any image was built).
 
 Coolify runs both as **Docker Image** services. Upgrade = new tag; rollback =
 redeploy the previous tag.
@@ -257,7 +261,16 @@ disagrees with the tag.
 4. `BACKEND_URL` on the frontend = the backend's internal URL
    (`http://<backend-service>:4700`). If it is unset in prod the proxy answers 503
    rather than silently misrouting.
-5. Deploy = Coolify pulls the new tag. Rollback = reselect the previous tag.
+5. `NEXT_PUBLIC_SITE_URL` on the frontend = the public origin of this deployment,
+   no trailing slash. It is read **server-side only** — `metadataBase` for
+   `og:url`/`og:image`, and the "Service" line in the legal documents — so unlike
+   the old `NEXT_PUBLIC_API_BASE_URL` it is not inlined into the browser bundle and
+   works fine as a runtime variable. Left unset, `metadataBase` is omitted and the
+   legal pages show a "not configured" chip instead of guessing a URL. The operator
+   identity those pages name (`LEG_OPERATOR_*`, `LEG_CONTACT_EMAIL`,
+   `LEG_HOSTING_REGION`, …) is server-only env too, never source — see
+   `packages/frontend/.env.example`.
+6. Deploy = Coolify pulls the new tag. Rollback = reselect the previous tag.
    **The DB does not roll back with the image**, so rollback is only safe for
    code-only releases — which is why every migration must stay backward-compatible
    for one release (add a column, use it, drop it in the _next_ release).
@@ -294,4 +307,6 @@ disagrees with the tag.
 6. §6.1 — `release.yml`; dry-run against a throwaway `v0.0.0-test` tag; confirm images
    and tags in GHCR; delete the test release.
 7. §8 — Coolify registries, services, env, deploy the pinned tag.
-8. Tag `v0.1.0` for real. §8.5 becomes the release process.
+8. Tag `v0.1.0` for real — done 2026-09-03 (images published, release `v0.1.0`).
+   §8.5 becomes the release process; the next tag is `v0.1.1`, and the manifests
+   must be bumped in the same commit as it.

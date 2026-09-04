@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { setSessionUser } from "@/lib/session";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { LegalLinksLine } from "@/components/LegalLinksLine";
 
 export default function LoginPage() {
   // useSearchParams() bails out of static rendering, and Next requires it to
@@ -112,6 +113,8 @@ function LoginForm() {
             Create an account
           </Link>
         </p>
+
+        <LegalLinksLine lead="Use of the Service is governed by our" />
       </div>
     </main>
   );

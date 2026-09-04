@@ -53,9 +53,9 @@ ENV HOSTNAME=0.0.0.0
 # lands under packages/frontend/ rather than at the image root.
 COPY --from=build --chown=node:node /app/packages/frontend/.next/standalone ./
 COPY --from=build --chown=node:node /app/packages/frontend/.next/static ./packages/frontend/.next/static
-# No `public/` copy: this app has no public directory yet. If one is added, add
-#   COPY --from=build --chown=node:node /app/packages/frontend/public ./packages/frontend/public
-# or static files will 404 in production only.
+# public/ holds the landing-page imagery. Without this copy the files exist in
+# dev but 404 in production only.
+COPY --from=build --chown=node:node /app/packages/frontend/public ./packages/frontend/public
 
 USER node
 EXPOSE 4701

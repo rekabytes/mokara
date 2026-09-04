@@ -34,7 +34,12 @@
       }
       body {
         margin: 0;
-        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
         background: linear-gradient(160deg, #f4f5fb, #eef1f8 60%, #eceff7);
         color: var(--color-ink);
         -webkit-font-smoothing: antialiased;
@@ -209,41 +214,6 @@
       }
       .bell:hover {
         background: var(--color-surface-2);
-      }
-
-      /* ---------- Shared range control (new) ---------- */
-      .range-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-top: 14px;
-      }
-      .seg {
-        display: inline-flex;
-        border: 1px solid var(--color-border-soft);
-        border-radius: 999px;
-        background: var(--color-surface-solid);
-        overflow: hidden;
-      }
-      .seg button {
-        border: none;
-        background: transparent;
-        padding: 6px 14px;
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--color-ink-muted);
-        cursor: pointer;
-      }
-      .seg button + button {
-        border-left: 1px solid var(--color-border-soft);
-      }
-      .seg button.on {
-        background: var(--color-accent-soft);
-        color: var(--color-accent);
-      }
-      .range-note {
-        font-size: 11.5px;
-        color: var(--color-ink-faint);
       }
 
       /* ---------- Cards ---------- */
@@ -444,7 +414,9 @@
         background: rgba(239, 68, 68, 0.9);
       }
       .h-due {
-        box-shadow: 0 0 0 2px var(--color-surface-solid), 0 0 0 3.5px var(--color-ink);
+        box-shadow:
+          0 0 0 2px var(--color-surface-solid),
+          0 0 0 3.5px var(--color-ink);
       }
       .h-moved::after {
         content: "";
@@ -572,17 +544,24 @@
       <aside class="sidebar">
         <div class="brand"><span class="mark"></span> MOKARA</div>
         <a class="nav-item" href="#">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="3" />
+            <path d="M3 9h18" />
+          </svg>
           Tasks
         </a>
         <a class="nav-item active" href="#">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20h-20"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 20V10M10 20V4M16 20v-7M22 20h-20" />
+          </svg>
           Analytics
         </a>
         <hr class="side-sep" />
         <div class="side-label">Containers</div>
         <a class="nav-item" href="#">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 5-9 5-9-5 9-5z"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 3l9 5-9 5-9-5 9-5z" />
+          </svg>
           Atlas Studio
         </a>
         <div class="side-foot">
@@ -604,22 +583,12 @@
           <button class="bell">🔔</button>
         </div>
 
-        <div class="range-row">
-          <div class="seg">
-            <button>7d</button>
-            <button class="on">14d</button>
-            <button>30d</button>
-            <button>92d</button>
-          </div>
-          <span class="range-note">range drives the activity chart · heatmap always spans the year</span>
-        </div>
-
         <div class="proposal">
           <b>What this mockup proposes:</b>
-          ① shared range control in the page head (chart window) ·
-          ② card order: distribution → heatmap → KPI progress → activity ·
-          ③ heatmap shows <b>7 tasks</b>, scrolls vertically inside the card (dates + titles stay pinned) ·
-          ④ KPI progress gets the same 7-row cap · ⑤ counts + “more below” hints.
+          ① card order: distribution → heatmap → KPI progress → activity · ② heatmap shows
+          <b>7 tasks</b>, scrolls vertically inside the card (dates + titles stay pinned) · ③ KPI
+          progress gets the same 7-row cap · ④ counts + “more below” hints.
+          <i>(The range control proposed here was dropped after review.)</i>
         </div>
 
         <!-- ============ Distribution ============ -->
@@ -629,7 +598,8 @@
             <span class="card-sub"><b>62%</b> of 21 tasks completed</span>
           </div>
           <div class="bar">
-            <i class="done" style="width: 52%"></i><i class="inp" style="width: 10%"></i><i class="todo" style="width: 28%"></i><i class="canc" style="width: 10%"></i>
+            <i class="done" style="width: 52%"></i><i class="inp" style="width: 10%"></i
+            ><i class="todo" style="width: 28%"></i><i class="canc" style="width: 10%"></i>
           </div>
           <div class="legend">
             <span><i class="done"></i>Completed 11</span>
@@ -654,8 +624,30 @@
             <span><i class="c-active"></i>In progress</span>
             <span><i class="c-done"></i>Completed</span>
             <span><i class="c-late"></i>Overdue</span>
-            <span><i style="box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--color-ink); background: #fff"></i>Deadline</span>
-            <span><i style="border-top: 6px solid #f59e0b; border-left: 4px solid transparent; border-right: 4px solid transparent; background: none; height: 0; width: 0"></i>Moved deadline</span>
+            <span
+              ><i
+                style="
+                  box-shadow:
+                    0 0 0 2px #fff,
+                    0 0 0 3.5px var(--color-ink);
+                  background: #fff;
+                "
+              ></i
+              >Deadline</span
+            >
+            <span
+              ><i
+                style="
+                  border-top: 6px solid #f59e0b;
+                  border-left: 4px solid transparent;
+                  border-right: 4px solid transparent;
+                  background: none;
+                  height: 0;
+                  width: 0;
+                "
+              ></i
+              >Moved deadline</span
+            >
           </div>
         </section>
 
@@ -696,22 +688,78 @@
 
       // title, status dot colour, created col, deadline col, finished col|null, moved deadline col|null
       const TASKS = [
-        ["Extract invoice parser", "#ef4444", col(addD(TODAY, -40)), col(addD(TODAY, -6)), null, col(addD(TODAY, -14))],
+        [
+          "Extract invoice parser",
+          "#ef4444",
+          col(addD(TODAY, -40)),
+          col(addD(TODAY, -6)),
+          null,
+          col(addD(TODAY, -14)),
+        ],
         ["Q3 vendor renewal", "#ef4444", col(addD(TODAY, -30)), col(addD(TODAY, -2)), null, null],
         ["Onboarding checklist", "#6366f1", col(addD(TODAY, -12)), col(addD(TODAY, 9)), null, null],
-        ["Refactor slug registry", "#6366f1", col(addD(TODAY, -9)), col(addD(TODAY, 21)), null, null],
+        [
+          "Refactor slug registry",
+          "#6366f1",
+          col(addD(TODAY, -9)),
+          col(addD(TODAY, 21)),
+          null,
+          null,
+        ],
         ["Draft API changelog", "#6366f1", col(addD(TODAY, -5)), col(addD(TODAY, 15)), null, null],
         ["Atlas brand refresh", "#94a3b8", col(addD(TODAY, -3)), col(addD(TODAY, 30)), null, null],
-        ["Migrate backups to nightly", "#94a3b8", col(addD(TODAY, -2)), col(addD(TODAY, 40)), null, null],
-        ["Fix double-submit on invite", "#16a34a", col(addD(TODAY, -50)), col(addD(TODAY, -20)), col(addD(TODAY, -22)), null],
-        ["Ship legal docs v2", "#16a34a", col(addD(TODAY, -35)), col(addD(TODAY, -10)), col(addD(TODAY, -12)), null],
-        ["Timeout retries for SSE", "#16a34a", col(addD(TODAY, -60)), col(addD(TODAY, -15)), col(addD(TODAY, -16)), col(addD(TODAY, -30))],
+        [
+          "Migrate backups to nightly",
+          "#94a3b8",
+          col(addD(TODAY, -2)),
+          col(addD(TODAY, 40)),
+          null,
+          null,
+        ],
+        [
+          "Fix double-submit on invite",
+          "#16a34a",
+          col(addD(TODAY, -50)),
+          col(addD(TODAY, -20)),
+          col(addD(TODAY, -22)),
+          null,
+        ],
+        [
+          "Ship legal docs v2",
+          "#16a34a",
+          col(addD(TODAY, -35)),
+          col(addD(TODAY, -10)),
+          col(addD(TODAY, -12)),
+          null,
+        ],
+        [
+          "Timeout retries for SSE",
+          "#16a34a",
+          col(addD(TODAY, -60)),
+          col(addD(TODAY, -15)),
+          col(addD(TODAY, -16)),
+          col(addD(TODAY, -30)),
+        ],
         ["Quarterly KPI review", "#94a3b8", col(addD(TODAY, -1)), col(addD(TODAY, 50)), null, null],
         ["Prepare demo dataset", "#94a3b8", col(addD(TODAY, 0)), col(addD(TODAY, 25)), null, null],
-        ["Rate-limit the public API", "#94a3b8", col(addD(TODAY, 2)), col(addD(TODAY, 45)), null, null],
+        [
+          "Rate-limit the public API",
+          "#94a3b8",
+          col(addD(TODAY, 2)),
+          col(addD(TODAY, 45)),
+          null,
+          null,
+        ],
         ["Fonts subset audit", "#94a3b8", col(addD(TODAY, 4)), col(addD(TODAY, 60)), null, null],
         ["Coolify runbook", "#94a3b8", col(addD(TODAY, 6)), col(addD(TODAY, 70)), null, null],
-        ["Archive stale workspaces", "#94a3b8", col(addD(TODAY, 8)), col(addD(TODAY, 80)), null, null],
+        [
+          "Archive stale workspaces",
+          "#94a3b8",
+          col(addD(TODAY, 8)),
+          col(addD(TODAY, 80)),
+          null,
+          null,
+        ],
       ];
 
       const TRACK_W = TOTAL * DAY_W;
@@ -815,9 +863,17 @@
       const x = (i) => PAD.l + (i / (days - 1)) * (W - PAD.l - PAD.r);
       const y = (v, max) => PAD.t + (1 - v / max) * (H - PAD.t - PAD.b);
       const series = [
-        { key: "Completed", color: "#16a34a", vals: [3, 4, 4, 5, 6, 7, 7, 8, 9, 10, 11, 11, 12, 13] },
+        {
+          key: "Completed",
+          color: "#16a34a",
+          vals: [3, 4, 4, 5, 6, 7, 7, 8, 9, 10, 11, 11, 12, 13],
+        },
         { key: "In progress", color: "#6366f1", vals: [0, 1, 1, 2, 2, 2, 3, 3, 4, 4, 4, 5, 5, 6] },
-        { key: "Created", color: "#0ea5e9", vals: [8, 10, 12, 14, 16, 19, 20, 22, 25, 27, 28, 30, 31, 33] },
+        {
+          key: "Created",
+          color: "#0ea5e9",
+          vals: [8, 10, 12, 14, 16, 19, 20, 22, 25, 27, 28, 30, 31, 33],
+        },
       ];
       const max = 35;
       let svg = `<svg viewBox="0 0 ${W} ${H}">`;

@@ -2,12 +2,13 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { isUniqueViolation } from "../lib/db-error.ts";
 import { prisma } from "../db.ts";
-import { signUpSchema, loginSchema } from "../lib/validation.ts";
+import { signUpSchema, loginSchema, changePasswordSchema } from "../lib/validation.ts";
 import { validate } from "../lib/validate.ts";
 import { hashPassword, verifyPassword } from "../lib/password.ts";
 import { issueToken, parseToken } from "../lib/jwt.ts";
 import { setAuthCookie, clearAuthCookie, readAuthCookie } from "../lib/cookies.ts";
-import { revokeToken } from "../lib/sessions.ts";
+import { revokeToken, revokeAllSessions } from "../lib/sessions.ts";
+import { authRequired } from "../middleware/auth.ts";
 import { getRedis } from "../redis.ts";
 import { log } from "../lib/logger.ts";
 import { toUser } from "../lib/types.ts";
@@ -96,6 +97,40 @@ authRoutes.post("/logout", async (c) => {
 });
 
 authRoutes.get("/me", meHandler);
+
+// PRD-08: both routes guard themselves because /api/auth stays public (login
+// and signup live there); only these two need the session.
+authRoutes.post("/password", authRequired, validate("json", changePasswordSchema), async (c) => {
+  const userId = c.get("userId");
+  const { current_password, new_password } = c.req.valid("json");
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, username: true, passwordHash: true },
+  });
+  if (!u) {
+    return c.json({ error: "lookup_failed", message: "user not found" }, 500);
+  }
+  const ok = await verifyPassword(current_password, u.passwordHash);
+  if (!ok) {
+    return c.json({ error: "incorrect_password", message: "current password is incorrect" }, 401);
+  }
+  const hash = await hashPassword(new_password);
+  // Floor first: a failure here revokes sessions without changing the password
+  // (safe direction) — the other order would leave old sessions alive under a
+  // new password.
+  await revokeAllSessions(getRedis(), u.id);
+  await prisma.user.update({ where: { id: u.id }, data: { passwordHash: hash } });
+  // Stay signed in on this device: the fresh token's iat clears the new floor.
+  const token = await issueToken(u.id, u.username);
+  setAuthCookie(c, token);
+  return c.body(null, 204);
+});
+
+authRoutes.post("/revoke-all", authRequired, async (c) => {
+  await revokeAllSessions(getRedis(), c.get("userId"));
+  clearAuthCookie(c);
+  return c.body(null, 204);
+});
 
 // `me` lives on the authed surface; export the handler so index.ts can mount
 // it there without re-fetching through the auth sub-app.

@@ -114,7 +114,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="flex flex-col gap-[0.6rem] border-t border-[var(--color-border-soft)] pt-[0.85rem]">
-          <div className="flex items-center gap-[0.65rem] rounded-[11px] px-[0.5rem] py-[0.45rem]">
+          <Link
+            href="/settings"
+            aria-label="Account settings"
+            className="flex items-center gap-[0.65rem] rounded-[11px] px-[0.5rem] py-[0.45rem] hover:bg-[var(--color-surface-2)]"
+          >
             <div className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--color-accent)] text-[0.85rem] font-semibold text-white">
               {handle.slice(0, 1).toUpperCase()}
             </div>
@@ -122,7 +126,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="truncate text-[0.9rem] font-semibold">{handle}</span>
               <span className="text-[0.76rem] text-[var(--color-ink-faint)]">@{user.username}</span>
             </div>
-          </div>
+          </Link>
           <button
             type="button"
             onClick={async () => {

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { AUTH_COOKIE } from "./lib/cookies";
 
-const PROTECTED_PREFIXES = ["/tasks", "/teams", "/dashboard", "/invitations"];
+const PROTECTED_PREFIXES = ["/tasks", "/teams", "/dashboard", "/invitations", "/settings"];
 const AUTH_PATHS = ["/login", "/signup"];
 
 export function proxy(req: NextRequest) {

@@ -42,6 +42,11 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
     message: "Your session has expired — sign in again.",
   },
   invalid_credentials: { kind: "auth", action: "inline", message: "Wrong username or password." },
+  incorrect_password: {
+    kind: "auth",
+    action: "inline",
+    message: "That's not your current password.",
+  },
 
   // --- access ---
   forbidden: { kind: "permission", action: "inline", message: "You don't have access to this." },

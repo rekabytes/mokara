@@ -33,6 +33,11 @@ function markAnonymous() {
   store().set(sessionAtom, { status: "anonymous" });
 }
 
+/** Clears the shared state without an API call (the server already cleared the cookie — PRD-08 revoke-all). */
+export function forgetSessionUser() {
+  markAnonymous();
+}
+
 export function useSession(): SessionState & {
   refresh: () => Promise<void>;
   logout: () => Promise<void>;

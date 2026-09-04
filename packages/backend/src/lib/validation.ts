@@ -23,6 +23,15 @@ export const loginSchema = z.object({
   password: z.string().min(1, "password is required"),
 });
 
+// PRD-08: the confirm-new-password match is checked client-side; the server
+// only needs the two values it actually verifies.
+export const changePasswordSchema = z
+  .object({
+    current_password: z.string().min(1, "current password is required"),
+    new_password: passwordSchema,
+  })
+  .strict();
+
 export const createTeamSchema = z.object({
   name: z
     .string()

@@ -31,7 +31,7 @@ export async function issueToken(userId: string, username: string): Promise<stri
     .sign(secret);
 }
 
-export type ParsedToken = Claims & { exp?: number };
+export type ParsedToken = Claims & { iat?: number; exp?: number };
 
 export async function parseToken(token: string): Promise<ParsedToken | null> {
   try {
@@ -47,6 +47,7 @@ export async function parseToken(token: string): Promise<ParsedToken | null> {
       sub: payload.sub,
       username: payload.username,
       jti: payload.jti,
+      iat: typeof payload.iat === "number" ? payload.iat : undefined,
       exp: typeof payload.exp === "number" ? payload.exp : undefined,
     };
   } catch {

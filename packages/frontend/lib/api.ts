@@ -297,6 +297,11 @@ export const api = {
       body: JSON.stringify(data),
     }),
   logout: () => req<void>("/auth/logout", { method: "POST" }),
+  // PRD-08: password change also signs out every other device (revocation
+  // floor); this device stays signed in via the fresh cookie in the response.
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    req<void>("/auth/password", { method: "POST", body: JSON.stringify(data) }),
+  revokeAllSessions: () => req<void>("/auth/revoke-all", { method: "POST" }),
   me: () => req<{ user: User }>("/me"),
 
   // ---- Teams ----

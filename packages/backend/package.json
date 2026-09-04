@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "pnpm --filter @mokara/db bootstrap",
     "dev": "tsx watch --exclude \"**/prisma/generated/**\" src/index.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit"

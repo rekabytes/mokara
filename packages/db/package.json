@@ -7,9 +7,10 @@
     "migrate": "prisma migrate dev",
     "migrate:init": "prisma migrate dev --name init",
     "migrate:deploy": "prisma migrate deploy",
+    "migrate:status": "prisma migrate status",
     "migrate:reset": "prisma migrate reset",
     "generate": "prisma generate",
-    "bootstrap": "prisma migrate deploy && prisma generate",
+    "bootstrap": "node scripts/bootstrap.mjs",
     "seed": "prisma generate && prisma db seed",
     "studio": "prisma studio",
     "typecheck": "prisma generate && tsc --noEmit"

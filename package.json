@@ -19,6 +19,7 @@
     "db:migrate": "pnpm --filter @mokara/db migrate",
     "db:migrate:init": "pnpm --filter @mokara/db migrate:init",
     "db:migrate:deploy": "pnpm --filter @mokara/db migrate:deploy",
+    "db:status": "pnpm --filter @mokara/db migrate:status",
     "db:migrate:reset": "pnpm --filter @mokara/db migrate:reset",
     "db:generate": "pnpm --filter @mokara/db generate",
     "db:bootstrap": "pnpm --filter @mokara/db bootstrap",

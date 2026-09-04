@@ -145,3 +145,4 @@ packages/frontend/next-env.d.ts
 
 # ---------- Prisma ----------
 packages/db/prisma/generated/
+.pi/memory.md

@@ -257,7 +257,16 @@ disagrees with the tag.
 4. `BACKEND_URL` on the frontend = the backend's internal URL
    (`http://<backend-service>:4700`). If it is unset in prod the proxy answers 503
    rather than silently misrouting.
-5. Deploy = Coolify pulls the new tag. Rollback = reselect the previous tag.
+5. `NEXT_PUBLIC_SITE_URL` on the frontend = the public origin of this deployment,
+   no trailing slash. It is read **server-side only** — `metadataBase` for
+   `og:url`/`og:image`, and the "Service" line in the legal documents — so unlike
+   the old `NEXT_PUBLIC_API_BASE_URL` it is not inlined into the browser bundle and
+   works fine as a runtime variable. Left unset, `metadataBase` is omitted and the
+   legal pages show a "not configured" chip instead of guessing a URL. The operator
+   identity those pages name (`LEG_OPERATOR_*`, `LEG_CONTACT_EMAIL`,
+   `LEG_HOSTING_REGION`, …) is server-only env too, never source — see
+   `packages/frontend/.env.example`.
+6. Deploy = Coolify pulls the new tag. Rollback = reselect the previous tag.
    **The DB does not roll back with the image**, so rollback is only safe for
    code-only releases — which is why every migration must stay backward-compatible
    for one release (add a column, use it, drop it in the _next_ release).

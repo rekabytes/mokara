@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { setSessionUser } from "@/lib/session";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { LegalLinksLine } from "@/components/LegalLinksLine";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -132,6 +133,8 @@ export default function SignupPage() {
             Sign in
           </Link>
         </p>
+
+        <LegalLinksLine lead="By creating an account you agree to our" />
       </div>
     </main>
   );

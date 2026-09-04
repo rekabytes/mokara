@@ -5,8 +5,11 @@ import { prisma } from "../db.ts";
 import { signUpSchema, loginSchema } from "../lib/validation.ts";
 import { validate } from "../lib/validate.ts";
 import { hashPassword, verifyPassword } from "../lib/password.ts";
-import { issueToken } from "../lib/jwt.ts";
-import { setAuthCookie, clearAuthCookie } from "../lib/cookies.ts";
+import { issueToken, parseToken } from "../lib/jwt.ts";
+import { setAuthCookie, clearAuthCookie, readAuthCookie } from "../lib/cookies.ts";
+import { revokeToken } from "../lib/sessions.ts";
+import { getRedis } from "../redis.ts";
+import { log } from "../lib/logger.ts";
 import { toUser } from "../lib/types.ts";
 import { ensureUniqueSlug, slugify } from "../lib/slug.ts";
 import type { Vars } from "../middleware/auth.ts";
@@ -72,7 +75,22 @@ authRoutes.post("/login", validate("json", loginSchema), async (c) => {
   return c.json({ user: toUser(u) });
 });
 
-authRoutes.post("/logout", (c) => {
+authRoutes.post("/logout", async (c) => {
+  const token = readAuthCookie(c);
+  if (token) {
+    const claims = await parseToken(token);
+    // Best-effort revocation: if Redis is down the cookie is still cleared so
+    // a user is never trapped signed in — and the unrevoked token buys
+    // nothing during the outage, because every authed request 503s while the
+    // middleware cannot consult the denylist.
+    if (claims) {
+      try {
+        await revokeToken(getRedis(), claims);
+      } catch {
+        log.warn("logout could not reach Redis — token not revoked");
+      }
+    }
+  }
   clearAuthCookie(c);
   return c.body(null, 204);
 });

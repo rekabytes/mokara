@@ -12,24 +12,37 @@ const secret = new TextEncoder().encode(
 export interface Claims {
   sub: string; // userId
   username: string;
+  jti: string; // session id — logout revokes this exact token (lib/sessions.ts)
 }
 
 export async function issueToken(userId: string, username: string): Promise<string> {
   return new SignJWT({ username })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(userId)
+    .setJti(crypto.randomUUID())
     .setIssuedAt()
     .setExpirationTime(`${TOKEN_LIFETIME_S}s`)
     .sign(secret);
 }
 
-export async function parseToken(token: string): Promise<Claims | null> {
+export type ParsedToken = Claims & { exp?: number };
+
+export async function parseToken(token: string): Promise<ParsedToken | null> {
   try {
     const { payload } = await jwtVerify(token, secret);
-    if (typeof payload.sub !== "string" || typeof payload.username !== "string") {
+    if (
+      typeof payload.sub !== "string" ||
+      typeof payload.username !== "string" ||
+      typeof payload.jti !== "string"
+    ) {
       return null;
     }
-    return { sub: payload.sub, username: payload.username };
+    return {
+      sub: payload.sub,
+      username: payload.username,
+      jti: payload.jti,
+      exp: typeof payload.exp === "number" ? payload.exp : undefined,
+    };
   } catch {
     return null;
   }

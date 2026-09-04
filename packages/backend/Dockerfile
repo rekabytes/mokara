@@ -29,6 +29,7 @@ FROM base AS deps
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/backend/package.json packages/backend/
 COPY packages/db/package.json packages/db/
+COPY packages/redis/package.json packages/redis/
 RUN pnpm install --frozen-lockfile
 
 # ---- build: generate the Prisma client into packages/db/prisma/generated ----
@@ -41,6 +42,7 @@ RUN pnpm install --frozen-lockfile
 # Prisma's client is .ts anyway. The container runs the same source through tsx.
 FROM deps AS build
 COPY packages/db packages/db
+COPY packages/redis packages/redis
 COPY packages/backend packages/backend
 RUN pnpm --filter @mokara/db generate
 

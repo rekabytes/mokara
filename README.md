@@ -163,10 +163,10 @@ ghcr.io/<owner>/mokara-backend:0.1.1    (+ :0.1, :latest)
 Coolify runs both as **Docker Image** services and pulls them. Full design and the
 reasoning behind each choice: `docs/development/PRD-07.md`.
 
-| Service  | Port | Reads                                                        |
-| -------- | ---- | ------------------------------------------------------------ |
-| frontend | 4701 | `BACKEND_URL` (runtime — the browser only ever calls `/api`) |
-| backend  | 4700 | `DATABASE_URL`, `AUTH_SECRET`, `ENV=production`, `PORT`      |
+| Service  | Port | Reads                                                                |
+| -------- | ---- | -------------------------------------------------------------------- |
+| frontend | 4701 | `BACKEND_URL` (runtime — the browser only ever calls `/api`)         |
+| backend  | 4700 | `DATABASE_URL`, `REDIS_URL`, `AUTH_SECRET`, `ENV=production`, `PORT` |
 
 The backend container applies pending migrations on start (`packages/backend/
 scripts/start.sh`) before the server binds, so it can never come up against a
@@ -180,7 +180,7 @@ them in the same release.
 - **Password hashing** is `bcryptjs` (cost 10). The seed file uses Go-compatible `$2a$10$…` hashes; both `bcryptjs` and `golang.org/x/crypto/bcrypt` accept the same format, so seeded users log in unchanged.
 - **Auth cookie** is `mokara_token` (HS256, httpOnly, SameSite=Lax). The frontend `proxy.ts` middleware checks the same cookie name when gating protected routes. Changing this name requires updating both sides.
 - **The 3-member team cap** is enforced by a Postgres trigger (`enforce_max_team_members`) that raises `team_full`. The backend catches this and returns a friendly 409 — same as it does for the partial unique index on pending invitations (`team_invitations_team_pending_unique`).
-- **Redis** is provisioned in Docker but unused in v1 (reserved for sessions/cache/rate-limiting).
+- **Redis** backs the session-revocation denylist: signing out (or any revocation) marks the token's `jti` invalid server-side until its natural expiry, so a copied cookie stops working the moment the user logs out. Provisioned by docker-compose in dev; production deployments must provide `REDIS_URL` (the backend fails fast at startup and fails closed per-request without it).
 - Package Dockerfiles use the repository root as their build context:
   - `docker build -f packages/backend/Dockerfile -t mokara-backend .`
   - `docker build -f packages/frontend/Dockerfile -t mokara-frontend .`

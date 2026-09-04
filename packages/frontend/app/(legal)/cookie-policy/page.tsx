@@ -126,7 +126,7 @@ const SECTIONS: LegalSection[] = [
         <L
           items={[
             "Created when you sign up or log in successfully.",
-            "Deleted immediately when you sign out.",
+            "Invalidated immediately when you sign out — the cookie is deleted and the token itself is revoked server-side, so a copy captured earlier stops working too.",
             "Expires by itself seven days after it was issued; signing in again issues a fresh one.",
             "Removable by you at any time through your browser’s site-data controls — see section 7.",
           ]}
@@ -289,11 +289,12 @@ const SECTIONS: LegalSection[] = [
     body: (
       <P>
         Seven days, from the moment the token is issued — not seven days from your last visit, so an
-        idle session does end and you will be asked to sign in again. Logging out ends it at once
-        and deletes the cookie server-side and in the browser. We chose a week rather than a
-        single-tab-session cookie because a task board is something you return to during the day
-        over several days; if you would prefer shorter, that is a browser-level control (clear on
-        exit, or private mode) rather than a setting we need to build.
+        idle session does end and you will be asked to sign in again. Logging out ends it at once:
+        your browser deletes the cookie and the server simultaneously invalidates the token itself,
+        so even a previously captured copy stops working the moment you sign out. We chose a week
+        rather than a single-tab-session cookie because a task board is something you return to
+        during the day over several days; if you would prefer shorter, that is a browser-level
+        control (clear on exit, or private mode) rather than a setting we need to build.
       </P>
     ),
   },

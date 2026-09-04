@@ -10,6 +10,12 @@ const EnvSchema = z
     // back to a labelled dev secret). The refine below makes "unset" fatal in
     // production instead — see the comment there.
     AUTH_SECRET: z.string().default(""),
+    // Session-revocation denylist (lib/sessions.ts). The default points at
+    // docker-compose's exposed port so development boots with no .env value.
+    // Unlike AUTH_SECRET there is no production refine here: a missing or dead
+    // Redis in production is caught by connectRedis()'s fail-fast ping at
+    // startup and by the middleware's fail-closed 503s at runtime.
+    REDIS_URL: z.string().default("redis://127.0.0.1:6379"),
     ENV: z.enum(["development", "production"]).default("development"),
   })
   // Same posture as the frontend's getBackendUrl(): a missing production secret

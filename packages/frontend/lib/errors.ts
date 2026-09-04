@@ -129,6 +129,11 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
     action: "retry",
     message: "Something broke on our side. Try again.",
   },
+  service_unavailable: {
+    kind: "server",
+    action: "retry",
+    message: "The service is briefly unavailable — try again in a moment.",
+  },
   lookup_failed: {
     kind: "server",
     action: "retry",

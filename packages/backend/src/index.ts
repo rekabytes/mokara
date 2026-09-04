@@ -13,6 +13,7 @@ import { commentRoutes } from "./routes/comments.ts";
 import { analyticsRoutes } from "./routes/analytics.ts";
 import { env } from "./env.ts";
 import { connectDB, disconnectDB } from "./db.ts";
+import { connectRedis, disconnectRedis } from "./redis.ts";
 import { log } from "./lib/logger.ts";
 
 // Dev-time restart hardening: tsx watch spawns the next child before the old
@@ -34,7 +35,14 @@ async function main() {
     process.exit(1);
   }
 
-  // 2) App
+  // 2) Redis — the session-revocation denylist; same fail-fast posture.
+  try {
+    await connectRedis();
+  } catch {
+    process.exit(1);
+  }
+
+  // 3) App
   const app = new Hono<{ Variables: Vars }>();
 
   app.onError((err, c) => {
@@ -96,6 +104,7 @@ async function main() {
     // Narrowed: the Http2 variant of ServerType lacks closeAllConnections.
     if (s && "closeIdleConnections" in s) s.closeIdleConnections();
     if (s && "closeAllConnections" in s) s.closeAllConnections();
+    await disconnectRedis();
     await disconnectDB();
     log.ok("Stopped");
     process.exit(0);

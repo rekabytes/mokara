@@ -2,6 +2,7 @@ packages:
   - "packages/frontend"
   - "packages/backend"
   - "packages/db"
+  - "packages/redis"
 
 # Disable pnpm v11's global virtual store. With it enabled, packages are
 # symlinked from ~/Library/pnpm/store/v11/.../node_modules/next and the

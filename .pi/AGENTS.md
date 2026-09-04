@@ -6,8 +6,8 @@ How to work in this repository. Project **facts, decisions and traps** live in
 
 ## Stack
 
-- pnpm workspace monorepo: `@mokara/frontend` (Next 16), `@mokara/backend` (Hono), `@mokara/db` (Prisma 7). Node ≥24, pnpm 11.13. Postgres 16 + Redis 7 run in Docker (dev only); backend :4700, frontend :4701.
-- Browser calls same-origin `/api` through the frontend proxy (`BACKEND_URL` at runtime). Auth is an HS256 JWT in the `mokara_token` httpOnly cookie; passwords are bcrypt.
+- pnpm workspace monorepo: `@mokara/frontend` (Next 16), `@mokara/backend` (Hono), `@mokara/db` (Prisma 7), `@mokara/redis` (ioredis). Node ≥24, pnpm 11.13. Postgres 16 + Redis 7 run in Docker (dev only). Redis is a **hard runtime dependency** of the backend (session revocation): `REDIS_URL` (default `redis://127.0.0.1:6379`), startup ping fails fast, auth middleware fails closed (503) when it is unreachable. Backend :4700, frontend :4701.
+- Browser calls same-origin `/api` through the frontend proxy (`BACKEND_URL` at runtime). Auth is an HS256 JWT in the `mokara_token` httpOnly cookie (carries a `jti`; logout writes it to a Redis denylist so a copied cookie dies too); passwords are bcrypt.
 - Every API failure is `{ error, message }`; codes are mapped in `packages/frontend/lib/errors.ts` and pages consume them through `hooks/useAsyncError.ts`. API responses are snake_case via `lib/types.ts` mappers. Server input is Zod-validated with strict schemas.
 
 ## Commands
@@ -41,7 +41,8 @@ How to work in this repository. Project **facts, decisions and traps** live in
 
 ## Where things live
 
-- Backend `packages/backend/src/`: `routes/` (auth, teams, invitations, tasks, comments, analytics, projects, kpis) · `lib/` (validation, types, jwt, cookies, db-error, container-scope, team-membership, slug, password, logger) · `middleware/` (auth, cors, request-log).
+- Backend `packages/backend/src/`: `routes/` (auth, teams, invitations, tasks, comments, analytics, projects, kpis) · `lib/` (validation, types, jwt, cookies, sessions, db-error, container-scope, team-membership, slug, password, logger) · `middleware/` (auth, cors, request-log) · `redis.ts` (connect/disconnect, fail-fast startup).
 - Frontend `packages/frontend/`: `app/(app)/` (tasks + drawer, analytics, teams) · `app/(legal)/` (three public documents) · `app/page.tsx` (landing) · `components/` (AppShell, ContainerSwitcher, ErrorBanner, MotionProvider, SiteHeader, SiteFooter, LegalDoc, LegalLinksLine, AmbientCanvas, HeroSplit, Reveal, TiltPanel) · `lib/` (api, errors, session, containers, meta, tasksView, motion, legal, cn) · `hooks/useAsyncError.ts`.
 - DB `packages/db/prisma/`: `schema.prisma` + `migrations/`.
+- Redis `packages/redis/`: `@mokara/redis` — client factory only (`createRedis`, fail-fast options); denylist keys live in backend `lib/sessions.ts`.
 - Docs: `docs/development/PRD-0*.md`, `docs/design/`.

@@ -19,10 +19,14 @@ pattern rather than re-deriving one. Where this PRD deliberately differs from it
 
 ## 1. Goal
 
-`git tag v0.1.0 && git push origin v0.1.0` produces:
+`git tag v0.1.1 && git push origin v0.1.1` produces:
 
-- `ghcr.io/<owner>/mokara-frontend:0.1.0` (+ `:0.1`, `:latest`, `:main-<sha>`)
-- `ghcr.io/<owner>/mokara-backend:0.1.0` (+ same)
+- `ghcr.io/<owner>/mokara-frontend:0.1.1` (+ `:0.1`, `:latest`)
+- `ghcr.io/<owner>/mokara-backend:0.1.1` (+ same)
+
+The tag has to match the `version` in the root `package.json` — the gate job
+fails otherwise (verified: a `v0.1.1` tag pushed while the manifests still said
+`0.1.0` was rejected before any image was built).
 
 Coolify runs both as **Docker Image** services. Upgrade = new tag; rollback =
 redeploy the previous tag.
@@ -303,4 +307,6 @@ disagrees with the tag.
 6. §6.1 — `release.yml`; dry-run against a throwaway `v0.0.0-test` tag; confirm images
    and tags in GHCR; delete the test release.
 7. §8 — Coolify registries, services, env, deploy the pinned tag.
-8. Tag `v0.1.0` for real. §8.5 becomes the release process.
+8. Tag `v0.1.0` for real — done 2026-09-03 (images published, release `v0.1.0`).
+   §8.5 becomes the release process; the next tag is `v0.1.1`, and the manifests
+   must be bumped in the same commit as it.

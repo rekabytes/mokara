@@ -23,6 +23,7 @@ import {
 } from "@/lib/api";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { useContainers } from "@/lib/containers";
+import { NotificationBell } from "@/components/NotificationBell";
 
 // PRD-04 phase 3 — team activity chart. Lines plot cumulative running
 // totals (created, started, finished, canceled) so the line never drops
@@ -233,13 +234,7 @@ export default function AnalyticsPage() {
             <StarIcon />
           </button>
         </div>
-        <button
-          type="button"
-          aria-label="Notifications"
-          className="grid size-8 cursor-pointer place-items-center rounded-md text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
-        >
-          <BellIcon />
-        </button>
+        <NotificationBell />
       </div>
 
       {/* Progress card */}
@@ -1149,20 +1144,6 @@ function StarIcon() {
         strokeWidth="1.6"
         strokeLinejoin="round"
       />
-    </svg>
-  );
-}
-
-function BellIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M6 16V11a6 6 0 1112 0v5l1.5 2H4.5L6 16z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <path d="M10 21h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }

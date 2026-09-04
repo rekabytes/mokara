@@ -100,6 +100,8 @@ export const createTaskSchema = z.object({
   priority: taskPrioritySchema.optional(),
   due_date: isoDate,
   project_id: z.uuid().nullish(),
+  // PRD-10: must be a member of the task's container — route-enforced.
+  assignee_id: z.uuid().nullish(),
   kpis: taskKpiBindings.optional(),
 });
 
@@ -111,6 +113,7 @@ export const updateTaskSchema = z
     priority: taskPrioritySchema.optional(),
     due_date: isoDate,
     project_id: z.uuid().nullish(),
+    assignee_id: z.uuid().nullish(),
   })
   .strict();
 

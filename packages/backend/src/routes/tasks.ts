@@ -11,6 +11,7 @@ import {
 import { validate } from "../lib/validate.ts";
 import { getTeamRole } from "../lib/team-membership.ts";
 import { toTask, toTaskKpi } from "../lib/types.ts";
+import { notify } from "../lib/notifications.ts";
 import type { Vars } from "../middleware/auth.ts";
 
 // Combines team-scoped (/teams/:id/tasks) and single-task (/tasks/:id) routes
@@ -22,9 +23,31 @@ export const taskRoutes = new Hono<{ Variables: Vars }>();
 // chips.
 const TASK_INCLUDE = {
   kpiBindings: { include: { kpi: { select: { name: true } } } },
+  creator: { select: { id: true, username: true, displayName: true } },
+  assignee: { select: { id: true, username: true, displayName: true } },
 } as const;
 
 type TaskWithBindings = Prisma.TaskGetPayload<{ include: typeof TASK_INCLUDE }>;
+
+// PRD-10: an assignee must be a member of the task's container — mirrors the
+// binding rule that nothing points across containers. Clearing is always
+// fine; the actor is never notified for their own assignment.
+async function assigneeDenial(
+  teamId: string,
+  assigneeId: string | null
+): Promise<{ error: string; message: string; status: 400 } | null> {
+  if (!assigneeId) return null;
+  const member = await prisma.teamMember.findUnique({
+    where: { teamId_userId: { teamId, userId: assigneeId } },
+  });
+  return member
+    ? null
+    : {
+        error: "assignee_not_member",
+        message: "assignee must be a member of this container",
+        status: 400,
+      };
+}
 
 function shape(t: TaskWithBindings) {
   return toTask(t, t.kpiBindings.map(toTaskKpi));
@@ -110,6 +133,7 @@ taskRoutes.get("/teams/:id/tasks", async (c) => {
 
 taskRoutes.post("/teams/:id/tasks", validate("json", createTaskSchema), async (c) => {
   const userId = c.get("userId");
+  const username = c.get("username");
   const teamId = c.req.param("id")!;
 
   const role = await getTeamRole(userId, teamId);
@@ -118,6 +142,13 @@ taskRoutes.post("/teams/:id/tasks", validate("json", createTaskSchema), async (c
   }
 
   const input = c.req.valid("json");
+
+  // PRD-10: an assignee must be a member of this container — mirrors the
+  // binding rule that nothing points across containers.
+  const aDenial = await assigneeDenial(teamId, input.assignee_id ?? null);
+  if (aDenial) {
+    return c.json({ error: aDenial.error, message: aDenial.message }, aDenial.status);
+  }
 
   if (input.project_id) {
     const denial = await projectDenial(teamId, input.project_id);
@@ -140,6 +171,8 @@ taskRoutes.post("/teams/:id/tasks", validate("json", createTaskSchema), async (c
       priority: input.priority ?? "medium",
       dueDate: input.due_date ? new Date(input.due_date) : null,
       projectId: input.project_id ?? null,
+      creatorId: userId,
+      assigneeId: input.assignee_id ?? null,
       kpiBindings: {
         createMany: { data: kpis.map((k) => ({ kpiId: k.kpi_id, weight: k.weight })) },
       },
@@ -160,6 +193,17 @@ taskRoutes.post("/teams/:id/tasks", validate("json", createTaskSchema), async (c
     where: { id: task.id },
     include: TASK_INCLUDE,
   });
+
+  // PRD-05 + PRD-10: creating a task with an assignee notifies them — never
+  // the actor themselves.
+  if (input.assignee_id && input.assignee_id !== userId) {
+    await notify(input.assignee_id, "task_assigned", {
+      actor_username: username,
+      task_id: task.id,
+      task_title: input.title,
+      team_id: teamId,
+    });
+  }
   return c.json(shape(created!), 201);
 });
 
@@ -181,11 +225,12 @@ taskRoutes.get("/tasks/:id", async (c) => {
 
 taskRoutes.patch("/tasks/:id", validate("json", updateTaskSchema), async (c) => {
   const userId = c.get("userId");
+  const username = c.get("username");
   const taskId = c.req.param("id")!;
 
   const existing = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { teamId: true, status: true, dueDate: true },
+    select: { teamId: true, status: true, dueDate: true, title: true, assigneeId: true },
   });
   if (!existing) {
     return c.json({ error: "not_found", message: "task not found" }, 404);
@@ -214,12 +259,35 @@ taskRoutes.patch("/tasks/:id", validate("json", updateTaskSchema), async (c) => 
     }
     data.projectId = patch.project_id;
   }
+  if (patch.assignee_id !== undefined) {
+    const aDenial = await assigneeDenial(existing.teamId, patch.assignee_id ?? null);
+    if (aDenial) {
+      return c.json({ error: aDenial.error, message: aDenial.message }, aDenial.status);
+    }
+    data.assigneeId = patch.assignee_id ?? null;
+  }
 
   const task = await prisma.task.update({
     where: { id: taskId },
     data,
     include: TASK_INCLUDE,
   });
+
+  // PRD-05 + PRD-10: a NEW assignee (someone other than the actor) is
+  // notified once — re-assigning to the same person is silent.
+  if (
+    patch.assignee_id !== undefined &&
+    patch.assignee_id &&
+    patch.assignee_id !== userId &&
+    patch.assignee_id !== existing.assigneeId
+  ) {
+    await notify(patch.assignee_id, "task_assigned", {
+      actor_username: username,
+      task_id: taskId,
+      task_title: patch.title ?? existing.title,
+      team_id: existing.teamId,
+    });
+  }
 
   // Record the transition in the activity log only when the status actually
   // changes; this keeps the analytics series honest (one event per move).

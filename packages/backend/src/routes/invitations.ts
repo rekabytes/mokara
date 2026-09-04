@@ -4,6 +4,7 @@ import { isTeamFull } from "../lib/db-error.ts";
 import { respondSchema } from "../lib/validation.ts";
 import { validate } from "../lib/validate.ts";
 import { toInvitation } from "../lib/types.ts";
+import { notify, markInvitationResponded } from "../lib/notifications.ts";
 import type { Vars } from "../middleware/auth.ts";
 
 export const invitationRoutes = new Hono<{ Variables: Vars }>();
@@ -33,7 +34,7 @@ invitationRoutes.post("/:id/respond", validate("json", respondSchema), async (c)
 
   const inv = await prisma.teamInvitation.findUnique({
     where: { id: invId },
-    select: { teamId: true, inviteeUsername: true, status: true, expiresAt: true },
+    select: { teamId: true, inviteeUsername: true, status: true, expiresAt: true, inviterId: true },
   });
   if (!inv) {
     return c.json({ error: "not_found", message: "invitation not found" }, 404);
@@ -57,6 +58,7 @@ invitationRoutes.post("/:id/respond", validate("json", respondSchema), async (c)
       where: { id: invId },
       data: { status: "declined", respondedAt: new Date() },
     });
+    await markInvitationResponded(userId, invId, "declined");
     return c.json({ invitation_id: invId, status: "declined" });
   }
 
@@ -83,6 +85,15 @@ invitationRoutes.post("/:id/respond", validate("json", respondSchema), async (c)
     }
     throw e;
   }
+
+  await markInvitationResponded(userId, invId, "accepted");
+  // PRD-05: tell the inviter their invitation was accepted (best-effort).
+  const team = await prisma.team.findUnique({ where: { id: inv.teamId }, select: { name: true } });
+  await notify(inv.inviterId, "invitation_accepted", {
+    actor_username: username,
+    team_name: team?.name,
+    team_id: inv.teamId,
+  });
 
   return c.json({
     invitation_id: invId,

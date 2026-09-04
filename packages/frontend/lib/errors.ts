@@ -76,6 +76,12 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
     action: "inline",
     message: "That KPI isn't in this container.",
   },
+  // PRD-10
+  assignee_not_member: {
+    kind: "input",
+    action: "inline",
+    message: "Assignee must be a member of this container.",
+  },
 
   // --- we asked for something wrong ---
   invalid_input: {

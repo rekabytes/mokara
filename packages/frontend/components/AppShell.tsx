@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { signOutServer, useSession } from "@/lib/session";
 import { useContainers } from "@/lib/containers";
 import { ContainerSwitcher } from "./ContainerSwitcher";
+import { NotificationDrawer } from "./NotificationDrawer";
 import { DUR, snap } from "@/lib/motion";
 import { cn } from "@/lib/cn";
 
@@ -163,6 +164,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="w-full min-w-0 px-[clamp(1.5rem,4vw,3rem)] pt-4 pb-16 max-[800px]:pt-[4rem]">
         {children}
       </main>
+
+      {/* PRD-05: mounted once here so the drawer exists on every page; the
+          bell in each page's breadcrumb bar just opens it. */}
+      <NotificationDrawer />
     </div>
   );
 }

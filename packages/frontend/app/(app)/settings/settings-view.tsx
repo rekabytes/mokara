@@ -5,6 +5,7 @@ import { api, type SessionInfo } from "@/lib/api";
 import { manualError } from "@/lib/errors";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { NotificationBell } from "@/components/NotificationBell";
 import { setSessionUser, signOutServer, useSession } from "@/lib/session";
 import { useContainers } from "@/lib/containers";
 
@@ -25,20 +26,6 @@ function StarIcon() {
         strokeWidth="1.6"
         strokeLinejoin="round"
       />
-    </svg>
-  );
-}
-
-function BellIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M6 16V11a6 6 0 1112 0v5l1.5 2H4.5L6 16z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <path d="M10 21h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
@@ -182,13 +169,7 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
             <StarIcon />
           </button>
         </div>
-        <button
-          type="button"
-          aria-label="Notifications"
-          className="grid size-8 cursor-pointer place-items-center rounded-md text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
-        >
-          <BellIcon />
-        </button>
+        <NotificationBell />
       </div>
 
       <ErrorBanner className="mb-3.5" message={error?.message} />

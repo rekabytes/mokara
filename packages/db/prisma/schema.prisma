@@ -26,6 +26,9 @@ model User {
   taskDueChanges    TaskDueChange[]  @relation("TaskDueChangeActor")
   projects          Project[]        @relation("ProjectOwner")
   kpis              Kpi[]            @relation("KpiOwner")
+  notifications     Notification[]
+  createdTasks      Task[]           @relation("TaskCreator")
+  assignedTasks     Task[]           @relation("TaskAssignee")
 
   @@map("users")
 }
@@ -95,9 +98,16 @@ model Task {
   flagged     Boolean   @default(false)
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  // PRD-10: the owner is the immutable creator (null for tasks predating the
+  // column); the assignee is mutable and always a member of the same team —
+  // both nullable, users leaving (future account deletion) nulls them.
+  creatorId   String?   @map("creator_id") @db.Uuid
+  assigneeId  String?   @map("assignee_id") @db.Uuid
 
   team       Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
   project    Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  creator    User?           @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  assignee   User?           @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   comments   Comment[]
   events     TaskEvent[]
   dueChanges TaskDueChange[]
@@ -106,6 +116,7 @@ model Task {
   @@index([teamId, status])
   @@index([status])
   @@index([projectId])
+  @@index([assigneeId])
   @@map("tasks")
 }
 
@@ -213,4 +224,21 @@ model TaskKpi {
   @@id([taskId, kpiId])
   @@index([kpiId])
   @@map("task_kpis")
+}
+
+model Notification {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  // "invitation" | "invitation_accepted" | "comment_reply" — a string, not an
+  // enum, so the UI can grow types (due-date reminders, mentions) without a
+  // migration. The payload carries whatever the row needs to render + link.
+  type      String
+  payload   Json
+  readAt    DateTime? @map("read_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("notifications")
 }

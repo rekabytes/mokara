@@ -19,12 +19,21 @@ export type TaskPatch = {
   priority?: TaskPriority;
   due_date?: string | null;
   project_id?: string | null;
+  // PRD-10: member id of this task's container, or null to unassign.
+  assignee_id?: string | null;
 };
 
 // One task→KPI binding as the client composes it, before the server has said
 // the kpi exists. `PUT /tasks/:id/kpis` and `POST /teams/:id/tasks` both take
 // an array of these.
 export type BindingDraft = { kpi_id: string; weight: number };
+
+// PRD-10: minimal user reference embedded in task payloads.
+export type UserRef = {
+  id: string;
+  username: string;
+  display_name: string | null;
+};
 
 export type Task = {
   id: string;
@@ -35,6 +44,8 @@ export type Task = {
   priority: TaskPriority;
   project_id: string | null;
   kpis: TaskKpiBinding[];
+  creator: UserRef | null;
+  assignee: UserRef | null;
   due_date: string | null;
   flagged: boolean;
   created_at: string;
@@ -92,6 +103,25 @@ export type User = {
 
 // One row of the Settings device list (PRD-08). `current` marks the calling
 // device; revoking it is a logout.
+// One row of the notification drawer (PRD-05). The payload is type-shaped on
+// the frontend side — optional fields, read with ?..
+export type NotificationInfo = {
+  id: string;
+  type: string;
+  payload: {
+    actor_username?: string;
+    team_name?: string;
+    team_id?: string;
+    task_id?: string;
+    task_title?: string;
+    snippet?: string;
+    invitation_id?: string;
+    responded?: string;
+  };
+  read_at: string | null;
+  created_at: string;
+};
+
 export type SessionInfo = {
   id: string;
   device: string;
@@ -205,16 +235,16 @@ export { isApiError } from "@/lib/errors";
 export type { ApiError } from "@/lib/errors";
 import { ERROR_RULES, type ApiError } from "@/lib/errors";
 
-// Mirrors the backend's request log so one call reads the same in both
-// terminals (Next forwards browser console output to the dev terminal):
-//   [api] GET /teams → 200 (4ms)
+// The browser console is failure-only (PRD: routine calls stay silent — the
+// success trail already lives in the backend's request log, which prints to
+// our terminal). Failures still surface here, one line each:
 //   [api] POST /tasks → 403 (2ms) · forbidden "not a member of this team"
 // Plain text, no %c styling, so the forwarded line stays readable.
 function logCall(method: string, path: string, status: number, ms: number, detail?: string) {
+  if (status > 0 && status < 400) return; // success — silent
   const line = `[api] ${method} ${path} → ${status} (${ms}ms)${detail ? ` · ${detail}` : ""}`;
   if (status === 0 || status >= 500) console.error(line);
-  else if (status >= 400) console.warn(line);
-  else console.log(line);
+  else console.warn(line);
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -307,6 +337,14 @@ export const api = {
       body: JSON.stringify(data),
     }),
   logout: () => req<void>("/auth/logout", { method: "POST" }),
+  // PRD-05: the notification drawer's REST surface (live delivery rides SSE).
+  listNotifications: () =>
+    req<{ notifications: NotificationInfo[]; unread_count: number }>("/notifications"),
+  markNotificationsRead: (ids: string[] | null) =>
+    req<{ marked: number }>("/notifications/read", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
   // PRD-08: password change also signs out every other device (revocation
   // floor); this device stays signed in via the fresh cookie in the response.
   changePassword: (data: { current_password: string; new_password: string }) =>

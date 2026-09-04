@@ -24,6 +24,8 @@ import {
   type User,
   type Project,
   type Kpi,
+  type TeamMember,
+  type UserRef,
 } from "@/lib/api";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { useContainers } from "@/lib/containers";
@@ -49,6 +51,7 @@ import {
   tickVariants,
 } from "@/lib/motion";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { NotificationBell } from "@/components/NotificationBell";
 import { cn } from "@/lib/cn";
 
 // Gap between a trigger and the menu that opens under it, and the same number
@@ -403,13 +406,7 @@ export default function TasksPage() {
             <StarIcon />
           </button>
         </div>
-        <button
-          type="button"
-          aria-label="Notifications"
-          className="grid size-8 cursor-pointer place-items-center rounded-md text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
-        >
-          <BellIcon />
-        </button>
+        <NotificationBell />
       </div>
 
       {/* Filter row */}
@@ -1269,6 +1266,96 @@ function ProjectChip({
   );
 }
 
+// PRD-10: assignee picker — any container member, clearable to Unassigned.
+// The creator (owner) is shown as a chip inside the menu and the leader gets
+// an owner pill; selection follows the checkmark-only drawer convention.
+function AssigneeChip({
+  members,
+  creator,
+  value,
+  currentUserId,
+  onChange,
+}: {
+  members: TeamMember[];
+  creator: UserRef | null;
+  value: UserRef | null;
+  currentUserId: string | null;
+  onChange: (assigneeId: string | null) => void;
+}) {
+  const current = members.find((m) => m.user_id === value?.id);
+  const label = current
+    ? current.display_name || current.username
+    : value
+      ? value.display_name || value.username
+      : "Unassigned";
+  return (
+    <Dropdown
+      trigger={(open) => (
+        <ChipShell open={open}>
+          <MinWidthChip
+            icon={
+              current || value ? (
+                <span className="grid size-4 flex-none place-items-center rounded-full bg-[var(--color-accent)] text-[0.55rem] font-bold text-white">
+                  {(
+                    current?.display_name ||
+                    current?.username ||
+                    value?.display_name ||
+                    value?.username ||
+                    "?"
+                  )
+                    .slice(0, 1)
+                    .toUpperCase()}
+                </span>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.8" />
+                  <path
+                    d="M4 21c1.5-4 5-5.5 8-5.5s6.5 1.5 8 5.5"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              )
+            }
+            longestLabel="Unassigned"
+          >
+            <span className="truncate">{label}</span>
+          </MinWidthChip>
+          <ChevronIcon />
+        </ChipShell>
+      )}
+    >
+      <MenuItem selected={!value} onClick={() => onChange(null)}>
+        Unassigned
+      </MenuItem>
+      {members.map((m) => (
+        <MenuItem
+          key={m.user_id}
+          selected={m.user_id === value?.id}
+          onClick={() => onChange(m.user_id)}
+        >
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="grid size-4 flex-none place-items-center rounded-full bg-[var(--color-accent)] text-[0.55rem] font-bold text-white">
+              {(m.display_name || m.username).slice(0, 1).toUpperCase()}
+            </span>
+            <span className="truncate">{m.display_name || m.username}</span>
+            {m.user_id === currentUserId && (
+              <span className="text-[var(--color-ink-faint)]">· you</span>
+            )}
+            {m.role === "owner" && <span className="text-[var(--color-ink-faint)]">· owner</span>}
+          </span>
+        </MenuItem>
+      ))}
+      {creator && !members.some((m) => m.user_id === creator.id) && (
+        <p className="m-0 px-3 py-2 text-[0.78rem] text-[var(--color-ink-faint)]">
+          Created by {creator.display_name || creator.username}
+        </p>
+      )}
+    </Dropdown>
+  );
+}
+
 function KpiChip({
   kpis,
   value,
@@ -1520,6 +1607,15 @@ function TaskRow({
         </span>
       )}
 
+      {task.assignee && (
+        <span
+          title={`Assigned to ${task.assignee.display_name || task.assignee.username}`}
+          className="grid size-5 flex-none place-items-center rounded-full bg-[var(--color-accent)] text-[0.6rem] font-bold text-white"
+        >
+          {(task.assignee.display_name || task.assignee.username).slice(0, 1).toUpperCase()}
+        </span>
+      )}
+
       {task.due_date && (
         <span className="shrink-0 font-mono text-[0.74rem] text-[var(--color-ink-faint)]">
           {formatDate(task.due_date)}
@@ -1665,20 +1761,6 @@ function StarIcon() {
         strokeWidth="1.6"
         strokeLinejoin="round"
       />
-    </svg>
-  );
-}
-
-function BellIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M6 16V11a6 6 0 1112 0v5l1.5 2H4.5L6 16z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <path d="M10 21h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
@@ -1859,6 +1941,26 @@ function TaskDetailDrawer({
   const [titleDraft, setTitleDraft] = useState(task.title);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
+  // ---- PRD-10: container members for the assignee dropdown. The member list
+  //      is not part of the page's data, so the drawer reads it straight from
+  //      the team detail API when the drawer's container changes — outside
+  //      React, the documented allowed effect. ----
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void api
+      .getTeam(task.team_id)
+      .then((detail) => {
+        if (alive) setMembers(detail.members);
+      })
+      .catch(() => {
+        if (alive) setMembers([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [task.team_id]);
+
   // ---- Due date: read straight off the task, persisted via PATCH on every
   //      change. DatePicker is fully controlled by `task.due_date`, so a
   //      server-side change lands on the chip with no mirroring (and no local
@@ -1982,6 +2084,12 @@ function TaskDetailDrawer({
             {task.title}
           </h2>
         )}
+        {task.creator && (
+          <p className="m-0 mt-0.5 px-1 text-[0.72rem] text-[var(--color-ink-faint)]">
+            Created by {task.creator.display_name || task.creator.username}
+            {task.creator.id === currentUser?.id ? " (you)" : ""}
+          </p>
+        )}
 
         {/* Description — click to edit */}
         <DescriptionField
@@ -2053,6 +2161,13 @@ function TaskDetailDrawer({
             )}
           />
 
+          <AssigneeChip
+            members={members}
+            creator={task.creator}
+            value={task.assignee}
+            currentUserId={currentUser?.id ?? null}
+            onChange={(assigneeId) => onUpdate({ assignee_id: assigneeId })}
+          />
           <ProjectChip
             projects={projects}
             value={task.project_id}

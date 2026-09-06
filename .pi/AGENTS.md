@@ -31,6 +31,7 @@ How to work in this repository. Project **facts, decisions and traps** live in
 - Dates: anchor day math on local midnight (`new Date(y, m, d)`); never derive day indexes from live timestamps or `.toISOString()` round-trips.
 - Tailwind/UI: no pseudo-element slide-ins; no `h-screen` inside padded containers (use `h-[calc(100dvh-…)]`); add `min-w-0` to grid/flex children; no box-shadow+radius on a child of `overflow-hidden`; no `calc(50% - 50vw)` bleeds inside grid columns; verify layouts at 1280/1440/1600/1920, never one width; don't assume token contrast — check the CSS var.
 - Copy the slim breadcrumb page header **verbatim** between pages (star + size-8 bell included; the bell sets the row height). Dropdowns: `grid-cols-[1fr_18px]`, checkmark-only selection.
+- Icons: hand-drawn inline SVG (`viewBox="0 0 24 24"`, `stroke="currentColor"`, `aria-hidden`, local per-file components — no icon library). **No emoji glyphs in UI** (2026-09-05 sweep); keyboard `⌘`, typographic `↳`/`→`/`©` and console-log prefixes stay — they are text, not emoji.
 - One surface per concern: `components/ErrorBanner.tsx` for block errors, `lib/cn.ts` for class merging, `lib/motion.ts` for motion constants — no private copies.
 - Backend: Zod strict schemas in `lib/validation.ts`; Prisma constraint matching through `lib/db-error.ts`; per-route authorisation before existence checks.
 
@@ -41,8 +42,8 @@ How to work in this repository. Project **facts, decisions and traps** live in
 
 ## Where things live
 
-- Backend `packages/backend/src/`: `routes/` (auth, teams, invitations, tasks, comments, analytics, projects, kpis) · `lib/` (validation, types, jwt, cookies, sessions, db-error, container-scope, team-membership, slug, password, logger) · `middleware/` (auth, cors, request-log) · `redis.ts` (connect/disconnect, fail-fast startup).
-- Frontend `packages/frontend/`: `app/(app)/` (tasks + drawer, analytics, teams) · `app/(legal)/` (three public documents) · `app/page.tsx` (landing) · `components/` (AppShell, ContainerSwitcher, ErrorBanner, MotionProvider, SiteHeader, SiteFooter, LegalDoc, LegalLinksLine, AmbientCanvas, HeroSplit, Reveal, TiltPanel) · `lib/` (api, errors, session, containers, meta, tasksView, motion, legal, cn) · `hooks/useAsyncError.ts`.
-- DB `packages/db/prisma/`: `schema.prisma` + `migrations/`.
+- Backend `packages/backend/src/`: `routes/` (auth, teams, invitations, tasks, comments, subtasks, attachments, analytics, projects, kpis, notifications, events) · `lib/` (validation, types, jwt, cookies, sessions, db-error, container-scope, team-membership, slug, password, logger, plans, entitlements, quota, storage) · `middleware/` (auth, cors, request-log) · `redis.ts` (connect/disconnect, fail-fast startup) · `env.ts` (the ENV contract, incl. `DEPLOY_MODE`). Tier→caps live ONLY in `lib/plans.ts` and are checked via `lib/entitlements.ts` denial objects — never in Postgres.
+- Frontend `packages/frontend/`: `app/(app)/` (tasks + drawer, analytics, teams, settings) · `app/(legal)/` (three public documents) · `app/page.tsx` (landing) · `app/api/[...path]/route.ts` (same-origin proxy) · `components/` (AppShell, ContainerSwitcher + ContainerIcon, ErrorBanner, MotionProvider, SiteHeader, SiteFooter, LegalDoc, LegalLinksLine, AmbientCanvas, HeroSplit, Reveal, TiltPanel, NotificationBell, NotificationDrawer) · `lib/` (api, errors, session, containers, notifications, meta, tasksView, motion, legal, cookies, backend-url, cn) · `hooks/useAsyncError.ts` · `app/(app)/tasks/DatePicker.tsx`. Drawer/modal chrome (`Dropdown`/`ChipShell`/`MenuItem`/chips) lives inside `tasks/page.tsx`.
+- DB `packages/db/prisma/`: `schema.prisma` + `migrations/` (hand-written; values that look like enums are TEXT + a DB CHECK). `Notification.type` is a plain string — new kinds need no migration.
 - Redis `packages/redis/`: `@mokara/redis` — client factory only (`createRedis`, fail-fast options); denylist keys live in backend `lib/sessions.ts`.
-- Docs: `docs/development/PRD-0*.md`, `docs/design/`.
+- Docs: `docs/development/PRD-*.md`, `docs/design/`.

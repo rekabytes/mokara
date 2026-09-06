@@ -14,6 +14,15 @@ model User {
   username     String   @unique @db.Citext
   passwordHash String   @map("password_hash")
   displayName  String?  @map("display_name")
+  // PRD-11: subscription tier (free | starter | pro | ultra). Lives on the
+  // user, not the team — a workspace's tier is its leader's plan. Plain String
+  // + DB CHECK like kind/status; Phase 2 webhooks are the only writer.
+  plan         String   @default("free")
+  // Owner (2026-09-06): last container the user selected — server-side UI
+  // state so a refresh restores "where you work" without device storage
+  // (cookie policy: no localStorage). GET /teams filters it against live
+  // membership; the FK clears it when the container is deleted.
+  lastContainerId String? @map("last_container_id") @db.Uuid
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -29,6 +38,8 @@ model User {
   notifications     Notification[]
   createdTasks      Task[]           @relation("TaskCreator")
   assignedTasks     Task[]           @relation("TaskAssignee")
+  attachments       Attachment[]
+  lastContainer     Team?            @relation("LastContainer", fields: [lastContainerId], references: [id], onDelete: SetNull)
 
   @@map("users")
 }
@@ -39,16 +50,24 @@ model Team {
   slug      String   @unique
   ownerId   String   @map("owner_id") @db.Uuid
   kind      String   @default("team") // "workspace" (private, solo) | "team"
+  // PRD-11 Phase 1.4: the container's logo. All three stay null together — a
+  // workspace either has one or does not — and the bytes count against the same
+  // storage quota as attachments (see lib/quota.ts).
+  logoKey   String?  @map("logo_key")
+  logoBytes Int?     @map("logo_bytes")
+  logoType  String?  @map("logo_type")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   owner       User             @relation("TeamOwner", fields: [ownerId], references: [id])
+  lastSelectedBy User[]        @relation("LastContainer")
   members     TeamMember[]
   invitations TeamInvitation[]
   tasks       Task[]
   taskEvents  TaskEvent[]
   projects    Project[]
   kpis        Kpi[]
+  attachments Attachment[]
 
   @@map("teams")
 }
@@ -112,12 +131,32 @@ model Task {
   events     TaskEvent[]
   dueChanges TaskDueChange[]
   kpiBindings TaskKpi[]
+  subtaskItems SubtaskItem[]
+  attachments Attachment[]
 
   @@index([teamId, status])
   @@index([status])
   @@index([projectId])
   @@index([assigneeId])
   @@map("tasks")
+}
+
+// PRD-11 Phase 1.2: a checklist inside a task. Deliberately flat items rather
+// than child tasks — no recursion, no per-item assignee or due date; those
+// would each drag the whole task surface into the model. Order is client-drawn
+// and stored in `position`.
+model SubtaskItem {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId    String   @map("task_id") @db.Uuid
+  title     String
+  done      Boolean  @default(false)
+  position  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, position])
+  @@map("subtask_items")
 }
 
 model Comment {
@@ -133,6 +172,7 @@ model Comment {
   author  User      @relation(fields: [authorId], references: [id])
   parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies Comment[] @relation("CommentReplies")
+  attachments Attachment[]
 
   @@index([taskId, createdAt])
   @@index([parentId])
@@ -224,6 +264,39 @@ model TaskKpi {
   @@id([taskId, kpiId])
   @@index([kpiId])
   @@map("task_kpis")
+}
+
+// PRD-11 Phase 1.3: a file on a task. team_id is denormalised because the
+// storage quota is summed per workspace on every upload — see the migration.
+// The bytes live in object storage under storage_key, which the server mints
+// from this row's id; the filename never touches the key.
+// PRD-11 Phase 1.3: a file on a task — or, since comment attachments, on a
+// comment. team_id is denormalised because the storage quota is summed per
+// workspace on every upload — see the migration. The bytes live in object
+// storage under storage_key, which the server mints from this row's id; the
+// filename never touches the key. Exactly one of task_id / comment_id is set
+// (attachments_owner_check).
+model Attachment {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId      String?  @map("task_id") @db.Uuid
+  commentId   String?  @map("comment_id") @db.Uuid
+  teamId      String   @map("team_id") @db.Uuid
+  uploaderId  String   @map("uploader_id") @db.Uuid
+  filename    String
+  sizeBytes   Int      @map("size_bytes")
+  contentType String   @map("content_type")
+  storageKey  String   @unique @map("storage_key")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  task     Task?      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  comment  Comment?   @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  team     Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  uploader User       @relation(fields: [uploaderId], references: [id])
+
+  @@index([taskId])
+  @@index([commentId])
+  @@index([teamId])
+  @@map("attachments")
 }
 
 model Notification {

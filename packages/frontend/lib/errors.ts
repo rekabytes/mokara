@@ -102,13 +102,59 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
     action: "inline",
     message: "KPI weights must total 100% or less.",
   },
+  // Owner rule (2026-09-05): binding is personal — you attach only KPIs you
+  // created. Teammates' bindings on a task are frozen from your chip.
+  kpi_not_owner: {
+    kind: "permission",
+    action: "inline",
+    serverSays: true,
+    message: "You can only bind your own KPIs.",
+  },
 
   // --- state collision ---
   username_taken: { kind: "conflict", action: "inline", message: "That username is taken." },
   team_full: {
     kind: "conflict",
     action: "inline",
-    message: "This team is full — 3 members maximum.",
+    // PRD-11: the number depends on the leader's plan, so only the server can
+    // state it — show its sentence rather than a hardcoded "3 members".
+    serverSays: true,
+    message: "This team is full.",
+  },
+  workspace_limit: {
+    kind: "conflict",
+    action: "inline",
+    // Same reason: the plan decides how many teams one account may lead.
+    serverSays: true,
+    message: "Your plan has no more team seats.",
+  },
+
+  // --- storage (PRD-11 Phase 1.3) ---
+  quota_exceeded: {
+    kind: "conflict",
+    action: "inline",
+    // The number is the plan's, so the server states it.
+    serverSays: true,
+    message: "This workspace is out of storage.",
+  },
+  file_too_large: {
+    kind: "input",
+    action: "inline",
+    serverSays: true,
+    message: "That file is too large for this plan.",
+  },
+  attachments_disabled: {
+    kind: "conflict",
+    action: "inline",
+    // True on any instance with no bucket configured — including a
+    // self-hosted one that never intended to store files.
+    serverSays: true,
+    message: "This instance has no file storage configured.",
+  },
+  storage_unavailable: {
+    kind: "server",
+    action: "retry",
+    message: "File storage could not be reached — try again.",
   },
   already_member: { kind: "conflict", action: "inline", message: "That user is already a member." },
   already_invited: {

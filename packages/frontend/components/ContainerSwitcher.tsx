@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useContainers } from "@/lib/containers";
+import { api } from "@/lib/api";
 import { DUR, popoverVariants, backdropVariants, sheetVariants, snap } from "@/lib/motion";
+import { ErrorBanner } from "@/components/ErrorBanner";
 import { cn } from "@/lib/cn";
 
 // PRD-06: Linear-style container switcher. Lists every container the user
@@ -43,14 +45,19 @@ export function ContainerSwitcher() {
           "transition-colors duration-[160ms] hover:bg-[var(--color-surface-2)]"
         )}
       >
-        <KindIcon kind={selected?.kind ?? "workspace"} />
+        <ContainerIcon container={selected} />
         <span className="min-w-0 flex-1 truncate">
           {selected?.name ?? (error ? "Containers" : "Loading…")}
         </span>
         <ChevronIcon open={open} />
       </button>
 
-      {error && <p className="mt-1.5 text-[0.72rem] text-[var(--color-danger)]">{error.message}</p>}
+      {/* The create modal owns failures while it is open (PRD-11: a plan cap
+          answers with workspace_limit / team_full, and the person hitting it is
+          inside the modal). This line is for list-load errors only. */}
+      {error && !modalOpen && (
+        <p className="mt-1.5 text-[0.72rem] text-[var(--color-danger)]">{error.message}</p>
+      )}
 
       {/* Backdrop closes the menu — no outside-click listener needed. It's
           transparent, so only the panel below is worth animating. */}
@@ -93,7 +100,7 @@ export function ContainerSwitcher() {
                     selected?.id === c.id && "font-semibold"
                   )}
                 >
-                  <KindIcon kind={c.kind} />
+                  <ContainerIcon container={c} />
                   <span className="min-w-0 flex-1 truncate">{c.name}</span>
                   <span className="text-[0.7rem] text-[var(--color-ink-faint)]">
                     {c.kind === "team" ? `${c.member_count} members` : "private"}
@@ -187,6 +194,10 @@ export function ContainerSwitcher() {
                   onClick={() => setKind("team")}
                 />
               </div>
+              {/* One block-error surface, inside the sheet that caused the
+                  failure — previously a create error only appeared as a small
+                  line under a closed menu. */}
+              <ErrorBanner message={error?.message} className="mb-3" />
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
@@ -245,6 +256,26 @@ function KindChoice({
       <span className="text-[0.72rem] text-[var(--color-ink-faint)]">{subtitle}</span>
     </button>
   );
+}
+
+// The container's avatar: its logo when the leader has set one (PRD-11 Phase
+// 1.4), the kind glyph otherwise. Deliberately not an <Image/>: these are
+// runtime bytes from a runtime-configured bucket, not build-time assets.
+function ContainerIcon({
+  container,
+}: {
+  container: { id: string; kind: "workspace" | "team"; has_logo: boolean } | null;
+}) {
+  if (container?.has_logo) {
+    return (
+      <img
+        src={api.teamLogoUrl(container.id)}
+        alt=""
+        className="size-[18px] shrink-0 rounded-[5px] object-cover"
+      />
+    );
+  }
+  return <KindIcon kind={container?.kind ?? "workspace"} />;
 }
 
 function KindIcon({ kind }: { kind: "workspace" | "team" }) {

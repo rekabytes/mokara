@@ -35,6 +35,28 @@ export type UserRef = {
   display_name: string | null;
 };
 
+// PRD-11 Phase 1.2: one checklist row. `position` is the order the server
+// stored; the drawer renders the array as-is and sends the whole id list back
+// when a row moves.
+export type SubtaskItem = {
+  id: string;
+  title: string;
+  done: boolean;
+  position: number;
+};
+
+// PRD-11 Phase 1.3: one stored file. `size_bytes` is what the server measured,
+// so the quota display can trust it.
+export type Attachment = {
+  id: string;
+  task_id: string;
+  filename: string;
+  size_bytes: number;
+  content_type: string;
+  uploader: UserRef;
+  created_at: string;
+};
+
 export type Task = {
   id: string;
   team_id: string;
@@ -44,6 +66,10 @@ export type Task = {
   priority: TaskPriority;
   project_id: string | null;
   kpis: TaskKpiBinding[];
+  // PRD-11: the task's checklist, in stored order. Embedded in every task
+  // response for the same reason as creator/assignee — the client replaces
+  // whole task objects after a mutation.
+  subtasks: SubtaskItem[];
   creator: UserRef | null;
   assignee: UserRef | null;
   due_date: string | null;
@@ -117,6 +143,10 @@ export type NotificationInfo = {
     snippet?: string;
     invitation_id?: string;
     responded?: string;
+    // PRD-11 §1.5: due-soon notifications carry the due timestamp and an
+    // overdue flag so the drawer can pick the right icon (red vs amber).
+    due_date?: string;
+    overdue?: boolean;
   };
   read_at: string | null;
   created_at: string;
@@ -137,7 +167,14 @@ export type Team = {
   owner_id: string;
   // PRD-06: one container model, two states.
   kind: "workspace" | "team";
+  // PRD-11 Phase 1.4: whether the container has a logo. A boolean, not a URL —
+  // the client builds the same-origin path with teamLogoUrl().
+  has_logo: boolean;
   member_count: number;
+  // PRD-11: the cap that applies to this container, from its leader's plan.
+  // null = unlimited (a self-hosted instance, or the top tier) — so no screen
+  // ever prints a hardcoded "3" again.
+  member_limit: number | null;
   created_at: string;
 };
 
@@ -181,6 +218,9 @@ export type Comment = {
   author: User;
   parent_id: string | null;
   body: string;
+  // PRD-11: files attached to this comment. Images render inline in the thread;
+  // clicking one opens the shared large view.
+  attachments: Attachment[];
   created_at: string;
   updated_at: string;
 };
@@ -233,7 +273,7 @@ export type Progress = {
 // re-exports keep `import { isApiError } from "@/lib/api"` working.
 export { isApiError } from "@/lib/errors";
 export type { ApiError } from "@/lib/errors";
-import { ERROR_RULES, type ApiError } from "@/lib/errors";
+import { ERROR_RULES, isApiError, type ApiError } from "@/lib/errors";
 
 // The browser console is failure-only (PRD: routine calls stay silent — the
 // success trail already lives in the backend's request log, which prints to
@@ -254,12 +294,16 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     logCall(method, path, status, Date.now() - start, detail);
 
   let res: Response;
+  // A FormData body must NOT carry a Content-Type: the browser has to add the
+  // multipart boundary itself, and a JSON header would break that. Everything
+  // else keeps the house default.
+  const isForm = typeof FormData !== "undefined" && init?.body instanceof FormData;
   try {
     res = await fetch(`${BASE}${path}`, {
       credentials: "include",
       ...init,
       headers: {
-        "Content-Type": "application/json",
+        ...(isForm ? {} : { "Content-Type": "application/json" }),
         ...(init?.headers ?? {}),
       },
     });
@@ -324,6 +368,53 @@ function isErrorBody(v: unknown): v is { error: string; message?: unknown } {
   );
 }
 
+/**
+ * Upload with progress. `fetch` reports no upload progress at all, so the
+ * attachment endpoints go through XMLHttpRequest purely for that event.
+ * Failures reject with the same `{ error, message, status }` shape `req()`
+ * throws, so `useAsyncError`'s `run()` normalises them identically.
+ */
+function uploadViaXhr(
+  path: string,
+  file: File,
+  onProgress?: (fraction: number) => void
+): Promise<{ attachment: Attachment }> {
+  return new Promise((resolve, reject) => {
+    const form = new FormData();
+    form.append("file", file);
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${BASE}${path}`);
+    xhr.withCredentials = true; // the httpOnly cookie IS the session
+    xhr.upload.onprogress = (e) => {
+      if (onProgress && e.lengthComputable) onProgress(e.loaded / e.total);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText) as { attachment: Attachment });
+        } catch {
+          reject({ error: "invalid_response", message: "upload failed", status: 0 });
+        }
+        return;
+      }
+      let code = "upload_failed";
+      let message = "upload failed";
+      try {
+        const parsed: unknown = JSON.parse(xhr.responseText);
+        if (isApiError(parsed)) {
+          code = parsed.error;
+          message = parsed.message;
+        }
+      } catch {
+        // A non-JSON body (a proxy's 413 page, say) keeps the fallbacks.
+      }
+      reject({ error: code, message, status: xhr.status });
+    };
+    xhr.onerror = () => reject({ error: "network_error", message: "upload failed", status: 0 });
+    xhr.send(form);
+  });
+}
+
 export const api = {
   // ---- Auth ----
   signUp: (data: { username: string; password: string; display_name?: string }) =>
@@ -364,7 +455,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  listTeams: () => req<{ teams: TeamWithRole[] }>("/teams"),
+  listTeams: () => req<{ teams: TeamWithRole[]; last_container_id: string | null }>("/teams"),
+  // Owner (2026-09-06): persist the last-selected container server-side so a
+  // refresh restores it. Fire-and-forget from the switcher; membership is
+  // checked by the route.
+  setLastContainer: (teamId: string) =>
+    req<void>("/me/last-container", { method: "PUT", body: JSON.stringify({ team_id: teamId }) }),
   getTeam: (id: string) => req<TeamDetail>(`/teams/${id}`),
   leaveTeam: (id: string) => req<void>(`/teams/${id}/leave`, { method: "POST" }),
   inviteToTeam: (id: string, data: { username: string }) =>
@@ -389,6 +485,13 @@ export const api = {
     }),
 
   // ---- Tasks (team-scoped) ----
+  // PRD-11: full payload for one task — used right after the create→upload
+  // chain, since the create response predates its own steps and files.
+  getTask: (id: string) => req<Task>(`/tasks/${id}`),
+  // The cross-container due-soon set now lives in the notifications table
+  // (PRD-11 §1.5, persistent rows). The bell badge + drawer render it
+  // through the existing listNotifications() surface — no per-request
+  // /me/due-soon endpoint any more.
   listTeamTasks: (teamId: string, status?: string) =>
     req<Task[]>(`/teams/${teamId}/tasks${status ? `?status=${status}` : ""}`),
   createTeamTask: (
@@ -400,6 +503,8 @@ export const api = {
       priority?: TaskPriority;
       due_date?: string;
       project_id?: string | null;
+      // PRD-10: assignable at creation — mirrors createTaskSchema.
+      assignee_id?: string | null;
       kpis?: BindingDraft[];
     }
   ) =>
@@ -460,6 +565,61 @@ export const api = {
       body: JSON.stringify({ body }),
     }),
   deleteComment: (id: string) => req<void>(`/comments/${id}`, { method: "DELETE" }),
+
+  // ---- Subtasks (PRD-11 Phase 1.2) ----
+  // No list endpoint: the checklist is embedded in every task response, so the
+  // drawer renders `task.subtasks` and reconciles these mutations into it.
+  createSubtask: (taskId: string, title: string) =>
+    req<{ subtask: SubtaskItem }>(`/tasks/${taskId}/subtasks`, {
+      method: "POST",
+      body: JSON.stringify({ title }),
+    }),
+  updateSubtask: (id: string, data: { title?: string; done?: boolean }) =>
+    req<{ subtask: SubtaskItem }>(`/subtasks/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  deleteSubtask: (id: string) => req<void>(`/subtasks/${id}`, { method: "DELETE" }),
+  // Full-list reorder: every id, in the order drawn.
+  orderSubtasks: (taskId: string, ids: string[]) =>
+    req<void>(`/tasks/${taskId}/subtasks/order`, {
+      method: "PUT",
+      body: JSON.stringify({ ids }),
+    }),
+
+  // ---- Attachments (PRD-11 Phase 1.3) ----
+  listAttachments: (taskId: string) =>
+    req<{ attachments: Attachment[] }>(`/tasks/${taskId}/attachments`),
+  deleteAttachment: (id: string) => req<void>(`/attachments/${id}`, { method: "DELETE" }),
+  uploadAttachment: (taskId: string, file: File, onProgress?: (fraction: number) => void) =>
+    uploadViaXhr(`/tasks/${taskId}/attachments`, file, onProgress),
+  /**
+   * Download is a navigation, not a fetch: the backend answers it with the
+   * bytes and `Content-Disposition: attachment`. Going through the address bar
+   * keeps it outside the CSP's `connect-src`, and the cookie rides along.
+   */
+  attachmentDownloadUrl: (id: string) => `${BASE}/attachments/${id}/download`,
+
+  // ---- Comment attachments (PRD-11) ----
+  listCommentAttachments: (commentId: string) =>
+    req<{ attachments: Attachment[] }>(`/comments/${commentId}/attachments`),
+  // Images and PDFs only — the route rejects anything else.
+  uploadCommentAttachment: (
+    commentId: string,
+    file: File,
+    onProgress?: (fraction: number) => void
+  ) => uploadViaXhr(`/comments/${commentId}/attachments`, file, onProgress),
+
+  // ---- Workspace logo (PRD-11 Phase 1.4) ----
+  setTeamLogo: (teamId: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return req<{ team: Team }>(`/teams/${teamId}/logo`, { method: "PUT", body: form });
+  },
+  removeTeamLogo: (teamId: string) =>
+    req<{ team: Team }>(`/teams/${teamId}/logo`, { method: "DELETE" }),
+  /** Rendered by <img>; `private, no-cache` on the response keeps it fresh. */
+  teamLogoUrl: (teamId: string) => `${BASE}/teams/${teamId}/logo`,
 
   // ---- Analytics ----
   getAnalytics: (teamId: string, range: number) =>

@@ -59,6 +59,12 @@ export const inviteSchema = z.object({
   username: usernameSchema,
 });
 
+// Owner (2026-09-06): the last-selected-container pointer (PUT /me/last-
+// container). Membership is checked in the route — the id must name a
+// container the caller actually belongs to — so the schema only proves
+// shape.
+export const lastContainerSchema = z.object({ team_id: z.uuid() }).strict();
+
 export const respondSchema = z.object({
   action: z.enum(["accept", "decline"], { error: "action must be accept or decline" }),
 });
@@ -177,3 +183,27 @@ export const createCommentSchema = z.object({
 export const commentSchema = z.object({
   body: commentBody,
 });
+
+// PRD-11 Phase 1.2: checklist items. Title rules shared by create and update,
+// same convention as commentBody. 200 chars keeps a subtask a step, not a
+// paragraph — the task title itself is the longer field.
+const subtaskTitle = z
+  .string()
+  .trim()
+  .min(1, "subtask title is required")
+  .max(200, "subtask title must be 200 characters or fewer");
+
+export const createSubtaskSchema = z.object({ title: subtaskTitle });
+
+export const updateSubtaskSchema = z
+  .object({
+    title: subtaskTitle.optional(),
+    done: z.boolean().optional(),
+  })
+  .strict();
+
+// Reorder: every id of the checklist in the order the client drew it. Partial
+// orders are rejected in the route — a half-list would silently reshuffle.
+export const orderSubtasksSchema = z
+  .object({ ids: z.array(z.uuid()).min(1, "at least one id is required") })
+  .strict();

@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { corsMiddleware } from "./middleware/cors.ts";
 import { requestLogger } from "./middleware/request-log.ts";
 import { authRequired, type Vars } from "./middleware/auth.ts";
-import { authRoutes, meHandler, updateMe } from "./routes/auth.ts";
+import { authRoutes, meHandler, updateMe, setLastContainer } from "./routes/auth.ts";
 import { notificationRoutes } from "./routes/notifications.ts";
 import { mountEventsRoute } from "./routes/events.ts";
 import { teamRoutes } from "./routes/teams.ts";
@@ -12,9 +12,11 @@ import { taskRoutes } from "./routes/tasks.ts";
 import { projectRoutes } from "./routes/projects.ts";
 import { kpiRoutes } from "./routes/kpis.ts";
 import { commentRoutes } from "./routes/comments.ts";
+import { subtaskRoutes } from "./routes/subtasks.ts";
+import { attachmentRoutes } from "./routes/attachments.ts";
 import { analyticsRoutes } from "./routes/analytics.ts";
 import { validate } from "./lib/validate.ts";
-import { updateMeSchema } from "./lib/validation.ts";
+import { updateMeSchema, lastContainerSchema } from "./lib/validation.ts";
 import { env } from "./env.ts";
 import { connectDB, disconnectDB } from "./db.ts";
 import { connectRedis, disconnectRedis } from "./redis.ts";
@@ -68,12 +70,23 @@ async function main() {
   authed.patch("/me", validate("json", updateMeSchema), async (c) =>
     c.json({ user: await updateMe(c.get("userId"), c.req.valid("json").display_name) })
   );
+  // Owner (2026-09-06): the last-selected-container pointer. Fire-and-forget
+  // from the client, hence a bare 204 — there is nothing to hand back.
+  authed.put("/me/last-container", validate("json", lastContainerSchema), async (c) => {
+    const ok = await setLastContainer(c.get("userId"), c.req.valid("json").team_id);
+    if (!ok) {
+      return c.json({ error: "forbidden", message: "not a member of this team" }, 403);
+    }
+    return c.body(null, 204);
+  });
   authed.route("/notifications", notificationRoutes);
   mountEventsRoute(authed);
   authed.route("/teams", teamRoutes);
   authed.route("/invitations", invitationRoutes);
   authed.route("/", taskRoutes);
   authed.route("/", commentRoutes);
+  authed.route("/", subtaskRoutes);
+  authed.route("/", attachmentRoutes);
   authed.route("/", analyticsRoutes);
   authed.route("/", projectRoutes);
   authed.route("/", kpiRoutes);

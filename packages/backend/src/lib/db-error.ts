@@ -61,11 +61,7 @@ export function isUniqueViolation(e: unknown, constraint: string): boolean {
   );
 }
 
-/**
- * Failure raised by the `enforce_max_team_members` trigger
- * (`RAISE EXCEPTION 'team_full' USING ERRCODE = 'P0001'`).
- */
-export function isTeamFull(e: unknown): boolean {
-  const info = dbErrorInfo(e);
-  return info.code === "P0001" || info.text.includes("team_full");
-}
+// PRD-11 Phase 1.1 removed this file's `isTeamFull` matcher along with the
+// enforce_max_team_members trigger it matched: the member cap is a plan
+// question now, answered by lib/entitlements.ts before the insert rather than
+// raised by Postgres during it.

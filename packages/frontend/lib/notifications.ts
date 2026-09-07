@@ -3,6 +3,7 @@
 import { useCallback, useEffect } from "react";
 import { atom, getDefaultStore, useAtom, useAtomValue } from "jotai";
 import { api, type NotificationInfo } from "./api";
+import { onSse } from "./sse";
 
 // PRD-05: shared notification state, same pattern as lib/session.ts — module
 // atoms on the default store, one REST backfill + one SSE connection per app
@@ -58,22 +59,20 @@ export function useNotifications() {
     );
   }, []);
 
-  // One-time REST backfill + SSE subscription. EventSource reconnects on its
-  // own; the `booted` guard keeps a single connection across page navigations
-  // (the document reload of a sign-out resets everything, per PRD-08).
+  // One-time REST backfill + SSE subscription. The connection itself is the
+  // shared lib/sse.ts singleton (one per tab, auto-reconnecting); the
+  // `booted` guard keeps this handler registered once across page
+  // navigations (the document reload of a sign-out resets everything, per
+  // PRD-08).
   useEffect(() => {
     if (booted) return;
     booted = true;
     void load();
-    const es = new EventSource("/api/events");
-    es.addEventListener("notification", (e) => {
-      // The SSE frame's data is the generic wire envelope { event, data }
-      // (lib/events.ts) — the notification itself lives in .data.
-      const envelope = JSON.parse((e as MessageEvent).data) as {
-        event: string;
-        data: NotificationInfo;
-      };
-      const n = envelope.data;
+    onSse("notification", (data) => {
+      // sse.ts unwrapped the {event,data} envelope; the payload is exactly
+      // what the REST list returns (toNotification) — the id check is the
+      // same trust the pre-singleton handler had on its own parse.
+      const n = data as NotificationInfo | null;
       if (!n?.id) return;
       store().set(listAtom, (prev) => {
         // An existing id means this is an UPDATE (e.g. an invitation gained

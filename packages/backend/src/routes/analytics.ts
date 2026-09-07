@@ -39,7 +39,7 @@ analyticsRoutes.get("/teams/:id/analytics", async (c) => {
   const rangeRaw = Number.parseInt(c.req.query("range") ?? "30", 10);
   const range = Number.isInteger(rangeRaw) && rangeRaw >= 1 ? Math.min(rangeRaw, 92) : 30;
 
-  // Pull full history. Teams cap at 3 members and event volume is small;
+  // Pull full history. Even at the largest plan cap event volume is small;
   // slicing in SQL wouldn't earn anything meaningful.
   const events = await prisma.taskEvent.findMany({
     where: { teamId },

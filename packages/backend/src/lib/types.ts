@@ -13,6 +13,8 @@ import type {
   TeamInvitation as PrismaTeamInvitation,
   Comment as PrismaComment,
   Notification as PrismaNotification,
+  SubtaskItem as PrismaSubtaskItem,
+  Attachment as PrismaAttachment,
 } from "@mokara/db/prisma/generated/client";
 
 export type UserResponse = {
@@ -28,7 +30,14 @@ export type TeamResponse = {
   slug: string;
   owner_id: string;
   kind: string; // "workspace" | "team" (PRD-06)
+  // PRD-11 Phase 1.4: whether this container has a logo. A boolean, not a URL —
+  // the client builds the same-origin path itself, so the backend never has to
+  // know how it is addressed from the browser.
+  has_logo: boolean;
   member_count: number;
+  // PRD-11: the leader's plan cap, or null when the plan is unlimited. The UI
+  // renders this instead of ever hardcoding "3" again.
+  member_limit: number | null;
   created_at: string;
 };
 
@@ -64,12 +73,40 @@ export type TaskResponse = {
   priority: string;
   project_id: string | null;
   kpis: TaskKpiResponse[];
+  // PRD-11: the task's checklist, in stored order. Embedded for the same reason
+  // as creator/assignee — the client replaces whole task objects after a
+  // mutation, so a response without them would wipe the list.
+  subtasks: SubtaskResponse[];
   creator: UserRefResponse | null;
   assignee: UserRefResponse | null;
   due_date: string | null;
   flagged: boolean;
   created_at: string;
   updated_at: string;
+};
+
+// PRD-11 Phase 1.2: one checklist item. No created_at on purpose — the order is
+// `position`, and a checklist row has no history worth surfacing yet.
+export type SubtaskResponse = {
+  id: string;
+  title: string;
+  done: boolean;
+  position: number;
+};
+
+// PRD-11 Phase 1.3: one stored file. `size_bytes` is what the server measured on
+// the way into the bucket, never what the client claimed — the quota sum depends
+// on that. The storage key is deliberately NOT exposed: it is server-internal
+// addressing and tells a client nothing it needs.
+export type AttachmentResponse = {
+  id: string;
+  task_id: string | null;
+  comment_id: string | null;
+  filename: string;
+  size_bytes: number;
+  content_type: string;
+  uploader: UserRefResponse;
+  created_at: string;
 };
 
 export type ProjectResponse = {
@@ -107,6 +144,10 @@ export type CommentResponse = {
   author: UserResponse;
   parent_id: string | null;
   body: string;
+  // PRD-11: files attached to this comment (images preview, everything else
+  // downloads). Embedded like subtasks — the client replaces whole comment
+  // objects after a mutation, so a response without them would wipe the list.
+  attachments: AttachmentResponse[];
   created_at: string;
   updated_at: string;
 };
@@ -163,14 +204,23 @@ export function toUser(
 
 // member_count is not on the row — callers pass the count they already have
 // (list route group-bys it, detail route uses its members array, create is 1).
-export function toTeam(t: PrismaTeam, memberCount = 1): TeamResponse {
+// member_limit likewise comes from lib/entitlements, never from the row.
+// Both are required: a caller that has not thought about which plan governs the
+// team must fail to compile rather than silently report unlimited.
+export function toTeam(
+  t: PrismaTeam,
+  memberCount: number,
+  memberLimit: number | null
+): TeamResponse {
   return {
     id: t.id,
     name: t.name,
     slug: t.slug,
     owner_id: t.ownerId,
     kind: t.kind,
+    has_logo: t.logoKey !== null,
     member_count: memberCount,
+    member_limit: memberLimit,
     created_at: t.createdAt.toISOString(),
   };
 }
@@ -210,6 +260,9 @@ export function toInvitation(
 export function toComment(
   c: PrismaComment & {
     author: Pick<PrismaUser, "id" | "username" | "displayName" | "createdAt">;
+    attachments?: (PrismaAttachment & {
+      uploader: Pick<PrismaUser, "id" | "username" | "displayName">;
+    })[];
   }
 ): CommentResponse {
   return {
@@ -219,6 +272,10 @@ export function toComment(
     author: toUser(c.author),
     parent_id: c.parentId,
     body: c.body,
+    attachments: (c.attachments ?? [])
+      .slice()
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map(toAttachment),
     created_at: c.createdAt.toISOString(),
     updated_at: c.updatedAt.toISOString(),
   };
@@ -244,6 +301,7 @@ export function toTask(
   t: PrismaTask & {
     creator?: Pick<PrismaUser, "id" | "username" | "displayName"> | null;
     assignee?: Pick<PrismaUser, "id" | "username" | "displayName"> | null;
+    subtaskItems?: PrismaSubtaskItem[];
   },
   kpis: TaskKpiResponse[] = []
 ): TaskResponse {
@@ -256,6 +314,10 @@ export function toTask(
     priority: t.priority,
     project_id: t.projectId,
     kpis,
+    subtasks: (t.subtaskItems ?? [])
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .map(toSubtask),
     creator: t.creator ? toUserRef(t.creator) : null,
     assignee: t.assignee ? toUserRef(t.assignee) : null,
     due_date: t.dueDate ? t.dueDate.toISOString() : null,
@@ -269,6 +331,27 @@ export function toTask(
 // stay one-liners.
 export function toTaskKpi(b: PrismaTaskKpi & { kpi: Pick<PrismaKpi, "name"> }): TaskKpiResponse {
   return { kpi_id: b.kpiId, name: b.kpi.name, weight: b.weight };
+}
+
+// PRD-11 Phase 1.2: checklist row → API shape.
+export function toSubtask(s: PrismaSubtaskItem): SubtaskResponse {
+  return { id: s.id, title: s.title, done: s.done, position: s.position };
+}
+
+// PRD-11 Phase 1.3: attachment row → API shape (uploader must be included).
+export function toAttachment(
+  a: PrismaAttachment & { uploader: Pick<PrismaUser, "id" | "username" | "displayName"> }
+): AttachmentResponse {
+  return {
+    id: a.id,
+    task_id: a.taskId,
+    comment_id: a.commentId,
+    filename: a.filename,
+    size_bytes: a.sizeBytes,
+    content_type: a.contentType,
+    uploader: toUserRef(a.uploader),
+    created_at: a.createdAt.toISOString(),
+  };
 }
 
 export function toProject(

@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 import { prisma } from "../db.ts";
-import { isTeamFull } from "../lib/db-error.ts";
 import { respondSchema } from "../lib/validation.ts";
 import { validate } from "../lib/validate.ts";
+import { joinDenial } from "../lib/entitlements.ts";
 import { toInvitation } from "../lib/types.ts";
-import { notify, markInvitationResponded } from "../lib/notifications.ts";
+import { notify, markInvitationResponded, regenerateDueSoonForTeam } from "../lib/notifications.ts";
 import type { Vars } from "../middleware/auth.ts";
 
 export const invitationRoutes = new Hono<{ Variables: Vars }>();
@@ -62,28 +62,32 @@ invitationRoutes.post("/:id/respond", validate("json", respondSchema), async (c)
     return c.json({ invitation_id: invId, status: "declined" });
   }
 
-  // accept — insert member + mark accepted. The team_full trigger
-  // raises P0001 with message containing "team_full" if the cap is hit.
-  try {
-    await prisma.$transaction(async (tx) => {
-      await tx.teamMember.create({
-        data: { teamId: inv.teamId, userId, role: "member" },
-      });
-      await tx.teamInvitation.update({
-        where: { id: invId },
-        data: { status: "accepted", respondedAt: new Date() },
-      });
-      // PRD-06: the first ACCEPTED invitation promotes the container —
-      // one-way, a team never reverts to a workspace.
-      await tx.team.update({ where: { id: inv.teamId }, data: { kind: "team" } });
+  // accept — the join gate (PRD-11 Phase 1.1). The enforce_max_team_members
+  // trigger used to be the race-safe guard and it is gone (a trigger cannot see
+  // the leader's plan), so the cap is now checked INSIDE this transaction after
+  // locking the workspace row: two simultaneous accepts serialise on that lock
+  // and the second sees the first one's member, exactly like the trigger did.
+  // An over-cap answer commits an empty transaction - there is nothing to undo.
+  const denial = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT 1 FROM "teams" WHERE "id" = ${inv.teamId}::uuid FOR UPDATE`;
+
+    const join = await joinDenial(tx, inv.teamId);
+    if (join) return join;
+
+    await tx.teamMember.create({
+      data: { teamId: inv.teamId, userId, role: "member" },
     });
-  } catch (e) {
-    // The enforce_max_team_members trigger raises 'team_full'; db-error.ts
-    // explains why the raw Prisma message can't be matched directly.
-    if (isTeamFull(e)) {
-      return c.json({ error: "team_full", message: "team already has 3 members" }, 409);
-    }
-    throw e;
+    await tx.teamInvitation.update({
+      where: { id: invId },
+      data: { status: "accepted", respondedAt: new Date() },
+    });
+    // PRD-06: the first ACCEPTED invitation promotes the container —
+    // one-way, a team never reverts to a workspace.
+    await tx.team.update({ where: { id: inv.teamId }, data: { kind: "team" } });
+    return null;
+  });
+  if (denial) {
+    return c.json({ error: denial.error, message: denial.message }, denial.status);
   }
 
   await markInvitationResponded(userId, invId, "accepted");
@@ -94,6 +98,10 @@ invitationRoutes.post("/:id/respond", validate("json", respondSchema), async (c)
     team_name: team?.name,
     team_id: inv.teamId,
   });
+  // PRD-11 §1.5: the new member's containers just gained a team — any
+  // matching tasks there should appear in their drawer the next time it
+  // opens, and the bell should bump if any are unread.
+  void regenerateDueSoonForTeam(inv.teamId);
 
   return c.json({
     invitation_id: invId,

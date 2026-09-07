@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { prisma } from "../db.ts";
-import { markRead } from "../lib/notifications.ts";
+import { markRead, regenerateDueSoonForUser } from "../lib/notifications.ts";
 import { validate } from "../lib/validate.ts";
 import { z } from "zod";
 import { toNotification } from "../lib/types.ts";
@@ -21,6 +21,12 @@ const readSchema = z
 
 notificationRoutes.get("/", async (c) => {
   const userId = c.get("userId");
+  // PRD-11 §1.5 (now persistent rows): the drawer's first load is also the
+  // session-start catch-up — bring the user's due-soon rows in line with the
+  // current matching set before returning, so a stale row from before a
+  // status change never lingers unread across devices. Mutation hooks keep
+  // things tight between requests; this is the safety net.
+  await regenerateDueSoonForUser(userId);
   const [rows, unread] = await Promise.all([
     prisma.notification.findMany({
       where: { userId },

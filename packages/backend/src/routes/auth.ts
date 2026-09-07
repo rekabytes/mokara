@@ -19,6 +19,7 @@ import {
   revokeSessionById,
 } from "../lib/sessions.ts";
 import { authRequired } from "../middleware/auth.ts";
+import { getTeamRole } from "../lib/team-membership.ts";
 import { getRedis } from "../redis.ts";
 import { log } from "../lib/logger.ts";
 import { toUser } from "../lib/types.ts";
@@ -179,6 +180,20 @@ export async function updateMe(userId: string, displayName: string | null) {
     select: { id: true, username: true, displayName: true, createdAt: true },
   });
   return toUser(u);
+}
+
+// Owner (2026-09-06): last-selected-container pointer. Same inline-route +
+// plain-helper shape as updateMe (a standalone Context cannot carry the
+// validated-json type). Membership is the whole authorization story here —
+// false means "not one of yours", which the route answers 403.
+export async function setLastContainer(userId: string, teamId: string): Promise<boolean> {
+  const role = await getTeamRole(userId, teamId);
+  if (!role) return false;
+  await prisma.user.update({
+    where: { id: userId },
+    data: { lastContainerId: teamId },
+  });
+  return true;
 }
 
 // `me` lives on the authed surface; export the handler so index.ts can mount

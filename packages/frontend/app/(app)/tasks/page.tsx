@@ -11,7 +11,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { useAtom } from "jotai";
+import { atom, useAtom } from "jotai";
 import { DatePicker } from "./DatePicker";
 import {
   api,
@@ -26,6 +26,8 @@ import {
   type Kpi,
   type TeamMember,
   type UserRef,
+  type SubtaskItem,
+  type Attachment,
 } from "@/lib/api";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { useContainers } from "@/lib/containers";
@@ -53,6 +55,11 @@ import {
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { NotificationBell } from "@/components/NotificationBell";
 import { cn } from "@/lib/cn";
+
+// PRD-10/11: members of the current container, shared by the drawer's and the
+// create-modal's AssigneeChip. Written by the page-level fetch (outside React)
+// so both read the same list — neither component fetches its own.
+const containerMembersAtom = atom<TeamMember[]>([]);
 
 // Gap between a trigger and the menu that opens under it, and the same number
 // used by the drawer's width animation. Module scope so `placeBelow`'s
@@ -162,6 +169,9 @@ function shortId(t: Task): string {
 
 export default function TasksPage() {
   const session = useSession();
+  // Owner rule (2026-09-05): KPI binding is personal — the chip only offers the
+  // signed-in user's own KPIs, on both the modal and the drawer.
+  const currentUserId = session.status === "authed" ? session.user.id : null;
 
   // PRD-06: the container comes from the global switcher atoms — no boot
   // fetch/effect here anymore. Containers failing is a boot-level error.
@@ -185,6 +195,12 @@ export default function TasksPage() {
   const [newDueDate, setNewDueDate] = useState<string | null>(null);
   const [newProjectId, setNewProjectId] = useState<string | null>(null);
   const [newKpis, setNewKpis] = useState<BindingDraft[]>([]);
+  // PRD-10: assignee at creation.
+  const [newAssigneeId, setNewAssigneeId] = useState<string | null>(null);
+  // PRD-11: steps and files are CREATION-TIME features — they are drafted here
+  // and uploaded right after the task exists (two-phase, like comments).
+  const [newSubtasks, setNewSubtasks] = useState<string[]>([]);
+  const [newFiles, setNewFiles] = useState<File[]>([]);
   const [creating, setCreating] = useState(false);
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -206,7 +222,35 @@ export default function TasksPage() {
     if (teamId) loadTasks();
   }, [teamId, loadTasks]);
 
-  async function createTaskFromModal() {
+  // PRD-10/11: container members shared by the drawer's AssigneeChip (main row
+  // and "…" panel). Written into the Jotai atom so both locations see the same
+  // list without either managing their own fetch.
+  const [, setContainerMembers] = useAtom(containerMembersAtom);
+  useEffect(() => {
+    if (!teamId) {
+      setContainerMembers([]);
+      return;
+    }
+    let alive = true;
+    void api
+      .getTeam(teamId)
+      .then((detail) => {
+        if (alive) setContainerMembers(detail.members);
+      })
+      .catch(() => {
+        if (alive) setContainerMembers([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [teamId, setContainerMembers]);
+
+  async function createTaskFromModal(e: React.FormEvent) {
+    // The submit button is a real <button type="submit"> inside a real <form>;
+    // without preventDefault the browser navigates to /tasks?… the moment the
+    // synchronous part of this handler finishes and aborts the upload chain
+    // (createTask succeeds → row on board, but file uploads never run).
+    e.preventDefault();
     if (!teamId) return;
     const title = newTitle.trim();
     if (!title || creating) return;
@@ -220,13 +264,39 @@ export default function TasksPage() {
           status: newStatus,
           due_date: newDueDate ?? undefined,
           project_id: newProjectId ?? undefined,
+          assignee_id: newAssigneeId ?? undefined,
           kpis: newKpis.length ? newKpis : undefined,
         }),
       { fallback: "Failed to create task" }
     );
+    if (!created) {
+      setCreating(false);
+      return;
+    }
+
+    // PRD-11: steps upload first (sequential appends land at positions 0..n-1),
+    // then files — image and PDF only, enforced by the route.
+    for (const step of newSubtasks) {
+      await run(() => api.createSubtask(created.id, step), {
+        fallback: "Failed to add a step",
+      });
+    }
+    for (const file of newFiles) {
+      await run(() => api.uploadAttachment(created.id, file), {
+        fallback: "Failed to attach the file",
+      });
+    }
+
+    // The created row predates its own steps/files — refetch so the board and
+    // the drawer start from the complete payload.
+    const fresh = await run(() => api.getTask(created.id), {
+      fallback: "Failed to load the new task",
+    });
     setCreating(false);
-    if (!created) return;
-    setTasks((prev) => [created, ...prev]);
+    // Only close the modal and add to the board when the refetch succeeds.
+    // On failure the error stays visible and the user can retry.
+    if (!fresh) return;
+    setTasks((prev) => [fresh, ...prev]);
     resetAndCloseModal();
   }
 
@@ -238,6 +308,7 @@ export default function TasksPage() {
     setNewDueDate(null);
     setNewProjectId(null);
     setNewKpis([]);
+    setNewAssigneeId(null);
     setModalOpen(true);
   }
 
@@ -249,6 +320,9 @@ export default function TasksPage() {
     setNewDueDate(null);
     setNewProjectId(null);
     setNewKpis([]);
+    setNewAssigneeId(null);
+    setNewSubtasks([]);
+    setNewFiles([]);
     setModalOpen(false);
   }
 
@@ -541,7 +615,12 @@ export default function TasksPage() {
                 {visibleGroups.map((g) => {
                   const items = visibleByGroup[g.id];
                   const isCollapsed = collapsed.has(g.id);
-                  if (items.length === 0) return null;
+                  // PRD-11: the To-do group STAYS on the board even when empty —
+                  // its header carries the only "+" that opens New task, so it
+                  // must never vanish (an in-progress-only board used to lose
+                  // the ability to create anything). Other groups keep their
+                  // hide-when-empty behaviour.
+                  if (items.length === 0 && g.id !== "todo") return null;
                   return (
                     <div key={g.id} className="flex flex-col">
                       <div className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-[var(--color-surface-2)]">
@@ -620,6 +699,13 @@ export default function TasksPage() {
                                 />
                               );
                             })}
+                            {/* The To-do group's empty state (it is the only group
+                                that renders at zero). */}
+                            {items.length === 0 && (
+                              <li className="m-0 list-none px-2 py-1.5 text-[0.78rem] text-[var(--color-ink-faint)]">
+                                Nothing queued yet.
+                              </li>
+                            )}
                           </motion.ul>
                         )}
                       </AnimatePresence>
@@ -687,11 +773,18 @@ export default function TasksPage() {
             dueDate={newDueDate}
             setDueDate={setNewDueDate}
             projects={projects}
-            kpis={containerKpis}
+            kpis={containerKpis.filter((k) => k.owner_id === currentUserId)}
             projectId={newProjectId}
             setProjectId={setNewProjectId}
             kpiBindings={newKpis}
             setKpiBindings={setNewKpis}
+            assigneeId={newAssigneeId}
+            setAssigneeId={setNewAssigneeId}
+            currentUserId={currentUserId}
+            subtasks={newSubtasks}
+            setSubtasks={setNewSubtasks}
+            files={newFiles}
+            setFiles={setNewFiles}
             creating={creating}
             onSubmit={createTaskFromModal}
             onClose={resetAndCloseModal}
@@ -720,6 +813,13 @@ function NewTaskModal({
   setProjectId,
   kpiBindings,
   setKpiBindings,
+  assigneeId,
+  setAssigneeId,
+  currentUserId,
+  subtasks,
+  setSubtasks,
+  files,
+  setFiles,
   creating,
   onSubmit,
   onClose,
@@ -741,11 +841,36 @@ function NewTaskModal({
   setProjectId: (id: string | null) => void;
   kpiBindings: BindingDraft[];
   setKpiBindings: (b: BindingDraft[]) => void;
+  // PRD-10: assignee at creation, offered from the shared members atom.
+  assigneeId: string | null;
+  setAssigneeId: (id: string | null) => void;
+  currentUserId: string | null;
+  // PRD-11: steps and files exist only at creation — drafted here, uploaded
+  // after the task exists.
+  subtasks: string[];
+  setSubtasks: (steps: string[]) => void;
+  files: File[];
+  setFiles: (f: File[]) => void;
   creating: boolean;
   onSubmit: (e: FormEvent) => void;
   onClose: () => void;
   onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => void;
 }) {
+  // Local draft for the step input; the committed list is the parent's state.
+  const [stepDraft, setStepDraft] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+  // PRD-10: assignee at creation. Members come from the shared container atom
+  // (page-level fetch) — the modal runs no fetch of its own.
+  const [members] = useAtom(containerMembersAtom);
+  const assigneeMember = members.find((m) => m.user_id === assigneeId) ?? null;
+
+  function commitStep() {
+    const step = stepDraft.trim();
+    if (!step) return;
+    setSubtasks([...subtasks, step]);
+    setStepDraft("");
+  }
+
   return (
     <motion.div
       role="dialog"
@@ -881,26 +1006,158 @@ function NewTaskModal({
                 </ChipShell>
               )}
             />
-            <ProjectChip projects={projects} value={projectId} onChange={setProjectId} />
-            <KpiChip kpis={kpis} value={kpiBindings} onChange={setKpiBindings} />
-            <button
-              type="button"
-              aria-label="More"
-              className="grid size-7 cursor-pointer place-items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-surface)] text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+            {/* PRD-10: assignee at creation — the same inline chip as the
+                drawer. Members come from the shared Jotai atom (page-level
+                fetch); the modal never fetches. */}
+            <AssigneeChip
+              members={members}
+              creator={null}
+              value={
+                assigneeMember
+                  ? {
+                      id: assigneeMember.user_id,
+                      username: assigneeMember.username,
+                      display_name: assigneeMember.display_name,
+                    }
+                  : null
+              }
+              currentUserId={currentUserId}
+              onChange={setAssigneeId}
+            />
+
+            {/* The "…" — project and KPIs fold in here, identical to the
+                drawer's panel; each chip still opens its own menu inside. */}
+            <Dropdown
+              trigger={(open) => (
+                <ChipShell open={open}>
+                  <DotsIcon />
+                  <ChevronIcon />
+                </ChipShell>
+              )}
             >
-              <DotsIcon />
-            </button>
+              <div className="flex flex-col items-start gap-1 p-1.5">
+                <ProjectChip projects={projects} value={projectId} onChange={setProjectId} />
+                {/* kpis arrive pre-filtered to the actor's own — binding is
+                    personal. */}
+                <KpiChip kpis={kpis} value={kpiBindings} onChange={setKpiBindings} />
+              </div>
+            </Dropdown>
           </div>
+
+          {/* Steps — creation-time checklist (PRD-11). Drafted here; uploaded
+              right after the task exists. */}
+          <div className="px-4 pb-3">
+            <p className="m-0 mb-1 text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-muted)]">
+              Steps
+            </p>
+            {subtasks.length > 0 && (
+              <div className="mb-1.5 flex flex-col gap-1">
+                {subtasks.map((step, i) => (
+                  <span
+                    key={`${step}-${i}`}
+                    className="flex items-center gap-1.5 rounded-md bg-[var(--color-surface)] px-2 py-1 text-[0.8rem] text-[var(--color-ink)]"
+                  >
+                    <span className="font-mono text-[0.7rem] text-[var(--color-ink-faint)]">
+                      {i + 1}.
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{step}</span>
+                    <button
+                      type="button"
+                      aria-label={`Remove step ${i + 1}`}
+                      onClick={() => setSubtasks(subtasks.filter((_, j) => j !== i))}
+                      className="grid size-4 shrink-0 cursor-pointer place-items-center rounded-full text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-danger)]"
+                    >
+                      <CloseSmallIcon />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center gap-1.5">
+              <input
+                type="text"
+                value={stepDraft}
+                onChange={(e) => setStepDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitStep();
+                  }
+                }}
+                placeholder="Add a step…"
+                maxLength={200}
+                aria-label="New step"
+                className="field min-w-0 flex-1 px-2 py-1 text-[0.82rem]"
+              />
+              <button
+                type="button"
+                onClick={commitStep}
+                disabled={!stepDraft.trim()}
+                aria-label="Add step"
+                className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md text-[var(--color-ink-muted)] transition-colors duration-150 hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)] disabled:cursor-default disabled:opacity-40"
+              >
+                <PlusSmallIcon />
+              </button>
+            </div>
+          </div>
+
+          {/* Attached files — removable until Create; image and PDF only. */}
+          {files.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 px-4 pb-2">
+              {files.map((f, i) => (
+                <span
+                  key={`${f.name}-${i}`}
+                  className="flex max-w-full items-center gap-1 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-2 py-[0.15rem] text-[0.72rem] text-[var(--color-ink-muted)]"
+                >
+                  <PaperclipIcon />
+                  <span className="min-w-0 truncate">{f.name}</span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${f.name}`}
+                    onClick={() => setFiles(files.filter((_, j) => j !== i))}
+                    className="grid size-3.5 shrink-0 cursor-pointer place-items-center rounded-full text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-danger)]"
+                  >
+                    <CloseSmallIcon />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Footer: attachment + Cancel + Create */}
           <div className="flex items-center justify-between border-t border-[var(--color-border-soft)] px-4 py-2.5">
-            <button
-              type="button"
-              aria-label="Add attachment"
-              className="grid size-7 cursor-pointer place-items-center rounded-md text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
-            >
-              <PaperclipIcon />
-            </button>
+            <div className="flex items-center gap-1.5">
+              {/* PRD-11: files exist only at creation — image and PDF only,
+                  enforced by the route. The paperclip here was a dead button
+                  before; it opens the picker now. */}
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                aria-label="Attach an image or PDF"
+                className="grid size-7 cursor-pointer place-items-center rounded-md text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+              >
+                <PaperclipIcon />
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const picked = e.target.files;
+                  if (picked && picked.length > 0) {
+                    setFiles([...files, ...Array.from(picked)]);
+                  }
+                  e.target.value = "";
+                }}
+              />
+              {files.length > 0 && (
+                <span className="text-[0.7rem] text-[var(--color-ink-faint)]">
+                  {files.length} file{files.length === 1 ? "" : "s"} attached
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -1379,7 +1636,7 @@ function KpiChip({
     >
       {kpis.length === 0 && (
         <p className="m-0 px-3 py-2 text-[0.78rem] text-[var(--color-ink-faint)]">
-          No KPIs yet — create them on the team page.
+          None of your KPIs here yet — create one on the team page.
         </p>
       )}
       {kpis.map((k) => {
@@ -1941,25 +2198,10 @@ function TaskDetailDrawer({
   const [titleDraft, setTitleDraft] = useState(task.title);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
-  // ---- PRD-10: container members for the assignee dropdown. The member list
-  //      is not part of the page's data, so the drawer reads it straight from
-  //      the team detail API when the drawer's container changes — outside
-  //      React, the documented allowed effect. ----
-  const [members, setMembers] = useState<TeamMember[]>([]);
-  useEffect(() => {
-    let alive = true;
-    void api
-      .getTeam(task.team_id)
-      .then((detail) => {
-        if (alive) setMembers(detail.members);
-      })
-      .catch(() => {
-        if (alive) setMembers([]);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [task.team_id]);
+  // ---- PRD-10/11: container members, read from the shared atom — the page
+  // effect keeps the current container's list warm; the drawer manages no
+  // member state of its own.
+  const [members] = useAtom(containerMembersAtom);
 
   // ---- Due date: read straight off the task, persisted via PATCH on every
   //      change. DatePicker is fully controlled by `task.due_date`, so a
@@ -2056,9 +2298,10 @@ function TaskDetailDrawer({
         </button>
       </div>
 
-      {/* Body — flex column: fixed title/description/chips up top, comments
-          section takes the remaining height (its list is the drawer's only
-          scroll region). Title/description stay line-clamped. */}
+      {/* Body — flex column: fixed title/description/chips/checklist up top,
+          comments take the remaining height (shrink-0 on the checklist keeps
+          that true however many steps exist). Title/description stay
+          line-clamped. */}
       <div className="flex flex-1 flex-col overflow-hidden px-5 py-4">
         {/* Title — double-click to rename inline */}
         {titleEditing ? (
@@ -2101,8 +2344,14 @@ function TaskDetailDrawer({
           }}
         />
 
-        {/* Chip row: status / priority / date / flag */}
-        <div className="mt-5 flex flex-wrap items-center gap-1.5">
+        {/* Files — PRD-11, creation-time only. Part of the description area;
+            renders nothing when the task has none. */}
+        <AttachmentsSection key={`files-${task.id}`} taskId={task.id} currentUser={currentUser} />
+
+        {/* Chip row — ONE line (owner): status / priority / due date / assignee
+            stay inline; project, KPIs and flag fold into the "…" panel, which
+            keeps them fully editable (each chip still opens its own menu). */}
+        <div className="mt-5 flex items-center gap-1.5">
           <Dropdown
             trigger={(open) => (
               <ChipShell open={open}>
@@ -2168,36 +2417,58 @@ function TaskDetailDrawer({
             currentUserId={currentUser?.id ?? null}
             onChange={(assigneeId) => onUpdate({ assignee_id: assigneeId })}
           />
-          <ProjectChip
-            projects={projects}
-            value={task.project_id}
-            onChange={(id) => onUpdate({ project_id: id })}
-          />
-          <KpiChip
-            kpis={kpis}
-            value={task.kpis}
-            onChange={(next) =>
-              onSetKpis(next.map((b) => ({ kpi_id: b.kpi_id, weight: b.weight })))
-            }
-          />
 
-          {/* Flag chip — uses onToggleFlag (POST /tasks/:id/flag), since
-                PATCH /tasks/:id is .strict() and rejects `flagged`. */}
-          <button
-            type="button"
-            onClick={onToggleFlag}
-            aria-pressed={task.flagged}
-            className={cn(
-              "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.78rem] font-medium transition-colors duration-150",
-              task.flagged
-                ? "border-[var(--color-danger-border)] bg-[var(--color-danger-soft)] text-[var(--color-danger)]"
-                : "border-[var(--color-border-soft)] bg-[var(--color-surface)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+          {/* The "…" — everything below the owner's priority line lives here,
+              still editable. */}
+          <Dropdown
+            trigger={(open) => (
+              <ChipShell open={open}>
+                <DotsIcon />
+                <ChevronIcon />
+              </ChipShell>
             )}
           >
-            <FlagIcon filled={task.flagged} />
-            <span>{task.flagged ? "Flagged" : "Flag"}</span>
-          </button>
+            <div className="flex flex-col items-start gap-1 p-1.5">
+              <ProjectChip
+                projects={projects}
+                value={task.project_id}
+                onChange={(id) => onUpdate({ project_id: id })}
+              />
+              <KpiChip
+                // Only the actor's own KPIs are offered; bindings teammates
+                // made are frozen from here (the server preserves them).
+                kpis={kpis.filter((k) => k.owner_id === currentUser?.id)}
+                value={task.kpis.filter((b) =>
+                  kpis.some((k) => k.owner_id === currentUser?.id && k.id === b.kpi_id)
+                )}
+                onChange={(next) =>
+                  onSetKpis(next.map((b) => ({ kpi_id: b.kpi_id, weight: b.weight })))
+                }
+              />
+              {/* Flag chip — uses onToggleFlag (POST /tasks/:id/flag), since
+                  PATCH /tasks/:id is .strict() and rejects `flagged`. */}
+              <button
+                type="button"
+                onClick={onToggleFlag}
+                aria-pressed={task.flagged}
+                className={cn(
+                  "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.78rem] font-medium transition-colors duration-150",
+                  task.flagged
+                    ? "border-[var(--color-danger-border)] bg-[var(--color-danger-soft)] text-[var(--color-danger)]"
+                    : "border-[var(--color-border-soft)] bg-[var(--color-surface)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+                )}
+              >
+                <FlagIcon filled={task.flagged} />
+                <span>{task.flagged ? "Flagged" : "Flag"}</span>
+              </button>
+            </div>
+          </Dropdown>
         </div>
+
+        {/* Checklist — PRD-11 Phase 1.2: creation-time only, so this is a
+            viewer for steps that exist. `key` remounts it per task so the
+            seeded list can never bleed from one task to the next. */}
+        <SubtasksSection key={task.id} task={task} />
 
         {/* Comments — fills remaining drawer height (PRD-03 Phase 1) */}
         <CommentsSection taskId={task.id} currentUser={currentUser} />
@@ -2316,12 +2587,464 @@ function wasEdited(c: Comment): boolean {
   return Math.abs(Date.parse(c.updated_at) - Date.parse(c.created_at)) > 1000;
 }
 
+// ---- PRD-11 Phase 1.2: the task checklist -------------------------------
+
+function SubtasksSection({ task }: { task: Task }) {
+  // Seeded straight from the task payload — the checklist is embedded in every
+  // task response — and the drawer mounts this per task with key={task.id}, so
+  // no prop→state mirror effect is needed (house rule: seed, don't sync).
+  // Steps are a CREATION-TIME feature (owner, 2026-09-05): the New task modal
+  // adds them; this section only shows, ticks, renames, reorders and removes
+  // what exists — and renders nothing at all when there are none.
+  const [items, setItems] = useState<SubtaskItem[]>(task.subtasks);
+  const { error, setError, run } = useAsyncError();
+
+  const doneCount = items.filter((i) => i.done).length;
+
+  async function toggle(item: SubtaskItem) {
+    const done = !item.done;
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, done } : i)));
+    const res = await run(() => api.updateSubtask(item.id, { done }), {
+      fallback: "Failed to update the step",
+      onError: () =>
+        setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, done: !done } : i))),
+    });
+    if (!res) return;
+    setError(null);
+    setItems((prev) => prev.map((i) => (i.id === item.id ? res.subtask : i)));
+  }
+
+  async function rename(item: SubtaskItem, title: string) {
+    const trimmed = title.trim();
+    if (!trimmed || trimmed === item.title) return;
+    const prevTitle = item.title;
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, title: trimmed } : i)));
+    const res = await run(() => api.updateSubtask(item.id, { title: trimmed }), {
+      fallback: "Failed to rename the step",
+      onError: () =>
+        setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, title: prevTitle } : i))),
+    });
+    if (!res) return;
+    setError(null);
+    setItems((prev) => prev.map((i) => (i.id === item.id ? res.subtask : i)));
+  }
+
+  async function remove(item: SubtaskItem) {
+    const snapshot = items;
+    setItems((prev) => prev.filter((i) => i.id !== item.id));
+    // DELETE resolves void → undefined, so test for null, not falsiness.
+    const ok = await run(() => api.deleteSubtask(item.id), {
+      fallback: "Failed to delete the step",
+      onError: () => setItems(snapshot),
+    });
+    if (ok !== null) setError(null);
+  }
+
+  async function move(index: number, delta: number) {
+    const target = index + delta;
+    if (target < 0 || target >= items.length) return;
+    const moved = items[index];
+    const rest = items.filter((_, i) => i !== index);
+    const next = [...rest.slice(0, target), moved, ...rest.slice(target)];
+    setItems(next);
+    // The whole order goes up every time: a dense 0..n-1 rewrite is cheaper to
+    // reason about than patching two positions and hoping they land in order.
+    const ok = await run(
+      () =>
+        api.orderSubtasks(
+          task.id,
+          next.map((i) => i.id)
+        ),
+      {
+        fallback: "Failed to reorder the steps",
+        // The array order is what we drew, so roll the whole list back.
+        onError: () => setItems(items),
+      }
+    );
+    if (ok !== null) setError(null);
+  }
+
+  // A task created without steps shows no checklist at all (owner: "if it
+  // wasn't added, don't show"). Deleting the last step hides it again.
+  if (items.length === 0) return null;
+
+  return (
+    <section className="mt-5 shrink-0" aria-label="Checklist">
+      <div className="flex items-center gap-2">
+        <h3 className="text-[0.74rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-muted)]">
+          Checklist
+        </h3>
+        <span className="rounded-full bg-[var(--color-surface-2)] px-1.5 py-px text-[0.68rem] font-medium text-[var(--color-ink-faint)]">
+          {doneCount}/{items.length}
+        </span>
+      </div>
+
+      <div className="mt-1.5 max-h-[9rem] overflow-y-auto pr-1">
+        <AnimatePresence initial={false}>
+          {items.map((item, index) => (
+            <motion.div
+              key={item.id}
+              variants={listItemVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              layout="position"
+              className="group flex items-center gap-2 py-[0.22rem]"
+            >
+              <button
+                type="button"
+                onClick={() => toggle(item)}
+                aria-pressed={item.done}
+                aria-label={item.done ? "Mark as not done" : "Mark as done"}
+                className={cn(
+                  "grid size-[18px] shrink-0 cursor-pointer place-items-center rounded-[5px] border transition-colors duration-150",
+                  item.done
+                    ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
+                    : "border-[var(--color-border-strong)] bg-[var(--color-surface-solid)] text-transparent hover:border-[var(--color-accent)]"
+                )}
+              >
+                <AnimatePresence>
+                  {item.done && (
+                    <motion.svg
+                      key="tick"
+                      variants={tickVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M5 12.5l4.5 4.5L19 7"
+                        stroke="currentColor"
+                        strokeWidth="2.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </motion.svg>
+                  )}
+                </AnimatePresence>
+              </button>
+
+              {/* Title: contentEditable-free inline edit — a double-click
+                    swaps in an input seeded with the current text, same
+                    contract as the drawer's title/description fields. */}
+              <SubtaskTitle value={item.title} onCommit={(next) => rename(item, next)} />
+
+              <span className="flex shrink-0 items-center opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+                {index > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => move(index, -1)}
+                    aria-label="Move up"
+                    className="grid size-5 cursor-pointer place-items-center rounded-md text-[var(--color-ink-faint)] hover:bg-white hover:text-[var(--color-ink)]"
+                  >
+                    <MoveArrowIcon />
+                  </button>
+                )}
+                {index < items.length - 1 && (
+                  <button
+                    type="button"
+                    onClick={() => move(index, 1)}
+                    aria-label="Move down"
+                    className="grid size-5 cursor-pointer place-items-center rounded-md text-[var(--color-ink-faint)] hover:bg-white hover:text-[var(--color-ink)]"
+                  >
+                    <MoveArrowIcon down />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => remove(item)}
+                  aria-label="Delete step"
+                  className="grid size-5 cursor-pointer place-items-center rounded-md text-[var(--color-ink-faint)] hover:bg-white hover:text-[var(--color-danger)]"
+                >
+                  <TrashIcon />
+                </button>
+              </span>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
+      {error && <p className="mt-1 text-[0.72rem] text-[var(--color-danger)]">{error.message}</p>}
+    </section>
+  );
+}
+
+// One checklist row's text. Double-click to edit, Enter/blur commits, Esc
+// cancels — the same contract the drawer's title uses, at row size.
+function SubtaskTitle({ value, onCommit }: { value: string; onCommit: (next: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  if (!editing) {
+    return (
+      <span
+        onDoubleClick={() => {
+          setDraft(value);
+          setEditing(true);
+        }}
+        title="Double-click to rename"
+        className={cn(
+          "min-w-0 flex-1 cursor-text truncate rounded px-1 text-[0.85rem] transition-colors duration-150 hover:bg-[var(--color-surface-2)]",
+          value.trim() === "" ? "text-[var(--color-ink-faint)] italic" : "text-[var(--color-ink)]"
+        )}
+      >
+        {value}
+      </span>
+    );
+  }
+
+  return (
+    <input
+      autoFocus
+      type="text"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        setEditing(false);
+        onCommit(draft);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          setEditing(false);
+          onCommit(draft);
+        } else if (e.key === "Escape") {
+          setEditing(false);
+        }
+      }}
+      maxLength={200}
+      aria-label="Step name"
+      className="field min-w-0 flex-1 rounded px-1.5 py-0.5 text-[0.85rem]"
+    />
+  );
+}
+
+function MoveArrowIcon({ down = false }: { down?: boolean }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      className={down ? "rotate-180" : undefined}
+    >
+      <path
+        d="M12 19V5m0 0l-6 6m6-6l6 6"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// ---- PRD-11 Phase 1.3: files on a task ----------------------------------
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb < 10 ? kb.toFixed(1) : Math.round(kb)} KB`;
+  const mb = kb / 1024;
+  if (mb < 1024) return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
+  return `${(mb / 1024).toFixed(1)} GB`;
+}
+
+function AttachmentsSection({ taskId, currentUser }: { taskId: string; currentUser: User | null }) {
+  // Files are a CREATION-TIME feature (owner, 2026-09-05): the New task modal
+  // uploads them right after the task exists, and this section — now part of
+  // the description area — only ever SHOWS them. No composer, no drop zone:
+  // post-creation images belong in comments. Hidden entirely when the task has
+  // none; a failed load also renders as nothing (req() already logged it),
+  // which is the honest reading of "don't show if none".
+  const [files, setFiles] = useState<Attachment[] | null>(null);
+  // Set by clicking an image; rendered as a full-screen preview (portal).
+  const [viewing, setViewing] = useState<Attachment | null>(null);
+  const { error, setError, run } = useAsyncError();
+
+  const load = useCallback(async () => {
+    try {
+      const res = await api.listAttachments(taskId);
+      setFiles(res.attachments);
+    } catch {
+      setFiles(null); // an unloadable list reads as "no files" — logged in req()
+    }
+  }, [taskId]);
+
+  // Server sync: load the list when the task changes (outside React).
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function remove(file: Attachment) {
+    const snapshot = files ?? [];
+    setFiles(snapshot.filter((f) => f.id !== file.id));
+    // DELETE resolves void → undefined, so test for null, not falsiness.
+    const ok = await run(() => api.deleteAttachment(file.id), {
+      fallback: "Failed to delete the file",
+      onError: () => setFiles(snapshot),
+    });
+    if (ok !== null) setError(null);
+  }
+
+  // A task with no files renders nothing at all (owner: "don't show if none").
+  if (!files || files.length === 0) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap items-start gap-1.5" aria-label="Files">
+      {files.map((f) => {
+        const mine = currentUser?.id === f.uploader.id;
+        return (
+          <div key={f.id} className="group relative">
+            {isImage(f) ? (
+              <button
+                type="button"
+                onClick={() => setViewing(f)}
+                aria-label={`Preview ${f.filename}`}
+                title={f.filename}
+                className="block cursor-pointer"
+              >
+                <img
+                  src={api.attachmentDownloadUrl(f.id)}
+                  alt={f.filename}
+                  className="size-14 rounded-[8px] border border-[var(--color-border-soft)] object-cover"
+                />
+              </button>
+            ) : (
+              <a
+                href={api.attachmentDownloadUrl(f.id)}
+                download={f.filename}
+                title={`${f.filename} · ${formatBytes(f.size_bytes)}`}
+                className="flex items-center gap-1 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-2 py-[0.2rem] text-[0.72rem] text-[var(--color-ink)] underline-offset-2 hover:bg-[var(--color-surface-2)] hover:underline"
+              >
+                <PaperclipIcon />
+                <span className="max-w-[12rem] truncate">{f.filename}</span>
+              </a>
+            )}
+            {/* PRD-11: only the uploader can remove a file — and with adding
+                locked to creation time, deletion is permanent. */}
+            {mine && (
+              <button
+                type="button"
+                onClick={() => remove(f)}
+                aria-label={`Delete ${f.filename}`}
+                className="absolute -right-1.5 -top-1.5 grid size-[18px] cursor-pointer place-items-center rounded-full border border-[var(--color-border-soft)] bg-white text-[var(--color-ink-faint)] opacity-0 transition-opacity duration-150 hover:text-[var(--color-danger)] group-hover:opacity-100 group-focus-within:opacity-100"
+              >
+                <CloseSmallIcon />
+              </button>
+            )}
+          </div>
+        );
+      })}
+
+      {error && <p className="w-full text-[0.72rem] text-[var(--color-danger)]">{error.message}</p>}
+
+      {/* Large view — shared with the comment thread (same component, same
+          rules); one presence check so it animates out on close. */}
+      <AttachmentLightbox attachment={viewing} onClose={() => setViewing(null)} />
+    </div>
+  );
+}
+
+// Images get a thumbnail + large view; everything else is a row with a
+// download link. The content type is the server's measurement of the bytes,
+// not the browser's guess from the extension.
+function isImage(a: Attachment): boolean {
+  return a.content_type.startsWith("image/");
+}
+
+/**
+ * The large view for any attachment, wherever it lives — task Files and the
+ * comment thread share it so the experience is identical. Portal +
+ * AnimatePresence is the NewTaskModal overlay idiom: one presence check,
+ * backdrop fades while the sheet lifts, both reverse on close. Esc lives here
+ * so every caller gets it for free (a keyboard listener is outside-React sync —
+ * the one kind of effect this codebase allows).
+ */
+function AttachmentLightbox({
+  attachment,
+  onClose,
+}: {
+  attachment: Attachment | null;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!attachment) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [attachment, onClose]);
+
+  return createPortal(
+    <AnimatePresence>
+      {attachment && (
+        <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Preview of ${attachment.filename}`}
+          variants={backdropVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          className="fixed inset-0 z-50 grid place-items-center p-4"
+          onClick={onClose}
+        >
+          <button
+            type="button"
+            aria-label="Close preview"
+            onClick={onClose}
+            className="absolute inset-0 cursor-default border-0 bg-[rgba(15,23,42,0.82)]"
+          />
+          <motion.figure
+            variants={sheetVariants}
+            onClick={(e) => e.stopPropagation()}
+            className="relative z-10 max-w-[92vw] overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] shadow-[var(--shadow-lift)]"
+          >
+            <img
+              src={api.attachmentDownloadUrl(attachment.id)}
+              alt={attachment.filename}
+              className="max-h-[72dvh] max-w-[86vw] object-contain"
+            />
+            <figcaption className="flex items-center gap-2 border-t border-[var(--color-border-soft)] px-3 py-2">
+              <span className="min-w-0 flex-1 truncate text-[0.82rem] font-medium text-[var(--color-ink)]">
+                {attachment.filename}
+              </span>
+              <span className="shrink-0 font-mono text-[0.7rem] text-[var(--color-ink-faint)]">
+                {formatBytes(attachment.size_bytes)} ·{" "}
+                {attachment.uploader.display_name || attachment.uploader.username}
+              </span>
+              <a
+                href={api.attachmentDownloadUrl(attachment.id)}
+                download={attachment.filename}
+                className="btn-base btn-primary shrink-0"
+                style={{ padding: "0.4rem 0.8rem", fontSize: "0.78rem" }}
+              >
+                Download
+              </a>
+            </figcaption>
+          </motion.figure>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body
+  );
+}
+
 function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser: User | null }) {
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const { error: actionError, setError: setActionError, run } = useAsyncError();
   const [now, setNow] = useState(() => Date.now());
   const [replyTo, setReplyTo] = useState<Comment | null>(null);
+  // PRD-11: a clicked comment image opens the shared large view.
+  const [viewing, setViewing] = useState<Attachment | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   // Relative timestamps need a clock, so this is a real outside-React sync:
@@ -2367,7 +3090,7 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
     if (el) el.scrollTop = el.scrollHeight;
   }, [count]);
 
-  async function submit(body: string, parentId?: string) {
+  async function submit(body: string, parentId?: string, files?: File[]) {
     if (!currentUser) return;
     setReplyTo(null);
     const iso = new Date().toISOString();
@@ -2380,6 +3103,7 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
       author: currentUser,
       parent_id: parentId ?? null,
       body,
+      attachments: [],
       created_at: iso,
       updated_at: iso,
     };
@@ -2389,7 +3113,23 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
       // Undo the optimistic insert; the hook already surfaced the failure.
       onError: () => setComments((cs) => (cs ?? []).filter((c) => c.id !== temp.id)),
     });
-    if (res) setComments((cs) => (cs ?? []).map((c) => (c.id === temp.id ? res.comment : c)));
+    if (!res) return;
+    setComments((cs) => (cs ?? []).map((c) => (c.id === temp.id ? res.comment : c)));
+
+    // PRD-11: the files upload AFTER the comment exists, one at a time, and
+    // each one folds into that comment's embedded list as it lands — so an
+    // image appears the moment its bytes are stored.
+    for (const file of files ?? []) {
+      const up = await run(() => api.uploadCommentAttachment(res.comment.id, file), {
+        fallback: "Failed to attach the file",
+      });
+      if (up)
+        setComments((cs) =>
+          (cs ?? []).map((c) =>
+            c.id === res.comment.id ? { ...c, attachments: [...c.attachments, up.attachment] } : c
+          )
+        );
+    }
   }
 
   async function saveEdit(id: string, prevBody: string, body: string) {
@@ -2441,8 +3181,10 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
         )}
       </div>
 
-      {/* The drawer's only scroll region — the discussion can grow without
-          bound while title/description/chips stay fixed above. */}
+      {/* The tall scroll region — the discussion can grow without bound while
+          title/description/chips stay fixed above. (The checklist above has its
+          own capped scroller since PRD-11; this is still the only region that
+          grows with content.) */}
       <div ref={listRef} className="mt-2 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
         {loadFailed && comments === null ? (
           <p className="text-[0.8rem] text-[var(--color-ink-faint)]">
@@ -2478,6 +3220,7 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
                     onSave={(body) => saveEdit(c.id, c.body, body)}
                     onDelete={() => remove(c.id)}
                     onReply={() => setReplyTo(c)}
+                    onPreview={setViewing}
                   />
                   {/* Replies fade in under their parent as a block; no `layout`
                       here — nested layout nodes inside this force-scrolled,
@@ -2502,6 +3245,7 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
                             onSave={(body) => saveEdit(r.id, r.body, body)}
                             onDelete={() => remove(r.id)}
                             onReply={() => setReplyTo(r)}
+                            onPreview={setViewing}
                           />
                         ))}
                       </motion.div>
@@ -2543,6 +3287,10 @@ function CommentsSection({ taskId, currentUser }: { taskId: string; currentUser:
           onSubmit={submit}
         />
       )}
+
+      {/* Same large view the task Files list uses — one component, one set of
+          rules, two surfaces. */}
+      <AttachmentLightbox attachment={viewing} onClose={() => setViewing(null)} />
     </section>
   );
 }
@@ -2554,7 +3302,7 @@ function CommentComposer({
 }: {
   replyTo: Comment | null;
   onCancelReply: () => void;
-  onSubmit: (body: string, parentId?: string) => void;
+  onSubmit: (body: string, parentId?: string, files?: File[]) => void;
 }) {
   const [draft, setDraft] = useState(() =>
     // The mention is the initial value, not a value copied in later. Combined
@@ -2563,14 +3311,23 @@ function CommentComposer({
     // "when replyTo changes, overwrite the draft and focus".
     replyTo ? `@${replyTo.author.username} ` : ""
   );
+  // PRD-11: images and PDFs ride along with the text. They upload after the
+  // comment exists, so they're held here as raw Files until submit.
+  const [files, setFiles] = useState<File[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   function submit() {
     const body = draft.trim();
     if (!body) return;
     // Threading is one level deep — replying to a reply targets the root.
-    onSubmit(body, replyTo ? (replyTo.parent_id ?? replyTo.id) : undefined);
+    onSubmit(
+      body,
+      replyTo ? (replyTo.parent_id ?? replyTo.id) : undefined,
+      files.length > 0 ? files : undefined
+    );
     setDraft("");
+    setFiles([]);
   }
 
   function cancelReply() {
@@ -2619,13 +3376,60 @@ function CommentComposer({
         placeholder={replyTo ? `Reply to @${replyTo.author.username}…` : "Add a comment…"}
         className="w-full resize-none rounded-md border border-[var(--color-border-soft)] bg-white px-2.5 py-2 text-[0.85rem] leading-[1.5] text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-faint)] focus:border-[var(--color-accent)]"
       />
+      {files.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {files.map((f, i) => (
+            <span
+              key={`${f.name}-${i}`}
+              className="flex max-w-full items-center gap-1 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-2 py-[0.15rem] text-[0.72rem] text-[var(--color-ink-muted)]"
+            >
+              <span className="min-w-0 truncate">{f.name}</span>
+              <button
+                type="button"
+                aria-label={`Remove ${f.name}`}
+                onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
+                className="grid size-3.5 shrink-0 cursor-pointer place-items-center rounded-full text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-danger)]"
+              >
+                <CloseSmallIcon />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       <div className="mt-1.5 flex items-center justify-between">
-        <span className="text-[0.7rem] text-[var(--color-ink-faint)]">
-          <kbd className="rounded border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-1 font-mono text-[0.66rem]">
-            ⌘
-          </kbd>
-          +Enter to post
+        <span className="flex items-center gap-2 text-[0.7rem] text-[var(--color-ink-faint)]">
+          {/* PRD-11: images and PDFs ride along with the text; the route
+              rejects anything else, so the picker narrows the obvious paths
+              and the server stays the only judge. */}
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            aria-label="Attach an image or PDF"
+            className="grid size-6 cursor-pointer place-items-center rounded-md text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+          >
+            <PaperclipIcon />
+          </button>
+          <span>
+            <kbd className="rounded border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-1 font-mono text-[0.66rem]">
+              ⌘
+            </kbd>
+            +Enter to post
+          </span>
         </span>
+        <input
+          ref={fileRef}
+          type="file"
+          multiple
+          accept="image/*,application/pdf"
+          className="hidden"
+          onChange={(e) => {
+            const picked = e.target.files;
+            if (picked && picked.length > 0) {
+              setFiles((prev) => [...prev, ...Array.from(picked)]);
+            }
+            e.target.value = "";
+          }}
+        />
         <button
           type="button"
           onClick={submit}
@@ -2647,6 +3451,7 @@ function CommentRow({
   onSave,
   onDelete,
   onReply,
+  onPreview,
 }: {
   comment: Comment;
   now: number;
@@ -2655,6 +3460,7 @@ function CommentRow({
   onSave: (body: string) => void;
   onDelete: () => void;
   onReply: () => void;
+  onPreview: (a: Attachment) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(comment.body);
@@ -2804,6 +3610,41 @@ function CommentRow({
             <p className="mt-0.5 whitespace-pre-wrap break-words text-[0.83rem] leading-[1.5] text-[var(--color-ink)]">
               {comment.body}
             </p>
+            {comment.attachments.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {comment.attachments.map((a) =>
+                  isImage(a) ? (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => onPreview(a)}
+                      aria-label={`Preview ${a.filename}`}
+                      className="cursor-pointer"
+                    >
+                      <img
+                        src={api.attachmentDownloadUrl(a.id)}
+                        alt={a.filename}
+                        className="size-14 rounded-[8px] border border-[var(--color-border-soft)] object-cover"
+                      />
+                    </button>
+                  ) : (
+                    <a
+                      key={a.id}
+                      href={api.attachmentDownloadUrl(a.id)}
+                      download={a.filename}
+                      title={a.filename}
+                      className="flex items-center gap-1 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-2 py-[0.15rem] text-[0.72rem] text-[var(--color-ink)] underline-offset-2 hover:bg-[var(--color-surface-2)] hover:underline"
+                    >
+                      <PaperclipIcon />
+                      <span className="max-w-[16rem] truncate">{a.filename}</span>
+                      <span className="shrink-0 font-mono text-[0.66rem] text-[var(--color-ink-faint)]">
+                        {formatBytes(a.size_bytes)}
+                      </span>
+                    </a>
+                  )
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

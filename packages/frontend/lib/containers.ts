@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo } from "react";
-import { atom, useAtom, useAtomValue } from "jotai";
+import { atom, getDefaultStore, useAtom, useAtomValue } from "jotai";
 import { api, type Team, type TeamWithRole } from "./api";
 import { normalizeError, type NormalizedError } from "./errors";
 
@@ -16,6 +16,9 @@ export const selectedContainerIdAtom = atom<string | null>(null);
 
 // Derived: explicit pick wins, else the newest container (list is ordered
 // newest-first by the API). No effect mirrors this — it's computed on read.
+// The "no pick" case almost never survives a bootstrap any more: load()
+// restores the server-side last selection into the atom before anything
+// reads this.
 export const selectedContainerAtom = atom<TeamWithRole | null>((get) => {
   const list = get(containersAtom);
   const id = get(selectedContainerIdAtom);
@@ -30,9 +33,23 @@ export function useContainers() {
   const [selectedId, setSelectedId] = useAtom(selectedContainerIdAtom);
   const selected = useAtomValue(selectedContainerAtom);
 
+  // Owner (2026-09-06): every explicit pick is stored server-side
+  // (users.last_container_id) so a refresh — or a new tab, or another device
+  // — restores "where you work" instead of falling back to the newest
+  // workspace. Server state, not device storage: the cookie policy's "no
+  // localStorage" promise stays literally true. Fire-and-forget — a failed
+  // write only costs the next refresh its memory, never the current view.
+  const selectContainer = useCallback(
+    (id: string | null) => {
+      setSelectedId(id);
+      if (id) void api.setLastContainer(id).catch(() => undefined);
+    },
+    [setSelectedId]
+  );
+
   const load = useCallback(async () => {
     try {
-      const { teams } = await api.listTeams();
+      const { teams, last_container_id } = await api.listTeams();
       // Legacy fallback: accounts predating server-side signup workspaces.
       if (teams.length === 0) {
         const created = await api.createTeam({ name: "Personal", kind: "workspace" });
@@ -40,6 +57,18 @@ export function useContainers() {
       }
       setContainers(teams);
       setError(null);
+      // Restore the pick BEFORE anything reads the derived fallback, and only
+      // when this session has no explicit choice yet. Written through the
+      // default store (same idiom as lib/notifications.ts) so it neither
+      // re-renders this hook's consumers twice nor echoes a PUT back for a
+      // selection the server already knows.
+      if (
+        last_container_id &&
+        teams.some((t) => t.id === last_container_id) &&
+        !getDefaultStore().get(selectedContainerIdAtom)
+      ) {
+        getDefaultStore().set(selectedContainerIdAtom, last_container_id);
+      }
     } catch (e) {
       setError(normalizeError(e, "Failed to load your workspaces"));
     }
@@ -51,7 +80,7 @@ export function useContainers() {
       try {
         const { team } = await api.createTeam({ name, kind });
         setContainers((prev) => [{ ...team, role: "owner" }, ...prev]);
-        setSelectedId(team.id);
+        selectContainer(team.id);
         setError(null);
         return team;
       } catch (e) {
@@ -59,7 +88,7 @@ export function useContainers() {
         return null;
       }
     },
-    [setContainers, setSelectedId, setError]
+    [setContainers, selectContainer, setError]
   );
 
   // Bootstrap probe — same one-time-outside-React read as lib/session.ts.
@@ -71,9 +100,18 @@ export function useContainers() {
 
   // Memoised for the same reason as useSession(): consumers legitimately list
   // this object (or `load`) in a useCallback dep array, and a fresh identity
-  // every render turns that into a refetch loop.
+  // every render turns that into a refetch loop. `setSelectedId` keeps its
+  // name at the call sites — it is now the persisting wrapper.
   return useMemo(
-    () => ({ containers, selected, selectedId, setSelectedId, error, load, create }),
-    [containers, selected, selectedId, setSelectedId, error, load, create]
+    () => ({
+      containers,
+      selected,
+      selectedId,
+      setSelectedId: selectContainer,
+      error,
+      load,
+      create,
+    }),
+    [containers, selected, selectedId, selectContainer, error, load, create]
   );
 }

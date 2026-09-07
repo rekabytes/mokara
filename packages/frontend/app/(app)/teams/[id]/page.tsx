@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, Fragment, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, Fragment, type FormEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -340,9 +340,14 @@ function LayersPanel({
       </div>
 
       {isWorkspace && (
-        <p className="col-span-full m-0 -mt-2 text-[0.76rem] text-[var(--color-ink-faint)] max-[900px]:col-span-1">
-          🔒 Team projects &amp; KPIs unlock when this workspace becomes a team — invite someone and
-          they take effect the moment they accept.
+        <p className="col-span-full m-0 -mt-2 flex items-start gap-1.5 text-[0.76rem] text-[var(--color-ink-faint)] max-[900px]:col-span-1">
+          <span className="mt-[2px] shrink-0">
+            <LockIcon />
+          </span>
+          <span>
+            Team projects &amp; KPIs unlock when this workspace becomes a team — invite someone and
+            they take effect the moment they accept.
+          </span>
         </p>
       )}
     </div>
@@ -612,6 +617,46 @@ function StarIcon() {
   );
 }
 
+function LockIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect width="18" height="11" x="3" y="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+}
+
+function RocketIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.1-2.9a2.18 2.18 0 0 0-2.9-.1Z" />
+      <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2Z" />
+      <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
+      <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+    </svg>
+  );
+}
+
 function ScopeToggle({
   active,
   label,
@@ -635,6 +680,104 @@ function ScopeToggle({
     >
       {label}
     </button>
+  );
+}
+
+// PRD-11 Phase 1.4: the container's identity tile — its logo, plus the leader's
+// controls to set or clear it. Shown to every member (who can see a container
+// can see what it looks like); the buttons are leader-only, and the routes
+// enforce that again.
+function LogoCard({
+  team,
+  canManage,
+  onTeam,
+}: {
+  team: Team;
+  canManage: boolean;
+  onTeam: (team: Team) => void;
+}) {
+  const { error, run } = useAsyncError();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function upload(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    const res = await run(() => api.setTeamLogo(team.id, file), {
+      fallback: "Failed to set the logo",
+    });
+    setBusy(false);
+    if (!res) return;
+    onTeam(res.team);
+  }
+
+  async function remove() {
+    setBusy(true);
+    const res = await run(() => api.removeTeamLogo(team.id), {
+      fallback: "Failed to remove the logo",
+    });
+    setBusy(false);
+    if (!res) return;
+    onTeam(res.team);
+  }
+
+  return (
+    <div className="card p-4">
+      <div className="flex items-center gap-3">
+        {team.has_logo ? (
+          <img
+            src={api.teamLogoUrl(team.id)}
+            alt=""
+            className="size-10 shrink-0 rounded-[10px] object-cover"
+          />
+        ) : (
+          <span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-[var(--color-accent-soft)] text-[0.95rem] font-bold text-[var(--color-accent)]">
+            {team.name.slice(0, 1).toUpperCase()}
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <h2 className="m-0 truncate text-[0.95rem] font-bold tracking-[-0.01em]">{team.name}</h2>
+          <p className="m-0 text-[0.72rem] text-[var(--color-ink-faint)]">
+            {team.kind === "team" ? "Team" : "Private workspace"}
+          </p>
+        </div>
+        {canManage && (
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => inputRef.current?.click()}
+              className="cursor-pointer rounded-full border border-[var(--color-border-soft)] px-2.5 py-1 text-[0.72rem] font-medium text-[var(--color-ink-muted)] transition-colors duration-[120ms] hover:bg-[var(--color-surface-2)] disabled:opacity-50"
+            >
+              {team.has_logo ? "Change" : "Logo"}
+            </button>
+            {team.has_logo && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={remove}
+                className="cursor-pointer rounded-full border border-transparent px-2 py-1 text-[0.72rem] font-medium text-[var(--color-ink-faint)] transition-colors duration-[120ms] hover:text-[var(--color-danger)] disabled:opacity-50"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            void upload(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
+      </div>
+      {error && (
+        <p className="m-0 mt-2 text-[0.72rem] text-[var(--color-danger)]">{error.message}</p>
+      )}
+    </div>
   );
 }
 
@@ -778,11 +921,18 @@ export default function TeamDetailPage() {
           />
         </section>
         <aside className="flex flex-col gap-4">
+          {/* PRD-11: container identity (logo + leader controls) leads the rail. */}
+          <LogoCard
+            team={detail.team}
+            canManage={detail.role === "owner"}
+            onTeam={(updated) => setDetail((prev) => (prev ? { ...prev, team: updated } : prev))}
+          />
           {isWorkspace ? (
             <>
               <div className="rounded-[16px] border border-[rgba(99,102,241,0.25)] bg-[linear-gradient(135deg,rgba(99,102,241,0.09),rgba(14,165,233,0.07))] p-4">
-                <h2 className="m-0 text-[0.95rem] font-bold tracking-[-0.01em]">
-                  🚀 Make this a team
+                <h2 className="m-0 flex items-center gap-1.5 text-[0.95rem] font-bold tracking-[-0.01em]">
+                  <RocketIcon />
+                  Make this a team
                 </h2>
                 <p className="mb-3 mt-1.5 text-[0.8rem] leading-[1.5] text-[var(--color-ink-muted)]">
                   Invite someone — the moment they <b>accept</b>, this workspace becomes a{" "}
@@ -839,7 +989,11 @@ export default function TeamDetailPage() {
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h2 className="m-0 text-[1rem] font-bold tracking-[-0.01em]">Members</h2>
                 <span className="rounded-full bg-[var(--color-accent-soft)] px-2 py-[2px] text-[0.7rem] font-bold text-[var(--color-accent)]">
-                  {detail.members.length} / 3
+                  {/* PRD-11: the cap is the leader's plan's, and null means
+                      unlimited — a bare count beats a fake "/ ∞". */}
+                  {detail.team.member_limit === null
+                    ? detail.members.length
+                    : `${detail.members.length} / ${detail.team.member_limit}`}
                 </span>
               </div>
               <div className="flex flex-col">

@@ -741,12 +741,17 @@ function ProgressGantt({
   });
 
   // Weekend columns + today, tinted once behind all rows (not per row).
-  const tints: { col: number; today: boolean }[] = [];
+  // Weekend columns + today, tinted once behind all rows (not per row).
+  // A column can carry TWO layers: the grey weekend wash and, painted over it,
+  // the indigo today marker — which is why identity is (column, layer) and not
+  // the column alone. Keying on `col` alone collided the first time "today"
+  // landed on a weekend (2026-09-05, column 247) and React warned about it.
+  const tints: { col: number; layer: "weekend" | "today" }[] = [];
   for (let idx = 0; idx < totalDays; idx++) {
     const dow = new Date(startMs + idx * DAY_MS).getUTCDay();
-    if (dow === 0 || dow === 6) tints.push({ col: idx, today: false });
+    if (dow === 0 || dow === 6) tints.push({ col: idx, layer: "weekend" });
   }
-  tints.push({ col: todayIdx, today: true });
+  tints.push({ col: todayIdx, layer: "today" });
 
   // Hover follows the cell under the cursor; the tooltip text is composed
   // from the row/cell data here, never stored on the cell itself.
@@ -861,15 +866,16 @@ function ProgressGantt({
             >
               {tints.map((t) => (
                 <div
-                  key={t.col}
+                  key={`${t.col}:${t.layer}`}
                   className="absolute inset-y-0"
                   style={{
                     left: `${t.col * DAY_WIDTH}px`,
                     width: `${DAY_WIDTH}px`,
-                    background: t.today ? "rgba(99,102,241,0.06)" : "rgba(15,23,42,0.028)",
+                    background:
+                      t.layer === "today" ? "rgba(99,102,241,0.06)" : "rgba(15,23,42,0.028)",
                   }}
                 >
-                  {t.today && (
+                  {t.layer === "today" && (
                     <div className="absolute inset-y-0 left-1/2 border-l border-dashed border-[rgba(15,23,42,0.35)]" />
                   )}
                 </div>
@@ -1002,8 +1008,22 @@ const HeatRow = memo(function HeatRow({ row, totalDays }: { row: HeatRowData; to
               <span className="absolute -bottom-[3px] -top-[3px] right-0 w-[2px] bg-[var(--color-warning)]" />
             )}
             {c.finished && (
-              <span className="absolute inset-0 grid place-items-center text-[13px] font-bold leading-none text-white">
-                ✓
+              <span className="absolute inset-0 grid place-items-center text-white">
+                {/* SVG, not the ✓ glyph — the UI stays emoji/glyph-free; the
+                    thicker stroke keeps the tick legible at 12px on the chip. */}
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
               </span>
             )}
           </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type ReactElement, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { notifDrawerVariants } from "@/lib/motion";
@@ -17,23 +17,145 @@ import { normalizeError } from "@/lib/errors";
 // (`responded`) and republishes over SSE, so the buttons become a state chip
 // on every device.
 
-const ICONS: Record<string, { glyph: string; className: string }> = {
+// Row icons are hand-drawn inline SVGs — the same idiom as the bell in
+// NotificationBell and the chips in tasks/page.tsx. Emoji glyphs render
+// inconsistently across platforms (and can't inherit the row's text color),
+// so the UI stays emoji-free: shape + color come from these paths.
+function AtSignIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function MailIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="m3.5 7.5 8.5 6 8.5-6"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M20 6 9 17l-5-5"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ReplyIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M9 14 4 9l5-5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4 9h11a5 5 0 0 1 5 5v6"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function AlarmClockIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="13.5" r="7.5" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M12 10v3.5l2.5 1.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="m5.5 3-2.3 2.3M18.5 3l2.3 2.3"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function DotIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" fill="currentColor" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M6 6l12 12M18 6 6 18"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+type RowIcon = { Icon: () => ReactElement; className: string };
+
+const ICONS: Record<string, RowIcon> = {
   task_assigned: {
-    glyph: "@",
+    Icon: AtSignIcon,
     className: "bg-[var(--color-accent-soft)] text-[var(--color-accent)]",
   },
-  invitation: { glyph: "✉", className: "bg-[var(--color-accent-soft)] text-[var(--color-accent)]" },
+  invitation: {
+    Icon: MailIcon,
+    className: "bg-[var(--color-accent-soft)] text-[var(--color-accent)]",
+  },
   invitation_accepted: {
-    glyph: "✓",
+    Icon: CheckIcon,
     className: "bg-[var(--color-accent-soft)] text-[var(--color-accent)]",
   },
-  comment_reply: { glyph: "↩", className: "bg-[rgba(14,165,233,0.14)] text-[#0284c7]" },
+  comment_reply: { Icon: ReplyIcon, className: "bg-[rgba(14,165,233,0.14)] text-[#0284c7]" },
+  // PRD-11 §1.5: overdue rows are loud (red), coming-up rows are quiet
+  // (amber). The icon shape is the same so a glance still says "due soon".
+  due_soon: {
+    Icon: AlarmClockIcon,
+    className: "bg-[rgba(239,68,68,0.12)] text-[var(--color-danger)]",
+  },
 };
 
-function iconFor(type: string) {
+function iconFor(type: string): RowIcon {
   return (
     ICONS[type] ?? {
-      glyph: "•",
+      Icon: DotIcon,
       className: "bg-[var(--color-surface-2)] text-[var(--color-ink-muted)]",
     }
   );
@@ -116,7 +238,7 @@ export function NotificationDrawer() {
               onClick={() => setOpen(false)}
               className="grid size-7 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
             >
-              ✕
+              <CloseIcon />
             </button>
           </div>
 
@@ -156,9 +278,13 @@ export function NotificationDrawer() {
                     }`}
                   >
                     <span
-                      className={`grid size-8 flex-none place-items-center rounded-[10px] text-[0.9rem] ${icon.className}`}
+                      className={`grid size-8 flex-none place-items-center rounded-[10px] ${
+                        n.type === "due_soon" && !n.payload.overdue
+                          ? "bg-[rgba(245,158,11,0.14)] text-[var(--color-warning)]"
+                          : icon.className
+                      }`}
                     >
-                      {icon.glyph}
+                      <icon.Icon />
                     </span>
                     <div className="min-w-0 flex-1">
                       <button
@@ -171,7 +297,15 @@ export function NotificationDrawer() {
                             n.read_at ? "" : "font-semibold"
                           }`}
                         >
-                          <b>{n.payload.actor_username ?? "Someone"}</b>{" "}
+                          {/* Actor-driven types lead with "<actor> <verb> ...";
+                              due_soon has no actor — a task's due date is not
+                              something someone did — so the prefix only fires
+                              for the four types that genuinely have one. */}
+                          {n.type !== "due_soon" && (
+                            <>
+                              <b>{n.payload.actor_username ?? "Someone"}</b>{" "}
+                            </>
+                          )}
                           {n.type === "invitation" && (
                             <>
                               invited you to join <b>{n.payload.team_name ?? "a container"}</b>
@@ -191,6 +325,19 @@ export function NotificationDrawer() {
                           {n.type === "comment_reply" && (
                             <>
                               replied to your comment on <b>{n.payload.task_title ?? "a task"}</b>
+                            </>
+                          )}
+                          {n.type === "due_soon" && (
+                            <>
+                              {n.payload.overdue ? (
+                                <>
+                                  <b>{n.payload.task_title ?? "a task"}</b> is overdue
+                                </>
+                              ) : (
+                                <>
+                                  <b>{n.payload.task_title ?? "a task"}</b> is coming due
+                                </>
+                              )}
                             </>
                           )}
                           {!ICONS[n.type] && "sent you a notification"}

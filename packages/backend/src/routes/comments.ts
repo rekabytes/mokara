@@ -4,16 +4,23 @@ import { commentSchema, createCommentSchema } from "../lib/validation.ts";
 import { validate } from "../lib/validate.ts";
 import { notify } from "../lib/notifications.ts";
 import { getTeamRole } from "../lib/team-membership.ts";
+import { purgeAttachmentObjects } from "./attachments.ts";
 import { toComment } from "../lib/types.ts";
 import type { Vars } from "../middleware/auth.ts";
 
 // Task comments (PRD-03). List/create hang off the task; edit/delete hang off
 // the comment itself. All reads/writes require membership in the task's team;
 // edit/delete additionally require the requester to be the comment's author.
+// Since comment attachments (PRD-11), every comment response carries its files.
 export const commentRoutes = new Hono<{ Variables: Vars }>();
 
 const authorInclude = {
   author: { select: { id: true, username: true, displayName: true, createdAt: true } },
+  // PRD-11: the comment's files ride along — images preview inline in the
+  // thread, and the client replaces whole comment objects after mutations.
+  attachments: {
+    include: { uploader: { select: { id: true, username: true, displayName: true } } },
+  },
 } as const;
 
 commentRoutes.get("/tasks/:id/comments", async (c) => {
@@ -152,6 +159,14 @@ commentRoutes.delete("/comments/:id", async (c) => {
     return c.json({ error: "forbidden", message: "you can only delete your own comments" }, 403);
   }
 
+  // PRD-11: rows cascade with the comment, but the BUCKETS don't delete
+  // themselves — collect the storage keys before the rows vanish and clean up
+  // best-effort afterwards (a leftover object is a billing leak, not a lie).
+  const stored = await prisma.attachment.findMany({
+    where: { commentId },
+    select: { storageKey: true },
+  });
   await prisma.comment.delete({ where: { id: commentId } });
+  await purgeAttachmentObjects(stored.map((a) => a.storageKey));
   return c.body(null, 204);
 });

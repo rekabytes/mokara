@@ -1,7 +1,7 @@
 # PRD-11 — Subscription Plans & Billing
 
 > **Status (2026-09-07): Phase 1 + the Phase 2 Starter slice are COMMITTED and
-> PUSHED to `dev` (`b1b8162` + `278c75e`); manifests bumped to **0.1.3** —
+> PUSHED to `dev` (`b1b8162` + `278c75e`); manifests now at **0.1.4** —
 > tagging is the owner's own step. Production Stripe
 > is configured by the owner (keys, webhook, live price).** §6.1 landed on
 > Stripe direct, §6.2 on USD, §6.7 on cards+Link; §6.3 (Pro/Ultra prices) and

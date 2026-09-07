@@ -77,6 +77,20 @@ export const collapseVariants: Variants = {
   visible: { height: "auto", opacity: 1, transition: snap(DUR.panel) },
 };
 
+// ---- Settings bento: one calm entrance stagger for the page's tiles ---------
+// The grid mounts once per visit; MotionConfig reducedMotion="user" turns this
+// into an opacity-only fade for reduced-motion users.
+
+export const tileStagger: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.05, delayChildren: 0.02 } },
+};
+
+export const tileIn: Variants = {
+  hidden: { opacity: 0, y: 14 },
+  show: { opacity: 1, y: 0, transition: snap(DUR.panel) },
+};
+
 // ---- Banners (error / notice) ----------------------------------------------
 
 export const bannerVariants: Variants = {

@@ -1,14 +1,19 @@
 # PRD-11 — Subscription Plans & Billing
 
-> **Status: Phase 1 BUILT (2026-09-05, uncommitted — all gates green; the owner
-> commits). Phase 2: the Starter slice is BUILT (2026-09-07, uncommitted) —
-> §7 2.1–2.4 + 2.7 describe what now exists; Pro/Ultra products were
-> deliberately NOT created (owner, 2026-09-07: launch Free + Starter only, the
-> price→plan map takes them the day they're minted). §6.3 prices and §6.4
-> trials stay open; §6.1 landed on Stripe direct (Managed Payments remains a
-> dashboard-side possibility to confirm with Stripe — same integration).**
-> §7 notes have been corrected to describe the code as written, and the
-> in-phase shape decisions the PRD reserved are recorded where they landed.
+> **Status (2026-09-07): Phase 1 + the Phase 2 Starter slice are COMMITTED and
+> PUSHED to `dev` (`b1b8162` + `278c75e`); manifests bumped to **0.1.3** —
+> tagging is the owner's own step. Production Stripe
+> is configured by the owner (keys, webhook, live price).** §6.1 landed on
+> Stripe direct, §6.2 on USD, §6.7 on cards+Link; §6.3 (Pro/Ultra prices) and
+> §6.4 (trials) stay open. Pro/Ultra products were deliberately NOT created
+> (launch Free + Starter only — adding a tier = one Stripe price + one
+> `PLAN_BY_PRICE_LOOKUP_KEY` entry + one env id).
+>
+> **Not built yet:** §6.3/6.4 decisions · 2.5 annual toggle · 2.6
+> priority-support copy (nothing published yet) · Pro/Ultra tiers · Phase 3
+> polish queue (all five) · two 1.x refinements intentionally skipped: the
+> 1.2 row done-count chip and a drop-zone/progress for uploads (creation-time
+> paperclip only). §7 notes describe the code as written.
 
 ## 1. Model decision
 
@@ -20,14 +25,14 @@ is today and the fastest to ship (zero license machinery needed).
 Pricing is **flat per workspace** (not per seat). Member caps pair naturally
 with flat tiers; per-seat pricing would have no reason to cap.
 
-## 2. Tier ladder (PROPOSED)
+## 2. Tier ladder (Starter minted; Pro/Ultra PROPOSED)
 
-| Tier    | Price  | Members   | Workspaces        | Storage | Notes                 |
-| ------- | ------ | --------- | ----------------- | ------- | --------------------- |
-| Basic   | Free   | 3         | personal + 1 team | 1 GB    | current behaviour     |
-| Starter | $4/mo  | 8         | personal + 3      | 10 GB   | small real teams      |
-| Pro     | $9/mo  | 25        | personal + 10     | 50 GB   | growing companies     |
-| Ultra   | $18/mo | unlimited | unlimited         | 200 GB  | API / MCP / audit log |
+| Tier    | Price  | Members   | Workspaces        | Storage | Notes                                                   |
+| ------- | ------ | --------- | ----------------- | ------- | ------------------------------------------------------- |
+| Basic   | Free   | 3         | personal + 1 team | 1 GB    | current behaviour                                       |
+| Starter | $4/mo  | 8         | personal + 3      | 10 GB   | small real teams — **minted live on Stripe 2026-09-07** |
+| Pro     | $9/mo  | 25        | personal + 10     | 50 GB   | growing companies — not minted                          |
+| Ultra   | $18/mo | unlimited | unlimited         | 200 GB  | API / MCP / audit log — not minted                      |
 
 Storage (§5) is the third capacity axis beside members and workspaces.
 
@@ -82,8 +87,9 @@ ever taken away or gated.
 ### Free — what we add
 
 - **Subtasks / checklists** — tasks are flat today; the biggest product gap.
-- **Basic due-soon banner** — in-app, computed on load from existing data;
-  no scheduler, no email. Makes due dates feel real.
+- **Due-soon notifications** — in-app, computed from existing data; no
+  scheduler, no email. Makes due dates feel real. (Shipped as `due_soon`
+  notification rows, 1.5 — the original "banner" framing was superseded.)
 - **Attachments, 1 GB** (§5) — ships on every tier; capacity is the gate,
   not the feature.
 - **Polish queue** (§7 Phase 3, one at a time): global search · ⌘K command
@@ -99,7 +105,7 @@ ever taken away or gated.
 Standing rule: gate on new features and capacity only. Considered and rejected
 for Starter (2026-09-05): guests/read-only members, saved filters/views.
 
-## 5. Storage & file attachments (PROPOSED — first feature of the ladder)
+## 5. Storage & file attachments (BUILT — first feature of the ladder)
 
 Agreed in the 2026-09-05 brainstorm: attachments ship on **every** tier — the
 feature is table stakes and must never be the paywall; **capacity** is the
@@ -136,15 +142,15 @@ upsell. Quotas are per workspace (the owner's plan pays for the team).
 
 ## 6. Open decisions — and what each one gates
 
-| #   | Decision                      | Options                                                                                                                                                                                                                                        | Gates         |
-| --- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
-| 1   | Payment processor             | Stripe direct vs Stripe Managed Payments (MoR — MY eligibility unconfirmed, ask Stripe) vs third-party MoR (Paddle / LS)                                                                                                                       | Phase 2 only  |
-| 2   | Currency                      | **DECIDED 2026-09-06: USD base prices** (global launch; localization deferred — see §2). The "RM + local methods" argument had already been retired by §6.7; reversible later via an RM-anchored base + Adaptive Pricing or `currency_options` | —             |
-| 3   | Final prices + annual Starter | $4/$9/$18 PROPOSED                                                                                                                                                                                                                             | Phase 2 only  |
-| 4   | Trials                        | e.g. 14-day Pro trial, or none at launch — config-cheap on the Stripe track (`trial_period_days` / Checkout trial setting), not a build                                                                                                        | Phase 2 only  |
-| 5   | Grandfathering sentence       | recommended default below                                                                                                                                                                                                                      | **Phase 1.1** |
-| 6   | Plan holder                   | on the user vs on the workspace                                                                                                                                                                                                                | **Phase 1.1** |
-| 7   | Subscription payment methods  | **DECIDED 2026-09-06: recurring-capable methods only — cards + Link. FPX and GrabPay are not used for subscriptions** (Stripe docs verified: both are single-use, excluded from Checkout subscription/setup mode)                              | Phase 2       |
+| #   | Decision                      | Options                                                                                                                                                                                                                                        | Gates        |
+| --- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| 1   | Payment processor             | **DECIDED 2026-09-07: Stripe direct** (live account, recurring proven). Managed Payments stays a later dashboard-side question — same integration shape; third-party MoR (Paddle / LS) dropped                                                 | —            |
+| 2   | Currency                      | **DECIDED 2026-09-06: USD base prices** (global launch; localization deferred — see §2). The "RM + local methods" argument had already been retired by §6.7; reversible later via an RM-anchored base + Adaptive Pricing or `currency_options` | —            |
+| 3   | Final prices + annual Starter | **partly settled** — Starter $4 minted live 2026-09-07; Pro $9 / Ultra $18 PROPOSED, not minted                                                                                                                                                | paid tiers   |
+| 4   | Trials                        | **open** — e.g. 14-day Pro trial, or none at launch — config-cheap on the Stripe track (`trial_period_days` / Checkout trial setting), not a build                                                                                             | Phase 2 only |
+| 5   | Grandfathering sentence       | **DECIDED 2026-09-05** — §6.5 default adopted (enforce at join/create; over-cap freezes)                                                                                                                                                       | — (built)    |
+| 6   | Plan holder                   | **DECIDED 2026-09-05** — §6.6 default adopted (plan on the USER; workspace tier = leader's plan)                                                                                                                                               | — (built)    |
+| 7   | Subscription payment methods  | **DECIDED 2026-09-06: recurring-capable methods only — cards + Link. FPX and GrabPay are not used for subscriptions** (Stripe docs verified: both are single-use, excluded from Checkout subscription/setup mode)                              | Phase 2      |
 
 - **§6.5 recommended default:** caps are enforced at join/create time only;
   existing over-cap state freezes (§3 rules). Nobody loses access to anything
@@ -154,7 +160,9 @@ upsell. Quotas are per workspace (the owner's plan pays for the team).
   workspaces the user leads. One checkout per account, and "personal + N
   workspaces" falls out naturally. A per-workspace plan would mean paying
   twice for two workspaces and fights the ladder design.
-- Phase 1 can start without decisions 1–4. Only 5 and 6 gate code.
+- Phase 1 can start without decisions 1–4. Only 5 and 6 gate code. **(Now
+  moot: 1/2/5/6/7 are decided and built; only 3 (Pro/Ultra prices) and 4
+  remain.)**
 
 ## 7. Development plan — phase by phase
 
@@ -193,8 +201,10 @@ Output: a "Phase 0 decisions" block appended to this PRD — value + date each.
   `teamCountDenial`, `memberLimitForPlan`) reading caps from `lib/plans.ts`, the
   one tier→caps table; container-scope's `{status,error,message}|null` shape so
   no helper needs a Hono Context. Self-host mode: `DEPLOY_MODE=self_hosted`
-  (the default) → every account reads unlimited and billing routes stay
-  unmounted (open-core, zero phone-home). Create-team, invite AND accept all
+  (the default) → every account reads unlimited; billing routes MOUNT but
+  answer `billing_not_configured` 409 (the attachments_disabled posture —
+  corrected from "stay unmounted", 2026-09-07; open-core stays zero
+  phone-home either way). Create-team, invite AND accept all
   check; accept re-checks inside a transaction behind a `FOR UPDATE` lock on the
   team row, which is what keeps two simultaneous accepts from both fitting
   (the trigger's old job). Answers: `team_full` (cap of the leader's plan),
@@ -215,8 +225,9 @@ Output: a "Phase 0 decisions" block appended to this PRD — value + date each.
   renders the array it was given.
 - API: items embedded in task responses; POST/PATCH/DELETE item routes
   (member-of-container authorisation, mirroring comments).
-- Frontend: checklist block in the task drawer; done-count chip on the row
-  if cheap.
+- Frontend: checklist block in the task drawer; the optional row done-count
+  chip was SKIPPED (2026-09-07 — "if cheap" didn't hold: the row is already
+  full at one line).
 - Done when: add / check / uncheck / delete / reorder persists across
   reloads.
 
@@ -250,8 +261,12 @@ Output: a "Phase 0 decisions" block appended to this PRD — value + date each.
   the uploader got 204). Accepted consequence: if an uploader later leaves the
   team, nobody can remove their file — the quota cap still bounds total
   exposure.
-- Frontend: drawer attachments block — upload (press or drop), progress,
-  list with size, download, delete.
+- Frontend (as built, 2026-09-07 correction): files are a CREATION-TIME
+  affordance — the New task modal drafts them (paperclip picker, removable
+  chips; no drop zone, and the XHR progress callback is unused); the drawer
+  shows a read-only strip in the description area (thumbnails + PDF chips,
+  uploader-only hover delete, hidden when empty); download and delete as
+  specced.
 - **Comment attachments (owner iteration, built 2026-09-05):** files can ride on
   COMMENTS as well as tasks — `attachments` gained a nullable `comment_id`
   beside a now-nullable `task_id`, with `attachments_owner_check` enforcing
@@ -259,7 +274,9 @@ Output: a "Phase 0 decisions" block appended to this PRD — value + date each.
   changes. `storageKey` gained a scope segment
   (`teams/<team>/{tasks|comments}/<id>/<file>`). **Comments accept images and
   PDFs only** (`unsupported_type` otherwise — the owner's allowlist; task
-  uploads stay type-agnostic, an asymmetry the owner chose); **a comment still
+  uploads were later brought to the same rule — as of 2026-09-05 BOTH
+  surfaces are images+PDFs only, the earlier type-agnostic asymmetry was
+  retired); **a comment still
   needs text alongside its files** (the two-phase create→upload flow can't
   enforce "body or file" atomically; image-only comments would need multipart
   comment creation — later). Files embed in every comment response. Deletion is
@@ -288,7 +305,7 @@ Output: a "Phase 0 decisions" block appended to this PRD — value + date each.
 - Done when: leader sets and removes it; members see it everywhere the
   workspace is named.
 
-**1.5 Basic due-soon banner**
+**1.5 Due-soon notifications (was: basic banner)**
 
 - Goal: due dates feel real without a scheduler.
 - Backend: **persistent rows** in the `notifications` table — one row per
@@ -315,14 +332,15 @@ Output: a "Phase 0 decisions" block appended to this PRD — value + date each.
   mutations keep the set honest, and accept-invite fills in the new member's
   cross-team view; zero timers, zero background jobs.
 
-### Phase 2 — money (gated on the Phase 0 processor choice)
+### Phase 2 — money
 
-Recon done 2026-09-06 against the live Stripe account (Rekabytes Enterprise,
-MY, MYR default, charges + payouts active, two monthly MYR subscriptions
-already running for another product — recurring billing on this account is
-proven). The shape below is the recommendation Stripe's own integration
-planner accepted for Mokara; it is the STRIPE track — re-derive the specifics
-if §6.1 lands on Paddle/LemonSqueezy.
+**Status 2026-09-07: the Starter slice (2.1–2.4b, 2.7, 2.8) is BUILT and on
+`dev`; 2.5/2.6 stay open with §6.3/6.4.** Recon ran 2026-09-06 against the
+live Stripe account (Rekabytes Enterprise, MY, MYR default, charges + payouts
+active, two monthly MYR subscriptions already running for another product —
+recurring billing on this account is proven); the shape below is what Stripe's
+own integration planner accepted for Mokara, and §6.1 then landed on the
+Stripe track.
 
 **2.1 Plans config** — `lib/plans.ts` stays the single source: tier → caps +
 price references. Prices are USD (§6.2). One Product per paid tier; every
@@ -376,13 +394,14 @@ expectation published on the landing page and settings the day Starter
 switches on.
 
 **2.7 Revenue recovery** — zero code: Smart Retries + automated failed-payment
-emails + automatic card updates, all Dashboard settings; the webhook still
-surfaces `invoice.payment_failed` for our grace/freeze mapping.
+emails + automatic card updates, all Dashboard settings (owner configured the
+production account 2026-09-07); the webhook still surfaces
+`invoice.payment_failed` for our grace/freeze mapping.
 
 **2.8 Tax** — Stripe Tax free threshold monitoring + a product tax category on
-Mokara products (no registrations on the account today). Whether/when to
-register for Malaysian digital-services tax is an accountant question, not
-code.
+Mokara products (no registrations on the account today; owner configured the
+production account 2026-09-07). Whether/when to register for Malaysian
+digital-services tax is an accountant question, not code.
 
 ### Phase 3 — free polish (never blocks billing; one at a time)
 
@@ -416,11 +435,11 @@ code.
 | 5   | Grandfathering               | Enforce at join/create time only; existing over-cap state **freezes** (§3) — nobody loses access to anything they already have                                                                                                                                   | §6.5 recommended default, adopted                  |
 | 6   | Plan holder                  | **On the user.** A workspace's tier = its **leader's** plan; the workspace-count cap counts `kind='team'` workspaces the user leads                                                                                                                              | §6.6 recommended default, adopted                  |
 | 7   | Subscription payment methods | **Recurring-capable methods only: cards + Link. FPX and GrabPay are NOT used for subscriptions** — verified in Stripe docs 2026-09-06 (both single-use, excluded from Checkout subscription/setup mode), so the restriction is also the platform's own behaviour | owner decision, 2026-09-06                         |
-| new | Deploy-mode signal           | `DEPLOY_MODE` env: `hosted` \| `self_hosted` (**default `self_hosted`**). Caps enforce only when `hosted`; `self_hosted` reads unlimited everywhere and billing routes stay unmounted                                                                            | processor-agnostic — must not depend on decision 1 |
-| 1   | Processor                    | **open** — Stripe direct vs Stripe Managed Payments (MoR; MY eligibility unconfirmed) vs Paddle/LS; gates Phase 2 only                                                                                                                                           | —                                                  |
+| new | Deploy-mode signal           | `DEPLOY_MODE` env: `hosted` \| `self_hosted` (**default `self_hosted`**). Caps enforce only when `hosted`; `self_hosted` reads unlimited everywhere and billing routes answer `billing_not_configured`                                                           | processor-agnostic — must not depend on decision 1 |
+| 1   | Processor                    | **DECIDED 2026-09-07: Stripe direct** — one live account, recurring proven; Managed Payments stays a later dashboard-side question (same integration shape); Paddle/LS dropped                                                                                   | owner decision                                     |
 | 2   | Currency                     | **DECIDED 2026-09-06: USD base prices** — global launch anchor; MYR/Adaptive-Pricing localization is a data-driven revisit, not a launch requirement (§2)                                                                                                        | owner decision, 2026-09-06                         |
-| 3   | Final prices                 | **open** — PROPOSED $4/$9/$18 stands until confirmed; gates Phase 2 only                                                                                                                                                                                         | —                                                  |
-| 4   | Trials                       | **open** — "none at launch" is the working assumption; config-cheap if yes (2.1–2.3 recon); gates Phase 2 only                                                                                                                                                   | —                                                  |
+| 3   | Final prices                 | **partly settled** — Starter $4 MINTED live 2026-09-07; Pro $9 / Ultra $18 remain PROPOSED until those tiers are minted                                                                                                                                          | —                                                  |
+| 4   | Trials                       | **open** — "none at launch" is the working assumption; config-cheap if yes (2.1–2.3 recon); gates paid-tier launch polish, not the Starter slice                                                                                                                 | —                                                  |
 
 Two implementation conflicts found during recon and resolved here:
 
@@ -435,7 +454,10 @@ Two implementation conflicts found during recon and resolved here:
   exist, so they are part of the entitlements commit, and team responses gain
   `member_limit`.
 
-Note for Phase 1 verification: nothing in Phase 1 lets a user _buy_ a tier —
-`plan` is written only by Phase 2 webhooks. So on a `hosted` deployment every
-account is `free` and the caps are the free caps; exercise them locally by
-setting `DEPLOY_MODE=hosted` in `packages/backend/.env`.
+Note for verification (updated 2026-09-07): `users.plan` is written by
+exactly two paths — the Stripe webhook and `POST /me/billing/sync` — never by
+the checkout redirect. On a `hosted` deployment every account starts `free`
+and the caps are the free caps until someone pays; exercise them locally by
+setting `DEPLOY_MODE=hosted` in `packages/backend/.env`. On `self_hosted`
+everything reads unlimited and the billing routes answer
+`billing_not_configured`.

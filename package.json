@@ -1,6 +1,6 @@
 {
   "name": "mokara",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "scripts": {
     "dev:frontend": "pnpm db:bootstrap && pnpm --filter @mokara/frontend dev",

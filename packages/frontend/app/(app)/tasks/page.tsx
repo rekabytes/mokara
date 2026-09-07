@@ -33,6 +33,7 @@ import { useAsyncError } from "@/hooks/useAsyncError";
 import { useContainers } from "@/lib/containers";
 import { useContainerMeta } from "@/lib/meta";
 import { useSession } from "@/lib/session";
+import { onSse } from "@/lib/sse";
 import {
   taskFilterAtom,
   taskSortAtom,
@@ -134,6 +135,30 @@ function PriorityBars({ priority }: { priority: TaskPriority }) {
   );
 }
 
+/**
+ * Board-event payload guard (SSE). The wire contract is the server's shape()
+ * output — byte-identical to what the REST task routes return — so this
+ * validates the fields the board branches on (identity, routing, grouping,
+ * and the two arrays the drawer chips read), not all fourteen. A frame that
+ * fails it is ignored, never half-applied.
+ */
+function asBoardTask(v: unknown): Task | null {
+  if (v === null || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  if (
+    typeof o.id === "string" &&
+    typeof o.team_id === "string" &&
+    typeof o.title === "string" &&
+    typeof o.status === "string" &&
+    typeof o.priority === "string" &&
+    Array.isArray(o.kpis) &&
+    Array.isArray(o.subtasks)
+  ) {
+    return v as Task;
+  }
+  return null;
+}
+
 function isToday(iso: string): boolean {
   const d = new Date(iso);
   const now = new Date();
@@ -220,6 +245,39 @@ export default function TasksPage() {
   // instead — see lib/tasksView.ts.
   useEffect(() => {
     if (teamId) loadTasks();
+  }, [teamId, loadTasks]);
+
+  // SSE sync (2026-09-07): teammates' task mutations land on this board
+  // without a reload. Upsert-by-id so our own optimistic writes and the echo
+  // of them on the same channel converge on one object; the reopen refetch
+  // covers events missed while the connection was down. The team filter is
+  // belt-and-braces (the server only sends channels we belong to) — events
+  // for other containers must not leak into this list.
+  useEffect(() => {
+    if (!teamId) return;
+    const upsert = (data: unknown) => {
+      const t = asBoardTask(data);
+      if (!t || t.team_id !== teamId) return;
+      setTasks((prev) =>
+        prev.some((x) => x.id === t.id) ? prev.map((x) => (x.id === t.id ? t : x)) : [t, ...prev]
+      );
+    };
+    const offs = [
+      onSse("task_created", upsert),
+      onSse("task_updated", upsert),
+      onSse("task_deleted", (data) => {
+        if (data === null || typeof data !== "object") return;
+        const id = (data as { id?: unknown }).id;
+        if (typeof id !== "string") return;
+        setTasks((prev) => prev.filter((x) => x.id !== id));
+      }),
+      onSse("sse:reopened", () => {
+        void loadTasks();
+      }),
+    ];
+    return () => {
+      for (const off of offs) off();
+    };
   }, [teamId, loadTasks]);
 
   // PRD-10/11: container members shared by the drawer's AssigneeChip (main row

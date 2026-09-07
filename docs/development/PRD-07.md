@@ -19,10 +19,10 @@ pattern rather than re-deriving one. Where this PRD deliberately differs from it
 
 ## 1. Goal
 
-`git tag v0.1.4 && git push origin v0.1.4` produces:
+`git tag v0.1.5 && git push origin v0.1.5` produces:
 
-- `ghcr.io/<owner>/mokara-frontend:0.1.4` (+ `:0.1`, `:latest`)
-- `ghcr.io/<owner>/mokara-backend:0.1.4` (+ same)
+- `ghcr.io/<owner>/mokara-frontend:0.1.5` (+ `:0.1`, `:latest`)
+- `ghcr.io/<owner>/mokara-backend:0.1.5` (+ same)
 
 The tag has to match the `version` in the root `package.json` — the gate job
 fails otherwise (verified: a `v0.1.1` tag pushed while the manifests still said

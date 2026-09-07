@@ -78,3 +78,27 @@ row needs to render + link), `read_at`, `created_at`; index
   through the existing switcher flow.
 - SSE shared with the future PRD-03 phase-2 comments stream (one endpoint,
   typed events).
+
+## 9. Realtime board (shipped 2026-09-07 — the "typed events" promised in §8)
+
+The single `/api/events` connection grew from one channel to many:
+
+- **Wire:** `lib/events.ts` gains `teamChannel` + `publishToTeam`; the bridge
+  subscribes each connection to the user's channel **plus every `team:<id>`
+  channel they hold membership in at connect time** (membership is not
+  re-checked mid-connection — joining a team lands on the next reconnect).
+  The SSE event name now comes from the envelope's `event` field instead of
+  being hardcoded `notification`, so kinds multiplex over one stream.
+- **Events (v1 scope — tasks only):** `task_created` / `task_updated`
+  (create, PATCH, flag toggle) / `task_deleted`, published best-effort from
+  `routes/tasks.ts` — a dropped publish costs a teammate one stale row, never
+  a failed mutation. Payload = the same `shape()` output the REST routes
+  return, so clients upsert without refetching. Comments/subtasks/attachments
+  stay refresh-to-see (PRD-03 phase 3 proper).
+- **Client:** `lib/sse.ts` — one shared `EventSource` per tab with a
+  per-event-name handler registry (notifications refactored onto it; the
+  connection is never closed, sign-out resets it via hard reload). The tasks
+  page upserts by id (own optimistic writes and their echo converge on one
+  object) and refetches once on `sse:reopened` to cover events missed while
+  disconnected. Guard `asBoardTask` validates the fields the board branches
+  on; a malformed frame is ignored, never half-applied.

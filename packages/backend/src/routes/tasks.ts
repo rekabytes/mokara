@@ -13,7 +13,20 @@ import { getTeamRole } from "../lib/team-membership.ts";
 import { purgeAttachmentObjects } from "./attachments.ts";
 import { toTask, toTaskKpi } from "../lib/types.ts";
 import { notify, regenerateDueSoonForTeam } from "../lib/notifications.ts";
+import { publishToTeam } from "../lib/events.ts";
+import { log } from "../lib/logger.ts";
 import type { Vars } from "../middleware/auth.ts";
+
+// Board events (2026-09-07): fire-and-forget publish to the team channel —
+// a dropped publish costs a teammate one stale row until their next refetch,
+// never a failed mutation (same posture as notify()). The payload is the
+// SAME shaped task the HTTP response carries, so the browser can upsert it
+// without a refetch or a second serialization path.
+function publishTeam(teamId: string, event: string, data: unknown): void {
+  publishToTeam(teamId, { event, data }).catch((e) =>
+    log.error(`board event ${event} not published`, e)
+  );
+}
 
 // Combines team-scoped (/teams/:id/tasks) and single-task (/tasks/:id) routes
 // — they're under the same authed surface and share the membership helper.
@@ -231,7 +244,9 @@ taskRoutes.post("/teams/:id/tasks", validate("json", createTaskSchema), async (c
   // (member's first reaction is to the bell). Fire-and-forget — regeneration
   // is best-effort by design, like notify().
   void regenerateDueSoonForTeam(teamId);
-  return c.json(shape(created!), 201);
+  const createdResponse = shape(created!);
+  publishTeam(teamId, "task_created", createdResponse);
+  return c.json(createdResponse, 201);
 });
 
 taskRoutes.get("/tasks/:id", async (c) => {
@@ -355,7 +370,9 @@ taskRoutes.patch("/tasks/:id", validate("json", updateTaskSchema), async (c) => 
     (patch.assignee_id !== undefined && patch.assignee_id !== existing.assigneeId);
   if (dueSoonTouched) void regenerateDueSoonForTeam(existing.teamId);
 
-  return c.json(shape(task));
+  const patchResponse = shape(task);
+  publishTeam(existing.teamId, "task_updated", patchResponse);
+  return c.json(patchResponse);
 });
 
 // Replace a task's KPI bindings wholesale (drawer chip). Empty array clears.
@@ -439,6 +456,7 @@ taskRoutes.delete("/tasks/:id", async (c) => {
   // rows need to lose their entry. Cascade only handles attachments here —
   // notifications don't reference tasks, so we sweep them ourselves.
   void regenerateDueSoonForTeam(existing.teamId);
+  publishTeam(existing.teamId, "task_deleted", { id: taskId, team_id: existing.teamId });
   return c.body(null, 204);
 });
 
@@ -465,5 +483,7 @@ taskRoutes.post("/tasks/:id/flag", async (c) => {
     data: { flagged: !existing.flagged },
     include: TASK_INCLUDE,
   });
-  return c.json(shape(updated));
+  const flagResponse = shape(updated);
+  publishTeam(existing.teamId, "task_updated", flagResponse);
+  return c.json(flagResponse);
 });

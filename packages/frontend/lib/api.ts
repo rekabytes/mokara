@@ -163,6 +163,13 @@ export type SessionInfo = {
 // PRD-11 Phase 2: the settings billing tile's payload. Caps use null for
 // "unlimited" (publicCap on the server); period_end/grace_until are the
 // webhook-maintained lifecycle timestamps.
+export type PlanCaps = {
+  members: number | null;
+  teams: number | null;
+  storage_bytes: number | null;
+  file_bytes: number | null;
+};
+
 export type BillingInfo = {
   plan: string;
   billing_configured: boolean;
@@ -170,12 +177,10 @@ export type BillingInfo = {
   has_subscription: boolean;
   period_end: string | null;
   grace_until: string | null;
-  caps: {
-    members: number | null;
-    teams: number | null;
-    storage_bytes: number | null;
-    file_bytes: number | null;
-  };
+  caps: PlanCaps;
+  /** The full tier ladder (lib/plans.ts) — the settings upgrade pitch renders
+   *  "what Starter unlocks" from this instead of hardcoded numbers. */
+  plans: Record<string, PlanCaps>;
 };
 
 export type Team = {

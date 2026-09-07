@@ -11,7 +11,7 @@ import {
   syncBillingForUser,
 } from "../lib/billing.ts";
 import { limitsOfUser } from "../lib/entitlements.ts";
-import { publicCap } from "../lib/plans.ts";
+import { limitsFor, PLAN_IDS, publicCap } from "../lib/plans.ts";
 import { getTeamRole } from "../lib/team-membership.ts";
 import type { Vars } from "../middleware/auth.ts";
 
@@ -62,6 +62,24 @@ billingRoutes.get("/me/billing", async (c) => {
       storage_bytes: publicCap(limits.storageBytes),
       file_bytes: publicCap(limits.maxFileBytes),
     },
+    // The whole tier ladder, from the one table. The settings tile renders
+    // "what the next tier unlocks" from this — numbers are never hardcoded
+    // in the UI, so display and enforcement can't drift apart. Raw tiers,
+    // not DEPLOY_MODE-filtered: on self-hosted the pitch is hidden anyway.
+    plans: Object.fromEntries(
+      PLAN_IDS.map((id) => {
+        const tier = limitsFor(id);
+        return [
+          id,
+          {
+            members: publicCap(tier.members),
+            teams: publicCap(tier.teams),
+            storage_bytes: publicCap(tier.storageBytes),
+            file_bytes: publicCap(tier.maxFileBytes),
+          },
+        ];
+      })
+    ),
   });
 });
 

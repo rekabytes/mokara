@@ -4,6 +4,7 @@ import { CONTACT, LEGAL_DOCS, LEGAL_LINKS, OPERATOR, siteHost } from "@/lib/lega
 import { AUTH_COOKIE } from "@/lib/cookies";
 
 const PRODUCT_LINKS = [
+  { href: "/pricing", label: "Pricing" },
   { href: "/login", label: "Log in" },
   { href: "/signup", label: "Create account" },
 ];

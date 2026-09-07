@@ -609,6 +609,16 @@ export default function TasksPage() {
                 <p className="m-0 mt-1 text-[0.88rem] text-[var(--color-ink-muted)]">
                   Try a different filter or add a new one.
                 </p>
+                {/* The copy invites "add a new one" — the board's only other "+"
+                    is the To-do group header, and this state renders when no
+                    group is on screen at all. So the button has to be here. */}
+                <button
+                  type="button"
+                  onClick={openModal}
+                  className="btn-base btn-primary mt-[0.85rem]"
+                >
+                  New task
+                </button>
               </div>
             ) : (
               <div className="flex flex-col">
@@ -2542,8 +2552,10 @@ function DescriptionField({ value, onSave }: { value: string; onSave: (text: str
       onClick={startEdit}
       // line-clamp-3 keeps a long description from pushing the compact
       // drawer taller than its content-allocated height (no internal scroll).
+      // whitespace-pre-wrap keeps the newlines typed in the textarea — HTML
+      // collapses them to spaces otherwise, so a 3-line note rendered as one.
       className={cn(
-        "mt-3 min-h-[2.25rem] cursor-text rounded-md px-2.5 py-1.5 -mx-2 text-[0.92rem] leading-[1.5] transition-colors duration-150 hover:bg-[var(--color-surface-2)] line-clamp-3",
+        "mt-3 min-h-[2.25rem] cursor-text rounded-md px-2.5 py-1.5 -mx-2 whitespace-pre-wrap break-words text-[0.92rem] leading-[1.5] transition-colors duration-150 hover:bg-[var(--color-surface-2)] line-clamp-3",
         value ? "text-[var(--color-ink)]" : "text-[var(--color-ink-faint)]"
       )}
     >

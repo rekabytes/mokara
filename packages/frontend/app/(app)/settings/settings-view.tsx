@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, type SessionInfo } from "@/lib/api";
+import { api, type BillingInfo, type SessionInfo } from "@/lib/api";
 import { manualError } from "@/lib/errors";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -54,6 +54,26 @@ function timeAgo(iso: string): string {
   if (diffS < 3600) return `${Math.floor(diffS / 60)}m ago`;
   if (diffS < 86400) return `${Math.floor(diffS / 3600)}h ago`;
   return `${Math.floor(diffS / 86400)}d ago`;
+}
+
+// --- PRD-11 Phase 2 cap display helpers. null = "no cap" (publicCap maps
+// Infinity to null server-side); undefined = not loaded yet. "∞" is
+// typography, not an emoji. ---
+function capWord(plan: string): string {
+  return plan.charAt(0).toUpperCase() + plan.slice(1);
+}
+function capNum(n: number | null | undefined): string {
+  return n === undefined ? "—" : n === null ? "∞" : String(n);
+}
+function capGb(bytes: number | null | undefined): string {
+  if (bytes === undefined) return "—";
+  if (bytes === null) return "∞";
+  return `${Math.round(bytes / 1024 ** 3)} GB`;
+}
+function capMb(bytes: number | null | undefined): string {
+  if (bytes === undefined) return "—";
+  if (bytes === null) return "∞";
+  return `${Math.max(1, Math.round(bytes / 1024 / 1024))} MB`;
 }
 
 export function SettingsView({ contactEmail }: { contactEmail: string | null }) {
@@ -148,6 +168,51 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
     if (ok === null) return;
     // The endpoint already cleared the cookie — just leave, hard.
     window.location.assign("/");
+  };
+
+  // --- plan & billing (PRD-11 Phase 2) ---
+  const [billing, setBilling] = useState<BillingInfo | null>(null);
+  const [billingBusy, setBillingBusy] = useState(false);
+
+  const loadBilling = useCallback(async () => {
+    // Sync BEFORE reading: the return trip from Stripe-hosted checkout lands
+    // here, and in local dev the webhook cannot reach localhost — the server
+    // applies the same mapping either way. Void endpoint → ignore the value.
+    await run(() => api.syncBilling(), { fallback: "Couldn't reach billing." });
+    const data = await run(() => api.getBilling(), { fallback: "Couldn't load your plan." });
+    if (data) setBilling(data);
+  }, [run]);
+
+  // Initial billing load — a one-time read of server state outside React
+  // (same documented pattern as the devices list above).
+  useEffect(() => {
+    void loadBilling();
+  }, [loadBilling]);
+
+  // Checkout is workspace-scoped (leader-only), but the PLAN is the account's:
+  // any container the caller leads works — the personal workspace always
+  // qualifies. Stripe's page is outside the app, so the redirect is a hard
+  // navigation, not a router push.
+  const onUpgrade = async () => {
+    const team = containers.find((c) => c.role === "owner") ?? containers[0];
+    if (!team) return;
+    setBillingBusy(true);
+    const res = await run(() => api.startCheckout(team.id), {
+      fallback: "Couldn't start checkout. Try again.",
+    });
+    setBillingBusy(false);
+    if (!res) return;
+    window.location.assign(res.url);
+  };
+
+  const onManage = async () => {
+    setBillingBusy(true);
+    const res = await run(() => api.billingPortal(), {
+      fallback: "Couldn't open the billing portal.",
+    });
+    setBillingBusy(false);
+    if (!res) return;
+    window.location.assign(res.url);
   };
 
   const TILE =
@@ -353,6 +418,63 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
           >
             Sign out everywhere
           </button>
+        </section>
+
+        {/* ======== Plan & billing (PRD-11 Phase 2) ======== */}
+        <section className={`${TILE} col-span-12 min-[961px]:col-span-7`}>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <span className="text-[0.8rem] font-semibold">
+              Plan &amp; billing{" "}
+              <span className="font-normal text-[var(--color-ink-faint)]">
+                · {billing ? capWord(billing.plan) : "…"}
+              </span>
+            </span>
+            {billing?.period_end && (
+              <span className="text-[0.72rem] text-[var(--color-ink-faint)]">
+                Renews {fmtMemberSince(billing.period_end)}
+              </span>
+            )}
+          </div>
+          {billing?.grace_until && (
+            <p className="mb-0 mt-2 rounded-[var(--radius-btn)] border border-[var(--color-warning-soft)] bg-[var(--color-warning-soft)] px-3 py-2 text-[0.78rem] text-[var(--color-warning)]">
+              A payment failed — paid features stay on until {fmtMemberSince(billing.grace_until)}.
+              Update your card in the billing portal.
+            </p>
+          )}
+          <div className="mt-3 grid grid-cols-2 gap-2.5 min-[560px]:grid-cols-4">
+            <Stat value={capNum(billing?.caps.members)} label="members / team" />
+            <Stat value={capNum(billing?.caps.teams)} label="team workspaces" />
+            <Stat value={capGb(billing?.caps.storage_bytes)} label="storage" />
+            <Stat value={capMb(billing?.caps.file_bytes)} label="per file" />
+          </div>
+          <div className="mt-3.5 flex flex-wrap items-center gap-2">
+            {billing?.checkout_configured && billing.plan === "free" && (
+              <button
+                type="button"
+                disabled={billingBusy}
+                onClick={onUpgrade}
+                className="btn-base btn-primary px-3.5 py-2 text-[0.8rem]"
+              >
+                Upgrade to Starter
+              </button>
+            )}
+            {billing?.billing_configured && billing.has_subscription && (
+              <button
+                type="button"
+                disabled={billingBusy}
+                onClick={onManage}
+                className="btn-base btn-ghost border border-[var(--color-border-soft)] px-3.5 py-2 text-[0.8rem]"
+              >
+                Manage billing
+              </button>
+            )}
+            {billing && !billing.billing_configured && (
+              <p className="m-0 text-[0.72rem] text-[var(--color-ink-faint)]">
+                Billing isn’t enabled on this instance — self-hosted installs run every plan
+                unlimited, with no payments.
+              </p>
+            )}
+          </div>
         </section>
 
         {/* ======== Danger strip ======== */}

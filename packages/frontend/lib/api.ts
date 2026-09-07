@@ -160,6 +160,24 @@ export type SessionInfo = {
   current: boolean;
 };
 
+// PRD-11 Phase 2: the settings billing tile's payload. Caps use null for
+// "unlimited" (publicCap on the server); period_end/grace_until are the
+// webhook-maintained lifecycle timestamps.
+export type BillingInfo = {
+  plan: string;
+  billing_configured: boolean;
+  checkout_configured: boolean;
+  has_subscription: boolean;
+  period_end: string | null;
+  grace_until: string | null;
+  caps: {
+    members: number | null;
+    teams: number | null;
+    storage_bytes: number | null;
+    file_bytes: number | null;
+  };
+};
+
 export type Team = {
   id: string;
   name: string;
@@ -448,6 +466,20 @@ export const api = {
   updateMe: (data: { display_name: string | null }) =>
     req<{ user: User }>("/me", { method: "PATCH", body: JSON.stringify(data) }),
   me: () => req<{ user: User }>("/me"),
+
+  // ---- Billing (PRD-11 Phase 2) ----
+  // GET /me/billing answers on every instance (self-hosted reads plan "free"
+  // with billing_configured false) — the settings tile renders from it.
+  getBilling: () => req<BillingInfo>("/me/billing"),
+  // Checkout/portal return a Stripe-hosted URL to navigate to; the redirect
+  // grants nothing (the webhook + sync do), so a failed click is harmless.
+  startCheckout: (teamId: string) =>
+    req<{ url: string }>(`/teams/${teamId}/billing/checkout`, { method: "POST" }),
+  billingPortal: () => req<{ url: string }>("/me/billing/portal", { method: "POST" }),
+  // Re-reads this user's subscriptions server-side — the settings tile calls
+  // it on mount so a checkout return lands the plan even where the webhook
+  // cannot reach (local dev). Void → test `=== null`.
+  syncBilling: () => req<void>("/me/billing/sync", { method: "POST" }),
 
   // ---- Teams ----
   createTeam: (data: { name: string; kind?: "workspace" | "team" }) =>

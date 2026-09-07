@@ -1,12 +1,14 @@
 # PRD-11 — Subscription Plans & Billing
 
 > **Status: Phase 1 BUILT (2026-09-05, uncommitted — all gates green; the owner
-> commits). Phase 2 not started — Stripe recon done 2026-09-06 (live account
-> verified; §7 Phase 2 now describes the accepted Stripe shape; §6.1 still
-> gates the processor).** Prices stay PROPOSED until §6.1/6.3/6.4 are signed
-> (§6.2 currency DECIDED 2026-09-06: USD base). §7 notes have been corrected
-> to describe the code as written, and the in-phase shape decisions the PRD
-> reserved are recorded where they landed.
+> commits). Phase 2: the Starter slice is BUILT (2026-09-07, uncommitted) —
+> §7 2.1–2.4 + 2.7 describe what now exists; Pro/Ultra products were
+> deliberately NOT created (owner, 2026-09-07: launch Free + Starter only, the
+> price→plan map takes them the day they're minted). §6.3 prices and §6.4
+> trials stay open; §6.1 landed on Stripe direct (Managed Payments remains a
+> dashboard-side possibility to confirm with Stripe — same integration).**
+> §7 notes have been corrected to describe the code as written, and the
+> in-phase shape decisions the PRD reserved are recorded where they landed.
 
 ## 1. Model decision
 
@@ -165,9 +167,9 @@ Touchpoints use the repo's real paths.
 
 Output: a "Phase 0 decisions" block appended to this PRD — value + date each.
 
-- [ ] Processor chosen (§6.1) — Stripe account recon DONE 2026-09-06 (live,
-      MY, recurring-proven; see Phase 2 header) — remaining: decide direct vs
-      Managed Payments (confirm MY eligibility with Stripe) vs Paddle/LS.
+- [x] Processor chosen (§6.1): **Stripe direct** (2026-09-07) — the one live
+      account, recurring proven; Managed Payments stays a later dashboard-side
+      question, the integration shape is identical.
 - [x] Grandfathering sentence approved (§6.5 default, adopted 2026-09-05).
 - [x] Plan holder model confirmed (§6.6 default, adopted 2026-09-05).
 - [x] Subscription payment methods decided (§6.7, owner 2026-09-06): recurring
@@ -328,23 +330,43 @@ Price carries a `lookup_key` (e.g. `starter_monthly`) so tier→price maps
 through env without hardcoding generated IDs. Annual = a second price per
 Product later (2.5). Payment methods: cards + Link only (§6.7).
 
-**2.2 Checkout** — `POST /teams/:id/billing/checkout` (leader-only) creates a
-Stripe-hosted **Checkout Session in `subscription` mode** (redirect; zero
-billing UI; no card data touches our server) with `user_id`/`team_id` in the
-session metadata. The client redirect **never** grants the plan; only webhooks
-write entitlements.
+**2.2 Checkout** — `POST /teams/:id/billing/checkout` (leader-only —
+`owner_only` 403; a payer already on a paid plan gets `already_subscribed`
+409 → portal, not a second subscription) creates a Stripe-hosted **Checkout
+Session in `subscription` mode** (redirect; zero billing UI; no card data
+touches our server) with `user_id`/`team_id` in the session AND
+subscription metadata. The client redirect **never** grants the plan; only
+the webhook — or `POST /me/billing/sync`, which runs the identical mapping —
+writes entitlements. Routes MOUNT everywhere but answer `billing_not_configured`
+409 unless `DEPLOY_MODE=hosted` + both secrets + the price id are set (the
+attachments_disabled posture; `GET /me/billing` always answers so the settings
+tile renders truthfully). The webhook (`POST /billing/webhook`) is the one
+public billing surface: signature-verified on the raw body, mounted before
+the authed sub-app, 400 on a bad signature, 500 on handler errors so Stripe
+retries (every handler re-fetches before applying → retry-safe).
+Status mapping (the §6.5 freeze model): active/trialing → plan granted
+(price `lookup_key` via `PLAN_BY_PRICE_LOOKUP_KEY` — an unmapped price grants
+NOTHING, which also keeps the account's other products out of Mokara);
+past_due → plan kept, `grace_until` = +7d; anything else → free, fields
+cleared. `period_end` tracks the item-level billing clock.
 
-**2.3 Lifecycle webhooks** — public, signature-verified route; the ONLY writer
-of `users.plan`. Event set: `checkout.session.completed`,
-`customer.subscription.created/updated/deleted`, `invoice.paid`,
-`invoice.payment_failed`. Failed payment = grace period, then
-downgrade-freeze per §3 (never delete). One migration adds the billing fields
-on the user (`stripe_customer_id`, `grace_until`, `period_end`).
+**2.3 Lifecycle webhooks** — see 2.2 (built together; `lib/billing.ts` is the
+only module that touches Stripe). Event set subscribed at the endpoint:
+`checkout.session.completed`, `customer.subscription.created/updated/deleted`,
+`invoice.paid`, `invoice.payment_failed`. Billing fields migration:
+`20260907120000_billing_fields` (`stripe_customer_id`, `grace_until`,
+`period_end`, all nullable).
 
-**2.4 Billing portal** — Stripe **Customer Portal** (no-code): upgrade,
-downgrade, cancel-at-period-end, change card, promo codes — all Stripe-hosted;
-proration is handled by flexible billing mode (Stripe's default). One
-leader-only endpoint returns a portal link; we build no billing screens.
+**2.4 Billing portal** — Stripe **Customer Portal** (no-code; default
+configuration): upgrade, downgrade, cancel-at-period-end, change card.
+`POST /me/billing/portal` returns the hosted link for whoever has a customer
+(`no_subscription` 409 otherwise); we build no billing screens.
+
+**2.4b Settings surface (built)** — a "Plan & billing" tile in /settings:
+plan word, renew date, amber grace warning, the four caps (∞ = uncapped),
+Upgrade (first container the caller leads — the personal workspace always
+qualifies) and Manage-billing buttons. The tile syncs-then-reads on mount,
+which is also what makes local dev work without a reachable webhook.
 
 **2.5 Annual toggle** (§2, 2 months free) — second price per tier, switch at
 renewal. Only after launch is stable.

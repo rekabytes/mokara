@@ -156,6 +156,28 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
     action: "retry",
     message: "File storage could not be reached — try again.",
   },
+
+  // --- billing (PRD-11 Phase 2) ---
+  billing_not_configured: {
+    kind: "conflict",
+    action: "inline",
+    // True on any self-hosted instance — including one that never intended
+    // to take payments. The server says it; that IS the honest state.
+    serverSays: true,
+    message: "Billing is not enabled on this instance.",
+  },
+  already_subscribed: {
+    kind: "conflict",
+    action: "inline",
+    serverSays: true,
+    message: "You already have a paid plan.",
+  },
+  no_subscription: {
+    kind: "conflict",
+    action: "inline",
+    message: "No billing account yet — upgrade first.",
+  },
+
   already_member: { kind: "conflict", action: "inline", message: "That user is already a member." },
   already_invited: {
     kind: "conflict",

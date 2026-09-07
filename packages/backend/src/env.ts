@@ -22,8 +22,9 @@ const EnvSchema = z
     // are: a self-hoster gets unlimited everything with zero configuration
     // (open-core, no phone-home, no license check). Only the hosted deployment
     // sets DEPLOY_MODE=hosted, which is what turns the plan caps on.
-    // Deliberately NOT derived from a payment credential - the processor
-    // choice (PRD-11 §6.1) is still open, and nothing here may name one.
+    // Deliberately NOT derived from a payment credential — self_hosted must
+    // read unlimited with zero billing config. (The Stripe integration that
+    // Phase 2 mounts when `hosted` is a §6.1 decision recorded in PRD-11.)
     DEPLOY_MODE: z.enum(["hosted", "self_hosted"]).default("self_hosted"),
     // PRD-11 Phase 1.3: object storage for task attachments. Every field is
     // optional on purpose: an instance with no bucket answers
@@ -44,6 +45,16 @@ const EnvSchema = z
       .string()
       .default("1")
       .transform((v) => v !== "0"),
+    // PRD-11 Phase 2: Stripe billing. Every field optional on purpose — the
+    // published image boots with no billing at all and answers
+    // `billing_not_configured`; only a `hosted` deploy with all three set
+    // mounts the routes. The secret key is a RESTRICTED key (checkout +
+    // customers + subscriptions + portal, nothing else). The price id is the
+    // Starter monthly USD price; tier→price mapping lives in lib/plans.ts by
+    // the price's lookup_key, so rotating the id is an env change only.
+    STRIPE_SECRET_KEY: z.string().default(""),
+    STRIPE_WEBHOOK_SECRET: z.string().default(""),
+    STRIPE_PRICE_STARTER: z.string().default(""),
   })
   // Same posture as the frontend's getBackendUrl(): a missing production secret
   // is a failed deploy, not a warning. Without this, ENV=production with no
@@ -71,3 +82,14 @@ export const storageConfigured =
   env.S3_BUCKET !== "" &&
   env.S3_ACCESS_KEY_ID !== "" &&
   env.S3_SECRET_ACCESS_KEY !== "";
+
+/**
+ * Billing is "configured" only on a hosted deploy with both Stripe secrets —
+ * half-configured (a key with no webhook secret) reads as unconfigured, the
+ * same posture as storageConfigured: a lying mount beats a broken one.
+ * `billingRoutesMounted` gates index.ts; checkout additionally needs the
+ * Starter price id (routes/billing.ts answers 409 without it).
+ */
+export const billingConfigured =
+  isHosted && env.STRIPE_SECRET_KEY !== "" && env.STRIPE_WEBHOOK_SECRET !== "";
+export const checkoutConfigured = billingConfigured && env.STRIPE_PRICE_STARTER !== "";

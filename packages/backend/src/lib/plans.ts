@@ -76,3 +76,14 @@ export function limitsFor(plan: string): PlanLimits {
 export function publicCap(cap: number): number | null {
   return Number.isFinite(cap) ? cap : null;
 }
+
+/**
+ * PRD-11 Phase 2: the ONLY price→plan trust boundary. The webhook (and the
+ * sync endpoint) resolve a subscription's plan from its price's lookup_key;
+ * a price not listed here — the account's OTHER products, anything hand-
+ * minted in the Dashboard — resolves to no plan and grants nothing. Adding a
+ * tier later = one entry here + one env price id, nowhere else.
+ */
+export const PLAN_BY_PRICE_LOOKUP_KEY: Record<string, Plan> = {
+  starter_monthly: "starter",
+};

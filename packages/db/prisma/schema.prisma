@@ -23,6 +23,13 @@ model User {
   // (cookie policy: no localStorage). GET /teams filters it against live
   // membership; the FK clears it when the container is deleted.
   lastContainerId String? @map("last_container_id") @db.Uuid
+  // PRD-11 Phase 2: Stripe billing linkage, maintained ONLY by the webhook
+  // (+ the sync endpoint running the same mapping). All nullable: free and
+  // self-hosted accounts have none. grace_until = paid features still on
+  // while a failed payment recovers; period_end = current paid period.
+  stripeCustomerId String?   @map("stripe_customer_id")
+  graceUntil       DateTime?  @map("grace_until") @db.Timestamptz(3)
+  periodEnd        DateTime?  @map("period_end") @db.Timestamptz(3)
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 

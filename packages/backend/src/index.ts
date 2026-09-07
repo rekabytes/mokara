@@ -14,6 +14,7 @@ import { kpiRoutes } from "./routes/kpis.ts";
 import { commentRoutes } from "./routes/comments.ts";
 import { subtaskRoutes } from "./routes/subtasks.ts";
 import { attachmentRoutes } from "./routes/attachments.ts";
+import { billingRoutes, billingWebhook } from "./routes/billing.ts";
 import { analyticsRoutes } from "./routes/analytics.ts";
 import { validate } from "./lib/validate.ts";
 import { updateMeSchema, lastContainerSchema } from "./lib/validation.ts";
@@ -63,6 +64,11 @@ async function main() {
 
   const api = new Hono<{ Variables: Vars }>();
   api.route("/auth", authRoutes);
+  // The Stripe webhook is mounted BEFORE the authed sub-app on purpose: it
+  // carries no session cookie — its signature is the authentication. Hono
+  // composes in registration order, so the handler answers before
+  // authRequired could reject it as unsigned-in.
+  api.route("/billing", billingWebhook);
 
   const authed = new Hono<{ Variables: Vars }>();
   authed.use("*", authRequired);
@@ -87,6 +93,7 @@ async function main() {
   authed.route("/", commentRoutes);
   authed.route("/", subtaskRoutes);
   authed.route("/", attachmentRoutes);
+  authed.route("/", billingRoutes);
   authed.route("/", analyticsRoutes);
   authed.route("/", projectRoutes);
   authed.route("/", kpiRoutes);

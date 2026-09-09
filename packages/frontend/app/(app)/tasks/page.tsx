@@ -55,6 +55,7 @@ import {
 } from "@/lib/motion";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { NotificationBell } from "@/components/NotificationBell";
+import { TourOverlay } from "@/components/TourOverlay";
 import { cn } from "@/lib/cn";
 
 // PRD-10/11: members of the current container, shared by the drawer's and the
@@ -210,6 +211,12 @@ export default function TasksPage() {
   const [filter, setFilter] = useAtom(taskFilterAtom);
   const [sort, setSort] = useAtom(taskSortAtom);
   const [loading, setLoading] = useState(true);
+  // PRD-13: the spotlight tour may only point at controls that really exist, so
+  // it waits for a SUCCESSFUL board load. Written beside `tasks` in the function
+  // that owns the transition — never mirrored from `loading` in an effect, and
+  // deliberately not just `!loading`, because a failed load would then coach
+  // over an empty board that never arrived.
+  const [boardReady, setBoardReady] = useState(false);
 
   const { collapsed, toggleGroup } = useCollapsedGroups();
   const [modalOpen, setModalOpen] = useState(false);
@@ -233,10 +240,14 @@ export default function TasksPage() {
   const loadTasks = useCallback(async () => {
     if (!teamId) return;
     setLoading(true);
+    setBoardReady(false);
     setError(null);
     const list = await run(() => api.listTeamTasks(teamId), { fallback: "Failed to load tasks" });
     setLoading(false);
-    if (list) setTasks(list);
+    if (list) {
+      setTasks(list);
+      setBoardReady(true);
+    }
   }, [teamId, run, setError]);
 
   // Server state, not app state: the task list belongs to the database, so
@@ -544,7 +555,10 @@ export default function TasksPage() {
       {/* Filter row */}
       <div className="flex items-center justify-between gap-3 py-3">
         <div className="flex items-center gap-2">
-          <div className="inline-flex items-center gap-[2px] rounded-full border border-[var(--color-border-soft)] bg-[var(--color-surface)] p-[3px] shadow-[var(--shadow-xs)] backdrop-blur-[22px]">
+          <div
+            data-tour="board-controls"
+            className="inline-flex items-center gap-[2px] rounded-full border border-[var(--color-border-soft)] bg-[var(--color-surface)] p-[3px] shadow-[var(--shadow-xs)] backdrop-blur-[22px]"
+          >
             {FILTERS.map((f) => (
               <button
                 key={f.id}
@@ -648,6 +662,7 @@ export default function TasksPage() {
                 <button
                   type="button"
                   onClick={openModal}
+                  data-tour="create-task"
                   className="btn-base btn-primary mt-[0.85rem]"
                 >
                   Create your first task
@@ -673,6 +688,7 @@ export default function TasksPage() {
                 <button
                   type="button"
                   onClick={openModal}
+                  data-tour="create-task"
                   className="btn-base btn-primary mt-[0.85rem]"
                 >
                   New task
@@ -727,6 +743,7 @@ export default function TasksPage() {
                             type="button"
                             onClick={openModal}
                             aria-label="New task"
+                            data-tour="create-task"
                             className="grid size-5 cursor-pointer place-items-center text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]"
                           >
                             <PlusSmallIcon />
@@ -860,6 +877,12 @@ export default function TasksPage() {
           />
         )}
       </AnimatePresence>
+
+      {/* PRD-13: the first-run tour. Mounted here rather than in AppShell so it
+          can wait on this page's own `boardReady` — see the comment on the
+          component. It decides for itself whether to appear (session, route,
+          viewport, dismissal). */}
+      <TourOverlay boardReady={boardReady} />
     </div>
   );
 }

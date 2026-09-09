@@ -1,0 +1,2495 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mokara — Product guide &amp; onboarding mockup (proposal)</title>
+    <style>
+      /* Real mokara tokens (packages/frontend/app/globals.css @theme block) */
+      :root {
+        --color-surface: rgba(255, 255, 255, 0.72);
+        --color-surface-2: rgba(255, 255, 255, 0.55);
+        --color-surface-solid: #ffffff;
+        --color-border-soft: rgba(15, 23, 42, 0.07);
+        --color-border-strong: rgba(15, 23, 42, 0.13);
+        --color-ink: #0f172a;
+        --color-ink-muted: #64748b;
+        --color-ink-faint: #94a3b8;
+        --color-accent: #6366f1;
+        --color-accent-hover: #5457e5;
+        --color-accent-soft: rgba(99, 102, 241, 0.12);
+        --color-danger: #ef4444;
+        --color-danger-soft: rgba(239, 68, 68, 0.1);
+        --color-danger-border: rgba(239, 68, 68, 0.2);
+        --color-danger-ink: #b91c1c;
+        --color-success: #15803d;
+        --color-success-soft: rgba(34, 197, 94, 0.14);
+        --color-warning: #a16207;
+        --color-warning-soft: rgba(234, 179, 8, 0.16);
+        --color-progress: #4f46e5;
+        --color-progress-soft: rgba(99, 102, 241, 0.14);
+        --color-pill-bg: rgba(148, 163, 184, 0.16);
+        --color-prio-high: #f43f5e;
+        --color-prio-medium: #f59e0b;
+        --color-prio-low: #94a3b8;
+        --radius-card: 18px;
+        --radius-btn: 11px;
+        --radius-icon: 10px;
+        --radius-pill: 999px;
+        --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+        --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.05), 0 10px 30px rgba(15, 23, 42, 0.06);
+        --shadow-lift: 0 4px 12px rgba(15, 23, 42, 0.06), 0 24px 48px rgba(15, 23, 42, 0.1);
+        --shadow-accent: 0 4px 14px rgba(99, 102, 241, 0.32);
+        --blur-glass: saturate(180%) blur(22px);
+        --ease-snap: cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        background: linear-gradient(160deg, #f4f5fb, #eef1f8 60%, #eceff7);
+        color: var(--color-ink);
+        -webkit-font-smoothing: antialiased;
+      }
+      .mono {
+        font-family: ui-monospace, "IBM Plex Mono", SFMono-Regular, Menlo, monospace;
+      }
+      kbd {
+        font-family: ui-monospace, "IBM Plex Mono", monospace;
+        font-size: 11px;
+        border: 1px solid var(--color-border-strong);
+        border-bottom-width: 2px;
+        border-radius: 5px;
+        padding: 1px 5px;
+        background: var(--color-surface-solid);
+        color: var(--color-ink-muted);
+      }
+
+      /* ---------- Mockup chrome (NOT product UI) ---------- */
+      .doc {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 34px 26px 90px;
+      }
+      .doc-eyebrow {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-ink-faint);
+      }
+      .doc h1 {
+        font-size: clamp(1.6rem, 4vw, 2.1rem);
+        font-weight: 700;
+        letter-spacing: -0.025em;
+        line-height: 1.1;
+        margin: 6px 0 8px;
+      }
+      .doc-sub {
+        font-size: 14px;
+        color: var(--color-ink-muted);
+        max-width: 74ch;
+        line-height: 1.55;
+        margin: 0 0 14px;
+      }
+      .proposal {
+        margin: 14px 0 0;
+        padding: 12px 15px;
+        border: 1px dashed var(--color-border-strong);
+        border-radius: 12px;
+        background: rgba(99, 102, 241, 0.06);
+        font-size: 12.8px;
+        line-height: 1.6;
+        color: var(--color-ink-muted);
+      }
+      .proposal b {
+        color: var(--color-ink);
+      }
+      .jump {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 18px 0 30px;
+      }
+      .jump a {
+        font-size: 12.5px;
+        font-weight: 600;
+        text-decoration: none;
+        color: var(--color-ink-muted);
+        border: 1px solid var(--color-border-soft);
+        background: var(--color-surface);
+        padding: 6px 12px;
+        border-radius: var(--radius-pill);
+      }
+      .jump a:hover {
+        color: var(--color-ink);
+        border-color: var(--color-border-strong);
+      }
+      .sec {
+        margin-top: 52px;
+      }
+      .sec-head {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        border-bottom: 1px solid var(--color-border-soft);
+        padding-bottom: 8px;
+        margin-bottom: 6px;
+      }
+      .sec-num {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        color: var(--color-accent);
+      }
+      .sec-head h2 {
+        font-size: 1.06rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        margin: 0;
+      }
+      .sec-note {
+        font-size: 13px;
+        color: var(--color-ink-muted);
+        line-height: 1.6;
+        max-width: 82ch;
+        margin: 8px 0 16px;
+      }
+      .tag {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        padding: 2px 8px;
+        border-radius: var(--radius-pill);
+        background: var(--color-accent-soft);
+        color: var(--color-progress);
+      }
+      .tag.warn {
+        background: var(--color-warning-soft);
+        color: var(--color-warning);
+      }
+      .tag.later {
+        background: var(--color-pill-bg);
+        color: var(--color-ink-muted);
+      }
+
+      /* ---------- Faithful app shell (mirrors AppShell.tsx) ---------- */
+      .frame {
+        border: 1px solid var(--color-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--color-surface-solid);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .shell {
+        display: flex;
+        min-height: 560px;
+      }
+      .sidebar {
+        width: 224px;
+        flex-shrink: 0;
+        padding: 20px 14px 20px 20px;
+        border-right: 1px solid var(--color-border-soft);
+        backdrop-filter: var(--blur-glass);
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 6px 10px;
+        margin-bottom: 10px;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+      }
+      .brand .mark {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--color-accent);
+        box-shadow: 0 0 0 4px var(--color-accent-soft);
+      }
+      .switcher {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 10px;
+        margin-bottom: 6px;
+        border: 1px solid var(--color-border-soft);
+        border-radius: var(--radius-btn);
+        background: var(--color-surface);
+        font-size: 12.8px;
+        font-weight: 600;
+      }
+      .switcher .chev {
+        margin-left: auto;
+        color: var(--color-ink-faint);
+      }
+      .nav {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        margin-bottom: auto;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 7px 10px;
+        border-radius: var(--radius-icon);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--color-ink-muted);
+      }
+      .nav-item.on {
+        background: var(--color-surface-solid);
+        color: var(--color-ink);
+        box-shadow:
+          0 1px 2px rgba(15, 23, 42, 0.06),
+          0 0 0 1px var(--color-border-soft);
+      }
+      .nav-item.on svg {
+        color: var(--color-accent);
+      }
+      .nav-sep {
+        height: 1px;
+        background: var(--color-border-soft);
+        margin: 8px 4px;
+      }
+      /* The proposed 4th nav leaf — the only sidebar change Option B needs */
+      .nav-item.new {
+        position: relative;
+      }
+      .nav-item.new::after {
+        content: "new";
+        margin-left: auto;
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-accent);
+        background: var(--color-accent-soft);
+        padding: 2px 6px;
+        border-radius: var(--radius-pill);
+      }
+      .side-foot {
+        border-top: 1px solid var(--color-border-soft);
+        padding-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .me {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 5px 8px;
+        border-radius: var(--radius-icon);
+      }
+      .ava {
+        width: 28px;
+        height: 28px;
+        flex-shrink: 0;
+        border-radius: 999px;
+        background: var(--color-accent);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        display: grid;
+        place-items: center;
+      }
+      .me-name {
+        font-size: 12.8px;
+        font-weight: 600;
+        line-height: 1.2;
+      }
+      .me-handle {
+        font-size: 11.5px;
+        color: var(--color-ink-faint);
+      }
+      .logout {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--color-ink-muted);
+        border: 1px solid var(--color-border-strong);
+        border-radius: var(--radius-btn);
+        padding: 7px;
+      }
+
+      .main {
+        flex: 1;
+        min-width: 0;
+        padding: 16px clamp(16px, 2.4vw, 28px) 26px;
+      }
+      .crumb {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--color-border-soft);
+        padding: 4px 0;
+      }
+      .crumb-l {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.92rem;
+        font-weight: 600;
+      }
+      .crumb-l .muted {
+        color: var(--color-ink-muted);
+      }
+      .crumb-l .sep {
+        color: var(--color-ink-faint);
+      }
+      .icon-btn {
+        width: 24px;
+        height: 24px;
+        display: grid;
+        place-items: center;
+        border-radius: 6px;
+        color: var(--color-ink-faint);
+      }
+      .bell {
+        width: 32px;
+        height: 32px;
+        display: grid;
+        place-items: center;
+        border-radius: var(--radius-icon);
+        color: var(--color-ink-muted);
+        position: relative;
+      }
+      .bell .badge {
+        position: absolute;
+        top: 3px;
+        right: 3px;
+        min-width: 15px;
+        height: 15px;
+        padding: 0 4px;
+        border-radius: 999px;
+        background: var(--color-accent);
+        color: #fff;
+        font-size: 9.5px;
+        font-weight: 700;
+        display: grid;
+        place-items: center;
+      }
+
+      /* ---------- Board (mirrors tasks/page.tsx) ---------- */
+      .filters {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 0;
+      }
+      .pillgroup {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        border: 1px solid var(--color-border-soft);
+        background: var(--color-surface);
+        padding: 3px;
+        border-radius: var(--radius-pill);
+        box-shadow: var(--shadow-xs);
+      }
+      .pillgroup button {
+        border: 0;
+        background: transparent;
+        font: inherit;
+        font-size: 0.82rem;
+        font-weight: 500;
+        color: var(--color-ink-muted);
+        padding: 0.3rem 12px;
+        border-radius: var(--radius-pill);
+        cursor: pointer;
+      }
+      .pillgroup button.on {
+        background: #fff;
+        color: var(--color-ink);
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+      }
+      .round-btn {
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        border-radius: 999px;
+        border: 1px solid var(--color-border-soft);
+        background: var(--color-surface);
+        color: var(--color-ink-faint);
+      }
+      .select {
+        font-size: 0.82rem;
+        font-weight: 500;
+        color: var(--color-ink-muted);
+        border: 1px solid var(--color-border-soft);
+        background: var(--color-surface);
+        border-radius: var(--radius-pill);
+        padding: 0.3rem 26px 0.3rem 12px;
+      }
+      .board {
+        border: 1px solid var(--color-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--color-surface);
+        box-shadow: var(--shadow-card);
+        backdrop-filter: var(--blur-glass);
+        padding: 6px 4px 10px;
+      }
+      .grp {
+        padding: 4px 6px 8px;
+      }
+      .grp-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 8px;
+      }
+      .grp-name {
+        font-size: 0.85rem;
+        font-weight: 600;
+        letter-spacing: -0.005em;
+      }
+      .grp-count {
+        font-size: 0.82rem;
+        color: var(--color-ink-faint);
+      }
+      .grp-add {
+        margin-left: auto;
+        width: 20px;
+        height: 20px;
+        display: grid;
+        place-items: center;
+        color: var(--color-ink-faint);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 4px;
+        padding: 6px 8px;
+        border-radius: 7px;
+      }
+      .row:hover {
+        background: var(--color-surface-2);
+      }
+      .cbx {
+        width: 15px;
+        height: 15px;
+        flex-shrink: 0;
+        border-radius: 3px;
+        border: 1.5px solid var(--color-border-strong);
+        display: grid;
+        place-items: center;
+        color: transparent;
+      }
+      .cbx.on {
+        background: var(--color-accent);
+        border-color: var(--color-accent);
+        color: #fff;
+      }
+      .bars {
+        display: flex;
+        align-items: flex-end;
+        gap: 1.5px;
+        height: 12px;
+      }
+      .bars i {
+        width: 2.5px;
+        border-radius: 1px;
+        background: var(--color-pill-bg);
+      }
+      .bars i:nth-child(1) {
+        height: 5px;
+      }
+      .bars i:nth-child(2) {
+        height: 8px;
+      }
+      .bars i:nth-child(3) {
+        height: 12px;
+      }
+      .bars.p1 i:nth-child(1) {
+        background: var(--color-prio-low);
+      }
+      .bars.p2 i:nth-child(-n + 2) {
+        background: var(--color-prio-medium);
+      }
+      .bars.p3 i {
+        background: var(--color-prio-high);
+      }
+      .tid {
+        width: 58px;
+        flex-shrink: 0;
+        font-size: 0.74rem;
+        letter-spacing: 0.02em;
+        color: var(--color-ink-faint);
+      }
+      .glyph {
+        width: 13px;
+        height: 13px;
+        flex-shrink: 0;
+        border-radius: 999px;
+        border: 1.5px solid var(--color-border-strong);
+      }
+      .glyph.todo {
+        border-color: var(--color-border-strong);
+      }
+      .glyph.prog {
+        border-color: var(--color-warning);
+        border-style: dashed;
+      }
+      .glyph.done {
+        border-color: var(--color-accent);
+        background: var(--color-accent);
+      }
+      .ttitle {
+        flex: 1;
+        min-width: 0;
+        font-size: 0.92rem;
+        font-weight: 500;
+        letter-spacing: -0.005em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .ttitle.done {
+        color: var(--color-ink-faint);
+        text-decoration: line-through;
+      }
+      .chips {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+        font-size: 0.72rem;
+        color: var(--color-ink-faint);
+      }
+      .chipdot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        display: inline-block;
+      }
+      .ava20 {
+        width: 20px;
+        height: 20px;
+        border-radius: 999px;
+        background: var(--color-accent);
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+        display: grid;
+        place-items: center;
+      }
+      .tdate {
+        font-size: 0.74rem;
+        color: var(--color-ink-faint);
+        flex-shrink: 0;
+      }
+      .rowacts {
+        display: flex;
+        gap: 2px;
+        opacity: 0.35;
+      }
+
+      /* ---------- Option A: getting-started card ---------- */
+      .gs {
+        border: 1px solid var(--color-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--color-surface-solid);
+        box-shadow: var(--shadow-card);
+        padding: 16px 18px 14px;
+        margin-bottom: 14px;
+        position: relative;
+        overflow: hidden;
+      }
+      .gs::before {
+        content: "";
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 3px;
+        background: linear-gradient(var(--color-accent), rgba(99, 102, 241, 0.25));
+      }
+      .gs-top {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+      }
+      .ring {
+        width: 44px;
+        height: 44px;
+        flex-shrink: 0;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        background: conic-gradient(
+          var(--color-accent) 0turn 0.4turn,
+          var(--color-accent-soft) 0.4turn 1turn
+        );
+        position: relative;
+      }
+      .ring::after {
+        content: "";
+        position: absolute;
+        inset: 4px;
+        border-radius: 999px;
+        background: var(--color-surface-solid);
+      }
+      .ring span {
+        position: relative;
+        font-size: 11.5px;
+        font-weight: 700;
+        color: var(--color-progress);
+      }
+      .gs-h {
+        font-size: 0.98rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        margin: 0 0 2px;
+      }
+      .gs-p {
+        font-size: 12.8px;
+        color: var(--color-ink-muted);
+        line-height: 1.5;
+        margin: 0;
+        max-width: 70ch;
+      }
+      .gs-x {
+        margin-left: auto;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--color-ink-faint);
+        background: transparent;
+        border: 0;
+        cursor: pointer;
+      }
+      .gs-x:hover {
+        color: var(--color-ink);
+      }
+      .steps {
+        list-style: none;
+        margin: 14px 0 0;
+        padding: 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(238px, 1fr));
+        gap: 8px;
+      }
+      .step {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid var(--color-border-soft);
+        border-radius: 12px;
+        background: var(--color-surface);
+        min-width: 0;
+      }
+      .step:hover {
+        border-color: var(--color-border-strong);
+        box-shadow: var(--shadow-xs);
+      }
+      .step.done {
+        background: var(--color-success-soft);
+        border-color: rgba(34, 197, 94, 0.22);
+      }
+      .step-n {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+        border-radius: 999px;
+        border: 1.5px solid var(--color-border-strong);
+        font-size: 10.5px;
+        font-weight: 700;
+        color: var(--color-ink-faint);
+        display: grid;
+        place-items: center;
+        margin-top: 1px;
+      }
+      .step.done .step-n {
+        background: var(--color-success);
+        border-color: var(--color-success);
+        color: #fff;
+      }
+      .step-t {
+        font-size: 12.9px;
+        font-weight: 600;
+        line-height: 1.35;
+      }
+      .step.done .step-t {
+        color: var(--color-ink-muted);
+      }
+      .step-h {
+        font-size: 11.8px;
+        color: var(--color-ink-faint);
+        line-height: 1.45;
+        margin-top: 2px;
+      }
+      .step-go {
+        font-size: 11.5px;
+        font-weight: 700;
+        color: var(--color-progress);
+        margin-top: 5px;
+        display: inline-block;
+      }
+      .gs-foot {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 12px;
+        padding-top: 11px;
+        border-top: 1px solid var(--color-border-soft);
+        font-size: 12px;
+        color: var(--color-ink-faint);
+      }
+      .gs-foot a {
+        color: var(--color-ink-muted);
+        font-weight: 600;
+      }
+
+      /* ---------- Option B: guide page ---------- */
+      .guide {
+        display: grid;
+        grid-template-columns: 210px minmax(0, 1fr) 176px;
+        gap: 26px;
+        padding-top: 16px;
+        align-items: start;
+      }
+      @media (max-width: 1000px) {
+        .guide {
+          grid-template-columns: 190px minmax(0, 1fr);
+        }
+        .guide .onthis {
+          display: none;
+        }
+      }
+      .chapters {
+        position: sticky;
+        top: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+      .ch-eyebrow {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--color-ink-faint);
+        padding: 0 10px 8px;
+      }
+      .ch {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: var(--radius-icon);
+        font-size: 12.9px;
+        font-weight: 600;
+        color: var(--color-ink-muted);
+      }
+      .ch .n {
+        font-size: 10.5px;
+        color: var(--color-ink-faint);
+        font-family: ui-monospace, "IBM Plex Mono", monospace;
+      }
+      .ch.on {
+        background: var(--color-surface-solid);
+        color: var(--color-ink);
+        box-shadow:
+          0 1px 2px rgba(15, 23, 42, 0.06),
+          0 0 0 1px var(--color-border-soft);
+      }
+      .ch.on .n {
+        color: var(--color-accent);
+      }
+      .ch-meta {
+        margin-left: auto;
+        font-size: 10.5px;
+        color: var(--color-ink-faint);
+      }
+      .article {
+        min-width: 0;
+        border: 1px solid var(--color-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--color-surface-solid);
+        box-shadow: var(--shadow-card);
+        padding: 26px 30px 30px;
+      }
+      .art-eyebrow {
+        font-size: 11.5px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-ink-faint);
+      }
+      .article h3 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        letter-spacing: -0.025em;
+        line-height: 1.15;
+        margin: 8px 0 8px;
+      }
+      .article .lede {
+        font-size: 14.2px;
+        line-height: 1.62;
+        color: var(--color-ink-muted);
+        margin: 0 0 20px;
+        max-width: 68ch;
+      }
+      .article h4 {
+        font-size: 0.95rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        margin: 24px 0 8px;
+      }
+      .article p {
+        font-size: 13.4px;
+        line-height: 1.65;
+        color: var(--color-ink-muted);
+        margin: 0 0 10px;
+        max-width: 70ch;
+      }
+      .howto {
+        list-style: none;
+        counter-reset: h;
+        margin: 0 0 6px;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .howto li {
+        counter-increment: h;
+        display: flex;
+        gap: 12px;
+        font-size: 13.4px;
+        line-height: 1.55;
+        color: var(--color-ink-muted);
+      }
+      .howto li::before {
+        content: counter(h);
+        flex-shrink: 0;
+        width: 20px;
+        height: 20px;
+        margin-top: 1px;
+        border-radius: 999px;
+        background: var(--color-accent-soft);
+        color: var(--color-progress);
+        font-size: 11px;
+        font-weight: 700;
+        display: grid;
+        place-items: center;
+      }
+      .howto b {
+        color: var(--color-ink);
+      }
+      .ui-ref {
+        font-family: ui-monospace, "IBM Plex Mono", monospace;
+        font-size: 12px;
+        background: var(--color-surface-2);
+        border: 1px solid var(--color-border-soft);
+        border-radius: 5px;
+        padding: 1px 5px;
+        color: var(--color-ink);
+      }
+      .callout {
+        border: 1px solid var(--color-border-soft);
+        border-left: 3px solid var(--color-accent);
+        background: var(--color-surface);
+        border-radius: 10px;
+        padding: 11px 14px;
+        font-size: 12.8px;
+        line-height: 1.55;
+        color: var(--color-ink-muted);
+        margin: 16px 0 0;
+      }
+      .callout.warn {
+        border-left-color: var(--color-warning);
+      }
+      .callout b {
+        color: var(--color-ink);
+      }
+      .shot {
+        margin: 18px 0 0;
+        border: 1px solid var(--color-border-soft);
+        border-radius: 12px;
+        background: linear-gradient(160deg, #f7f8fc, #eef1f8);
+        padding: 14px;
+      }
+      .shot-cap {
+        font-size: 11.5px;
+        color: var(--color-ink-faint);
+        margin-top: 9px;
+        text-align: center;
+      }
+      .onthis {
+        position: sticky;
+        top: 16px;
+        font-size: 12.2px;
+      }
+      .onthis .ch-eyebrow {
+        padding-left: 0;
+      }
+      .onthis a {
+        display: block;
+        padding: 4px 0 4px 10px;
+        border-left: 2px solid var(--color-border-soft);
+        color: var(--color-ink-faint);
+        text-decoration: none;
+        line-height: 1.35;
+      }
+      .onthis a.on {
+        border-left-color: var(--color-accent);
+        color: var(--color-ink);
+        font-weight: 600;
+      }
+      .art-foot {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 26px;
+        padding-top: 16px;
+        border-top: 1px solid var(--color-border-soft);
+        font-size: 12.5px;
+        color: var(--color-ink-faint);
+      }
+      .art-foot .btn {
+        margin-left: auto;
+      }
+      .btn {
+        font: inherit;
+        font-size: 12.8px;
+        font-weight: 600;
+        border-radius: var(--radius-btn);
+        padding: 0.5rem 0.85rem;
+        border: 1px solid transparent;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .btn.primary {
+        background: var(--color-accent);
+        color: #fff;
+        box-shadow: var(--shadow-accent);
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--color-ink-muted);
+        border-color: var(--color-border-strong);
+      }
+
+      /* ---------- Option C: spotlight tour ---------- */
+      .tour {
+        position: relative;
+        background: rgba(15, 23, 42, 0.42);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .tour .shell {
+        filter: none;
+      }
+      .tour .dim {
+        opacity: 0.34;
+        filter: saturate(0.7);
+      }
+      .spot {
+        position: relative;
+        z-index: 2;
+        border-radius: 10px;
+        box-shadow:
+          0 0 0 3px var(--color-surface-solid),
+          0 0 0 9999px rgba(15, 23, 42, 0.44);
+      }
+      .coach {
+        position: absolute;
+        z-index: 3;
+        width: 320px;
+        border: 1px solid var(--color-border-soft);
+        border-radius: 14px;
+        background: var(--color-surface-solid);
+        box-shadow: var(--shadow-lift);
+        padding: 15px 16px 13px;
+      }
+      .coach .step-of {
+        font-size: 10.8px;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--color-accent);
+      }
+      .coach h5 {
+        font-size: 14.5px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        margin: 6px 0 5px;
+      }
+      .coach p {
+        font-size: 12.8px;
+        line-height: 1.55;
+        color: var(--color-ink-muted);
+        margin: 0 0 12px;
+      }
+      .coach-foot {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .dots {
+        display: flex;
+        gap: 4px;
+        margin-right: auto;
+      }
+      .dots i {
+        width: 5px;
+        height: 5px;
+        border-radius: 999px;
+        background: var(--color-border-strong);
+      }
+      .dots i.on {
+        background: var(--color-accent);
+        width: 14px;
+      }
+
+      /* ---------- Tables / lists ---------- */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.9px;
+        background: var(--color-surface-solid);
+        border: 1px solid var(--color-border-soft);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      th {
+        text-align: left;
+        font-size: 10.8px;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--color-ink-faint);
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--color-border-soft);
+        background: var(--color-surface);
+      }
+      td {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--color-border-soft);
+        vertical-align: top;
+        color: var(--color-ink-muted);
+        line-height: 1.5;
+      }
+      tr:last-child td {
+        border-bottom: 0;
+      }
+      td b,
+      li b {
+        color: var(--color-ink);
+      }
+      .tight {
+        margin: 0;
+        padding-left: 18px;
+        font-size: 13px;
+        line-height: 1.65;
+        color: var(--color-ink-muted);
+      }
+      .tight li {
+        margin-bottom: 5px;
+      }
+      .two {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 14px;
+      }
+      .panel {
+        border: 1px solid var(--color-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--color-surface-solid);
+        box-shadow: var(--shadow-card);
+        padding: 16px 18px;
+        min-width: 0;
+      }
+      .panel h4 {
+        font-size: 13.4px;
+        font-weight: 700;
+        margin: 0 0 4px;
+      }
+      .panel .cap {
+        font-size: 12.2px;
+        color: var(--color-ink-faint);
+        margin: 0 0 10px;
+      }
+      .panel.bad {
+        border-color: var(--color-danger-border);
+        background:
+          linear-gradient(rgba(239, 68, 68, 0.035), rgba(239, 68, 68, 0.035)),
+          var(--color-surface-solid);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="doc">
+      <div class="doc-eyebrow">Proposal · product guide &amp; first-run onboarding</div>
+      <h1>Teaching Mokara without adding noise</h1>
+      <p class="doc-sub">
+        Three formats, mocked against the real UI vocabulary (labels, chips and copy quoted from
+        <span class="mono">tasks/page.tsx</span>, <span class="mono">AppShell.tsx</span>,
+        <span class="mono">teams/[id]/page.tsx</span>, <span class="mono">settings-view.tsx</span>,
+        <span class="mono">analytics/page.tsx</span>). Nothing here is built — this is the choice
+        sheet. Section 05 lists the controls a guide must <b>not</b> document because they currently
+        do nothing.
+      </p>
+      <div class="proposal">
+        <b>Recommendation: ship B first, then A. Hold C.</b>
+        A public <b>/guide</b> (marketing group, renders from HTML like
+        <span class="mono">/pricing</span>) is the only option that costs no schema, no first-run
+        flag and no new state — it is content, it is shareable, it answers "what is this?" before
+        signup, and every in-app empty state can link into it the day it exists. <b>A</b> (the
+        first-run card) is the higher-conversion half but needs a dismissal decision that touches
+        the database, so it should land second and small. <b>C</b> (spotlight tour) is the most work
+        for the least content: it needs the same flag, a measured-rect overlay, and it cannot point
+        at a task drawer because there is no <span class="mono">?task=</span> deep link yet. Park it
+        behind A.
+      </div>
+      <div class="jump">
+        <a href="#a">01 · First-run card</a>
+        <a href="#b">02 · /guide help centre</a>
+        <a href="#c">03 · Spotlight tour</a>
+        <a href="#outline">04 · Content outline</a>
+        <a href="#honest">05 · Do not document</a>
+        <a href="#plan">06 · Phasing &amp; questions</a>
+      </div>
+
+      <!-- ================= 01 · OPTION A ================= -->
+      <section class="sec" id="a">
+        <div class="sec-head">
+          <span class="sec-num">01</span>
+          <h2>Option A — first-run “Getting started” card on /tasks</h2>
+          <span class="tag">phase 2</span>
+        </div>
+        <p class="sec-note">
+          One card above the board, shown until it is dismissed or completed. Five items, each a
+          real action in the product with the real control named in the hint. It is the only format
+          that teaches by <i>doing</i>, and the only one that can be finished. Rendered where the
+          user already is — no new route, no nav change, no modal on first login.
+        </p>
+
+        <div class="frame">
+          <div class="shell">
+            <aside class="sidebar">
+              <div class="brand"><span class="mark"></span> MOKARA</div>
+              <div class="switcher">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <rect
+                    x="4"
+                    y="10"
+                    width="16"
+                    height="10"
+                    rx="2.5"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                  />
+                  <path
+                    d="M8 10V7.5a4 4 0 018 0V10"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                  />
+                </svg>
+                Personal
+                <svg
+                  class="chev"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M6 9l6 6 6-6"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </div>
+              <nav class="nav">
+                <div class="nav-item on">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M5 6h14M5 12h14M5 18h9"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                  Tasks
+                </div>
+                <div class="nav-item">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M5 19V9m5 10V5m5 14v-7m5 7V8"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                  Analytics
+                </div>
+                <div class="nav-sep"></div>
+                <div class="nav-item">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <circle cx="9" cy="8" r="3.2" stroke="currentColor" stroke-width="1.8" />
+                    <path
+                      d="M3.5 19c.6-3 2.8-4.6 5.5-4.6S14 16 14.6 19"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                    />
+                    <path
+                      d="M16 6.2a3 3 0 010 5.6M18 18.6c-.2-1.6-.7-2.9-1.5-3.8"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                  Team
+                </div>
+              </nav>
+              <div class="side-foot">
+                <div class="me">
+                  <span class="ava">M</span>
+                  <span style="min-width: 0">
+                    <span class="me-name">Mira</span><br />
+                    <span class="me-handle">@mira</span>
+                  </span>
+                </div>
+                <div class="logout">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M15 5h3a2 2 0 012 2v10a2 2 0 01-2 2h-3M11 8l-4 4 4 4M7 12h9"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                  Log out
+                </div>
+              </div>
+            </aside>
+
+            <div class="main">
+              <div class="crumb">
+                <div class="crumb-l">
+                  <span class="muted">Mokara</span>
+                  <span class="sep">›</span>
+                  <span>Tasks</span>
+                  <span class="icon-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M12 4l2.3 5 5.7.6-4.2 3.8 1.2 5.6L12 16.9 7 19l1.2-5.6L4 9.6 9.7 9z"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </span>
+                </div>
+                <span class="bell">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M6.5 10a5.5 5.5 0 0111 0c0 4 1.5 5.5 1.5 5.5H5S6.5 14 6.5 10z"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M10 18.5a2 2 0 004 0"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </span>
+              </div>
+
+              <!-- ===== THE PROPOSED CARD ===== -->
+              <div class="gs" style="margin-top: 14px">
+                <div class="gs-top">
+                  <div class="ring"><span>2/5</span></div>
+                  <div style="min-width: 0">
+                    <h3 class="gs-h">Getting started in Mokara</h3>
+                    <p class="gs-p">
+                      Five small things. Together they cover the whole product — a task with a
+                      deadline, broken into steps, shared with someone, weighed against a goal.
+                    </p>
+                  </div>
+                  <button class="gs-x" type="button">Dismiss</button>
+                </div>
+
+                <ol class="steps">
+                  <li class="step done">
+                    <span class="step-n">
+                      <svg
+                        width="10"
+                        height="10"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M5 12.5l4.5 4.5L19 7"
+                          stroke="currentColor"
+                          stroke-width="3.4"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                    </span>
+                    <span style="min-width: 0">
+                      <span class="step-t">Create your first task</span>
+                      <span class="step-h"
+                        >The <b>+</b> on the Todo header. A title is enough.</span
+                      >
+                    </span>
+                  </li>
+
+                  <li class="step done">
+                    <span class="step-n">
+                      <svg
+                        width="10"
+                        height="10"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M5 12.5l4.5 4.5L19 7"
+                          stroke="currentColor"
+                          stroke-width="3.4"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                    </span>
+                    <span style="min-width: 0">
+                      <span class="step-t">Give it a due date</span>
+                      <span class="step-h">
+                        <b>Due date</b> chip in the drawer, then <b>Today</b> or <b>+7 days</b>.
+                      </span>
+                    </span>
+                  </li>
+
+                  <li class="step">
+                    <span class="step-n">3</span>
+                    <span style="min-width: 0">
+                      <span class="step-t">Break one into steps</span>
+                      <span class="step-h">
+                        <b>Steps</b> when you create it — it becomes the <b>Checklist</b>.
+                      </span>
+                      <span class="step-go">Open the new-task form →</span>
+                    </span>
+                  </li>
+
+                  <li class="step">
+                    <span class="step-n">4</span>
+                    <span style="min-width: 0">
+                      <span class="step-t">Create a project or a KPI</span>
+                      <span class="step-h">
+                        On the team page. Then weigh tasks toward it from the <b>…</b> panel.
+                      </span>
+                      <span class="step-go">Go to Team →</span>
+                    </span>
+                  </li>
+
+                  <li class="step">
+                    <span class="step-n">5</span>
+                    <span style="min-width: 0">
+                      <span class="step-t">Invite someone by @username</span>
+                      <span class="step-h">
+                        The moment they accept, this workspace becomes a team.
+                      </span>
+                      <span class="step-go">Go to Team →</span>
+                    </span>
+                  </li>
+                </ol>
+
+                <div class="gs-foot">
+                  <span>Progress is derived from your own data — nothing to tick by hand.</span>
+                  <a href="#b">Read the guide</a>
+                </div>
+              </div>
+              <!-- ===== /PROPOSED CARD ===== -->
+
+              <div class="filters">
+                <div style="display: flex; align-items: center; gap: 8px">
+                  <div class="pillgroup">
+                    <button class="on" type="button">Active</button>
+                    <button type="button">Today</button>
+                    <button type="button">This week</button>
+                    <button type="button">Done</button>
+                  </div>
+                  <span class="round-btn">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8" />
+                      <path
+                        d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6L18 18M18 6l-1.4 1.4M7.4 16.6L6 18"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                      />
+                    </svg>
+                  </span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px">
+                  <span class="select">Manual</span>
+                </div>
+              </div>
+
+              <div class="board">
+                <div class="grp">
+                  <div class="grp-head">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M6 9l6 6 6-6"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                      />
+                    </svg>
+                    <span class="grp-name">Todo</span>
+                    <span class="grp-count">2</span>
+                    <span class="grp-add">
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M12 5v14M5 12h14"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                        />
+                      </svg>
+                    </span>
+                  </div>
+                  <div class="row">
+                    <span class="cbx"></span>
+                    <span class="bars p3"><i></i><i></i><i></i></span>
+                    <span class="tid mono">3F9A1C</span>
+                    <span class="glyph todo"></span>
+                    <span class="ttitle">Draft the onboarding copy</span>
+                    <span class="chips">
+                      <span style="display: inline-flex; align-items: center; gap: 4px">
+                        <span class="chipdot" style="background: #6366f1"></span> Website
+                      </span>
+                    </span>
+                    <span class="tdate mono">Mar 5</span>
+                    <span class="rowacts">
+                      <span class="icon-btn">
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M6 4v16M6 5h9l-1.2 3L15 11H6"
+                            stroke="currentColor"
+                            stroke-width="1.7"
+                            stroke-linejoin="round"
+                          />
+                        </svg>
+                      </span>
+                      <span class="icon-btn">
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M5 7h14M9 7V5.5A1.5 1.5 0 0110.5 4h3A1.5 1.5 0 0115 5.5V7M7 7l1 12.5h8L17 7"
+                            stroke="currentColor"
+                            stroke-width="1.7"
+                            stroke-linecap="round"
+                          />
+                        </svg>
+                      </span>
+                    </span>
+                  </div>
+                  <div class="row">
+                    <span class="cbx"></span>
+                    <span class="bars p2"><i></i><i></i><i></i></span>
+                    <span class="tid mono">A71D04</span>
+                    <span class="glyph todo"></span>
+                    <span class="ttitle">Rename the pricing tiers</span>
+                    <span class="chips"><span class="ava20">J</span></span>
+                    <span class="tdate mono">Mar 8</span>
+                    <span class="rowacts"></span>
+                  </div>
+                </div>
+                <div class="grp">
+                  <div class="grp-head">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M6 9l6 6 6-6"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                      />
+                    </svg>
+                    <span class="grp-name">In Progress</span>
+                    <span class="grp-count">1</span>
+                  </div>
+                  <div class="row">
+                    <span class="cbx"></span>
+                    <span class="bars p1"><i></i><i></i><i></i></span>
+                    <span class="tid mono">C22B9E</span>
+                    <span class="glyph prog"></span>
+                    <span class="ttitle">Move attachments to the proxy path</span>
+                    <span class="chips"><span class="ava20">M</span></span>
+                    <span class="tdate mono">Mar 4</span>
+                    <span class="rowacts"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="proposal">
+          <b>How the ticks work (the real design question).</b>
+          Every item is derived from data the app already has — never a manual checkbox, because a
+          checklist the user ticks themselves teaches nothing and lies the moment they click
+          <span class="ui-ref">Dismiss</span>. Items 1–2 and 4 come from the current container's
+          task list and <span class="mono">useContainerMeta</span> (projects/KPIs already fetched);
+          item 5 from <span class="mono">member_count</span> on the containers list.
+          <b>Two gaps to decide:</b> (a) “your first task” is cross-container, but the board only
+          knows the selected one — either accept per-container truth or add a small
+          <span class="mono">GET /me/onboarding</span> summary; (b) “read the analytics page” can
+          never be detected, so it stays a plain link and is <i>not</i> one of the five.
+        </div>
+        <div class="proposal">
+          <b>Dismissal is a database decision, not a component one.</b>
+          The house rule is server state over device storage (that is why
+          <span class="mono">last_container_id</span> is a column and the cookie policy can promise
+          “one session cookie”), so <span class="mono">localStorage</span> is out. Options:
+          <b>(i)</b> derived-only — the card disappears when all five complete, with no way to
+          dismiss early; <b>(ii)</b> one nullable
+          <span class="mono">users.onboarding_dismissed_at</span> + a migration; <b>(iii)</b> derive
+          “already knows the product” from existing data (any task older than the account's first
+          day → never show) and ship with no schema change at all.
+          <b>(iii) is the cheapest honest version</b> and is what the mockup assumes; (ii) is the
+          one to pick if you want an explicit <span class="ui-ref">Dismiss</span> that survives
+          every device.
+        </div>
+      </section>
+
+      <!-- ================= 02 · OPTION B ================= -->
+      <section class="sec" id="b">
+        <div class="sec-head">
+          <span class="sec-num">02</span>
+          <h2>
+            Option B — <span class="mono">/guide</span>, a help centre in the product's own voice
+          </h2>
+          <span class="tag">phase 1</span>
+        </div>
+        <p class="sec-note">
+          Ten short chapters, each a numbered path through one surface, each quoting the label the
+          user actually reads. Placed in the <b>(marketing)</b> group so it inherits the landing's
+          furniture and renders from HTML for anonymous visitors — no spinner, shareable, indexable,
+          and it can answer “what is this?” before someone signs up. In-app it is reached from one
+          new sidebar leaf and from the empty states that already say
+          <i>“create them on the team page”</i>.
+        </p>
+
+        <div class="frame">
+          <div class="shell" style="min-height: 620px">
+            <aside class="sidebar">
+              <div class="brand"><span class="mark"></span> MOKARA</div>
+              <div class="switcher">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="1.8" />
+                  <circle cx="16" cy="10" r="2.4" stroke="currentColor" stroke-width="1.8" />
+                  <path
+                    d="M4 19c.5-2.7 2.4-4.2 5-4.2s4.5 1.5 5 4.2"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                  />
+                </svg>
+                Atlas Studio
+                <svg
+                  class="chev"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M6 9l6 6 6-6"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </div>
+              <nav class="nav">
+                <div class="nav-item">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M5 6h14M5 12h14M5 18h9"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                  Tasks
+                </div>
+                <div class="nav-item">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M5 19V9m5 10V5m5 14v-7m5 7V8"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                  Analytics
+                </div>
+                <div class="nav-sep"></div>
+                <div class="nav-item">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <circle cx="9" cy="8" r="3.2" stroke="currentColor" stroke-width="1.8" />
+                    <path
+                      d="M3.5 19c.6-3 2.8-4.6 5.5-4.6S14 16 14.6 19"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                  Team
+                </div>
+                <div class="nav-item new on">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M5 5.5A1.5 1.5 0 016.5 4H11v16H6.5A1.5 1.5 0 015 18.5v-13zM13 4h4.5A1.5 1.5 0 0119 5.5v13a1.5 1.5 0 01-1.5 1.5H13V4z"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                  Guide
+                </div>
+              </nav>
+              <div class="side-foot">
+                <div class="me">
+                  <span class="ava">M</span>
+                  <span style="min-width: 0">
+                    <span class="me-name">Mira</span><br />
+                    <span class="me-handle">@mira</span>
+                  </span>
+                </div>
+                <div class="logout">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M15 5h3a2 2 0 012 2v10a2 2 0 01-2 2h-3M11 8l-4 4 4 4M7 12h9"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                  Log out
+                </div>
+              </div>
+            </aside>
+
+            <div class="main">
+              <div class="crumb">
+                <div class="crumb-l">
+                  <span class="muted">Mokara</span>
+                  <span class="sep">›</span>
+                  <span>Guide</span>
+                  <span class="icon-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M12 4l2.3 5 5.7.6-4.2 3.8 1.2 5.6L12 16.9 7 19l1.2-5.6L4 9.6 9.7 9z"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </span>
+                </div>
+                <span class="bell">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M6.5 10a5.5 5.5 0 0111 0c0 4 1.5 5.5 1.5 5.5H5S6.5 14 6.5 10z"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M10 18.5a2 2 0 004 0"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </span>
+              </div>
+
+              <div class="guide">
+                <nav class="chapters">
+                  <div class="ch-eyebrow">Chapters</div>
+                  <div class="ch">
+                    <span class="n">01</span> Start here <span class="ch-meta">3m</span>
+                  </div>
+                  <div class="ch">
+                    <span class="n">02</span> The board <span class="ch-meta">4m</span>
+                  </div>
+                  <div class="ch on">
+                    <span class="n">03</span> Inside a task <span class="ch-meta">5m</span>
+                  </div>
+                  <div class="ch">
+                    <span class="n">04</span> Projects &amp; KPIs <span class="ch-meta">4m</span>
+                  </div>
+                  <div class="ch">
+                    <span class="n">05</span> Working together <span class="ch-meta">4m</span>
+                  </div>
+                  <div class="ch">
+                    <span class="n">06</span> Files &amp; storage <span class="ch-meta">3m</span>
+                  </div>
+                  <div class="ch">
+                    <span class="n">07</span> Analytics <span class="ch-meta">3m</span>
+                  </div>
+                  <div class="ch">
+                    <span class="n">08</span> Plans &amp; billing <span class="ch-meta">3m</span>
+                  </div>
+                  <div class="ch">
+                    <span class="n">09</span> Keyboard <span class="ch-meta">1m</span>
+                  </div>
+                  <div class="ch">
+                    <span class="n">10</span> Self-hosting <span class="ch-meta">2m</span>
+                  </div>
+                </nav>
+
+                <article class="article">
+                  <div class="art-eyebrow">Chapter 03 · the task drawer</div>
+                  <h3>Inside a task</h3>
+                  <p class="lede">
+                    Click any row and the board gives up forty percent of its width. Everything you
+                    need to change about a task is in that panel — and almost all of it is one click
+                    or one keystroke away, with no save button anywhere.
+                  </p>
+
+                  <h4>Open it, then read it top to bottom</h4>
+                  <ol class="howto">
+                    <li>
+                      Click a row on the board. The drawer's top bar shows the word
+                      <span class="ui-ref">Task</span> and its short id (<span class="ui-ref mono"
+                        >3F9A1C</span
+                      >) — the same id the row carries.
+                    </li>
+                    <li>
+                      The title is read-only until you <b>double-click</b> it.
+                      <kbd>Enter</kbd> saves, <kbd>Esc</kbd> cancels.
+                    </li>
+                    <li>
+                      Under it, <span class="ui-ref">Created by jonas</span> — immutable, and the
+                      reason assignment and authorship never get confused.
+                    </li>
+                    <li>
+                      Click the description to edit it. <kbd>⌘</kbd>+<kbd>Enter</kbd> saves;
+                      <kbd>Esc</kbd> reverts; clearing the text removes it.
+                    </li>
+                  </ol>
+
+                  <h4>Change its state from the chip row</h4>
+                  <p>
+                    One line of chips, each opening a small menu: <span class="ui-ref">Todo</span> /
+                    <span class="ui-ref">In Progress</span> / <span class="ui-ref">Done</span> /
+                    <span class="ui-ref">Canceled</span>, then <span class="ui-ref">Low</span> ·
+                    <span class="ui-ref">Medium</span> · <span class="ui-ref">High</span>, then the
+                    due date, then the assignee. The <span class="ui-ref">…</span> at the end folds
+                    three more: <b>Project</b>, <b>KPIs</b> and <b>Flag</b>.
+                  </p>
+
+                  <div class="shot">
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
+                      <span class="select" style="border-radius: var(--radius-pill)">Todo</span>
+                      <span class="select" style="border-radius: var(--radius-pill)">High</span>
+                      <span class="select" style="border-radius: var(--radius-pill)">Mar 5</span>
+                      <span
+                        class="select"
+                        style="
+                          border-radius: var(--radius-pill);
+                          display: inline-flex;
+                          align-items: center;
+                          gap: 6px;
+                        "
+                        ><span class="ava20" style="width: 16px; height: 16px; font-size: 9px"
+                          >J</span
+                        >
+                        Jonas</span
+                      >
+                      <span class="round-btn" style="width: 26px; height: 26px; font-size: 13px"
+                        >…</span
+                      >
+                    </div>
+                    <div class="shot-cap">
+                      The drawer's chip row — identical in shape to the new-task form's.
+                    </div>
+                  </div>
+
+                  <h4>Checklist, files, comments</h4>
+                  <ol class="howto">
+                    <li>
+                      <b>Checklist</b> — the steps you wrote at creation. Tick them, double-click to
+                      rename, reorder with the arrows, delete on hover. The count beside the heading
+                      reads <span class="ui-ref">2/5</span>.
+                    </li>
+                    <li>
+                      <b>Files</b> — thumbnails for images, a download pill for PDFs. Only the
+                      person who uploaded a file can delete it.
+                    </li>
+                    <li>
+                      <b>Comments</b> — type and press <kbd>⌘</kbd>+<kbd>Enter</kbd>. A plain
+                      <kbd>Enter</kbd> is a newline. Replies go one level deep; edit and delete are
+                      yours alone.
+                    </li>
+                  </ol>
+
+                  <div class="callout warn">
+                    <b>Two honest limits.</b> Steps and task files are set when you
+                    <i>create</i> the task — the drawer has no “add a step” field and no upload
+                    button, so later material goes into a comment (which does take files). And
+                    <span class="ui-ref">Delete</span> in the drawer's footer removes the task
+                    immediately, with no confirmation.
+                  </div>
+
+                  <div class="callout">
+                    <b>Close it</b> with <kbd>Esc</kbd> — unless you are typing, in which case
+                    <kbd>Esc</kbd> cancels what you are editing first. There is no backdrop; the
+                    board stays visible and clickable beside the panel.
+                  </div>
+
+                  <div class="art-foot">
+                    <span>Was this chapter useful?</span>
+                    <a class="btn ghost" href="#b">Yes</a>
+                    <a class="btn ghost" href="#b">Not quite</a>
+                    <a class="btn primary" href="#a">Next · Projects &amp; KPIs</a>
+                  </div>
+                </article>
+
+                <nav class="onthis">
+                  <div class="ch-eyebrow">On this page</div>
+                  <a href="#b">Open it, then read it</a>
+                  <a href="#b" class="on">Change its state</a>
+                  <a href="#b">Checklist, files, comments</a>
+                  <a href="#b">Two honest limits</a>
+                </nav>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="proposal">
+          <b>Placement: (marketing) or (app)?</b> Both are one-line decisions, and they are not
+          equivalent. <b>(marketing)</b> = <span class="mono">app/(marketing)/guide/</span>, public,
+          AmbientCanvas + SiteHeader + SiteFooter, dynamic off the session cookie exactly like
+          <span class="mono">/pricing</span> — a signed-in visitor gets a sidebar-less page and a
+          “Open app” header CTA. <b>(app)</b> = inside AppShell, so it keeps the sidebar, the
+          container switcher and the bell, but only signed-in users can read it and it costs an
+          auth'd page load to answer a pre-signup question. The mockup above draws the (app) version
+          because that is where the sidebar leaf lives; the recommendation is still (marketing) plus
+          a deep link, since a guide that Google cannot reach does not help anyone deciding whether
+          to sign up. Content lives in a data module (<span class="mono">lib/guide.ts</span>, the
+          way <span class="mono">lib/legal.ts</span> and
+          <span class="mono">lib/pricing.ts</span> already do) so the chapter rail cannot drift from
+          the articles.
+        </div>
+      </section>
+
+      <!-- ================= 03 · OPTION C ================= -->
+      <section class="sec" id="c">
+        <div class="sec-head">
+          <span class="sec-num">03</span>
+          <h2>Option C — spotlight coach marks</h2>
+          <span class="tag later">parked</span>
+        </div>
+        <p class="sec-note">
+          The familiar pattern: dim the app, cut a hole around one control, explain it, next. Four
+          or five steps on first login only. Shown here over the real board — step 2 points at the
+          <span class="ui-ref">+</span> on the Todo header, because that is the one control a new
+          user must find and the board's only create affordance.
+        </p>
+
+        <div class="frame">
+          <div class="tour">
+            <div class="shell">
+              <aside class="sidebar dim" style="border-right-color: rgba(15, 23, 42, 0.14)">
+                <div class="brand"><span class="mark"></span> MOKARA</div>
+                <div class="switcher">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect
+                      x="4"
+                      y="10"
+                      width="16"
+                      height="10"
+                      rx="2.5"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                    />
+                    <path
+                      d="M8 10V7.5a4 4 0 018 0V10"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                  Personal
+                </div>
+                <nav class="nav">
+                  <div class="nav-item on">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M5 6h14M5 12h14M5 18h9"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                      />
+                    </svg>
+                    Tasks
+                  </div>
+                  <div class="nav-item">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M5 19V9m5 10V5m5 14v-7m5 7V8"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                      />
+                    </svg>
+                    Analytics
+                  </div>
+                </nav>
+              </aside>
+              <div class="main">
+                <div class="crumb dim">
+                  <div class="crumb-l">
+                    <span class="muted">Mokara</span><span class="sep">›</span><span>Tasks</span>
+                  </div>
+                </div>
+                <div class="filters dim">
+                  <div class="pillgroup">
+                    <button class="on" type="button">Active</button>
+                    <button type="button">Today</button>
+                    <button type="button">This week</button>
+                    <button type="button">Done</button>
+                  </div>
+                  <span class="select">Manual</span>
+                </div>
+                <div class="board">
+                  <div class="grp">
+                    <div class="grp-head">
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M6 9l6 6 6-6"
+                          stroke="currentColor"
+                          stroke-width="2.2"
+                          stroke-linecap="round"
+                        />
+                      </svg>
+                      <span class="grp-name">Todo</span>
+                      <span class="grp-count">0</span>
+                      <!-- the spotlight target -->
+                      <span class="grp-add spot">
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M12 5v14M5 12h14"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                          />
+                        </svg>
+                      </span>
+                    </div>
+                    <div
+                      style="padding: 6px 10px; font-size: 12.5px; color: var(--color-ink-faint)"
+                    >
+                      Nothing queued yet.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="coach" style="top: 178px; right: 34px">
+              <div class="step-of">Step 2 of 5</div>
+              <h5>Everything starts on the Todo header</h5>
+              <p>
+                This <b>+</b> is the board's only create button — it lives on Todo even when Todo is
+                empty, so it is never hidden. It opens a form where a title is the only required
+                field.
+              </p>
+              <div class="coach-foot">
+                <span class="dots"><i></i><i class="on"></i><i></i><i></i><i></i></span>
+                <a class="btn ghost" href="#c">Skip tour</a>
+                <a class="btn primary" href="#c">Next</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="proposal">
+          <b>Why it is parked.</b> It needs the same dismissal flag as Option A, plus a portal
+          overlay that measures the target's rect and re-measures on scroll and resize — the exact
+          idiom the <span class="mono">Dropdown</span> already uses, so the technique is not new,
+          but it is five measured targets and a stack of edge cases (mobile drawer open, sidebar
+          collapsed, the board scrolled). It also cannot teach the drawer, which is where most of
+          the product lives, because there is no <span class="mono">?task=&lt;id&gt;</span> deep
+          link — a tour step cannot open a task on the user's behalf.
+          <b>If you want C, add the deep link first</b>; it is independently useful (notification
+          rows and due-soon rows currently can only switch container and push
+          <span class="mono">/tasks</span>, which is the known UX-parity gap).
+        </div>
+      </section>
+
+      <!-- ================= 04 · OUTLINE ================= -->
+      <section class="sec" id="outline">
+        <div class="sec-head">
+          <span class="sec-num">04</span>
+          <h2>The content itself — what the guide has to cover</h2>
+          <span class="tag">applies to all three</span>
+        </div>
+        <p class="sec-note">
+          Ten chapters, ~32 minutes total if anyone read it linearly (nobody will — each is
+          self-contained and linked from the surface it describes). Wording below is the real
+          product's wording, quoted from the components.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 34px">#</th>
+              <th style="width: 168px">Chapter</th>
+              <th>Must answer</th>
+              <th style="width: 190px">Linked from</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono">01</td>
+              <td><b>Start here</b></td>
+              <td>
+                What Mokara is in one paragraph · <b>workspace</b> (private, padlock icon) vs
+                <b>team</b> (shared, two-person icon) · the sidebar's three leaves · the container
+                switcher and why your last choice comes back after a refresh · where settings live
+                (your avatar, bottom left).
+              </td>
+              <td>Signup success · landing footer</td>
+            </tr>
+            <tr>
+              <td class="mono">02</td>
+              <td><b>The board</b></td>
+              <td>
+                Four groups (<b>Todo · In Progress · Done · Canceled</b>) and that only Todo renders
+                when empty · filters <b>Active / Today / This week / Done</b> · sort
+                <b>Manual / Priority / Due date</b> · collapsing a group · row anatomy left to right
+                (checkbox, priority bars, id, status glyph, title, project/KPI chips, assignee,
+                date, flag, delete) · clicking the priority bars cycles low → medium → high ·
+                <b>delete has no confirmation</b>.
+              </td>
+              <td>Board empty state</td>
+            </tr>
+            <tr>
+              <td class="mono">03</td>
+              <td><b>Inside a task</b></td>
+              <td>
+                The drawer, as mocked above: double-click to rename · click-to-edit description ·
+                the chip row and the <b>…</b> panel (Project, KPIs, Flag) · Checklist · Files ·
+                Comments with <kbd>⌘</kbd>+<kbd>Enter</kbd> · <kbd>Esc</kbd> to close · the
+                creation-time-only rule for steps and files.
+              </td>
+              <td>Task drawer footer</td>
+            </tr>
+            <tr>
+              <td class="mono">04</td>
+              <td><b>Projects &amp; KPIs</b></td>
+              <td>
+                Created on the team page, not on the board · <b>Team</b> vs <b>Personal</b> scope
+                and who can make which · colours are optional · archive vs delete (a project with
+                tasks archives, and stays under <b>Archived (n)</b>) ·
+                <b>KPIs are always personal</b> — you can only weigh a task toward your own ·
+                weights cap at 100% per task · the progress formula
+                <span class="mono">Σ(weight × status) ÷ Σ(weight)</span>, todo 0 / in progress 0.5 /
+                done 1, canceled excluded.
+              </td>
+              <td><span class="ui-ref">None yet.</span> empty states · KPI chip empty menu</td>
+            </tr>
+            <tr>
+              <td class="mono">05</td>
+              <td><b>Working together</b></td>
+              <td>
+                Invite by <b>@username</b> · a workspace becomes a team the moment the first invite
+                is <i>accepted</i>, never before · roles are <b>owner</b> and <b>member</b>, and
+                only the owner starts checkout, changes the logo, or makes team projects ·
+                assignment notifies the person assigned · the bell: invitations, assignments,
+                replies and due-soon rows, with <b>Accept</b>/<b>Decline</b> inline · due-soon looks
+                48 hours ahead and red means overdue · <b>the board updates live</b> — a teammate's
+                change lands without a refresh (tasks only; comments still need one).
+              </td>
+              <td>Team page · notification drawer empty state</td>
+            </tr>
+            <tr>
+              <td class="mono">06</td>
+              <td><b>Files &amp; storage</b></td>
+              <td>
+                <b>Images and PDFs only</b>, on tasks and on comments · task files at creation,
+                comment files any time · the lightbox and its <b>Download</b> button · delete is
+                <b>uploader-only</b> · the two caps that matter (per file, per workspace) and that
+                hitting a cap freezes, never deletes · the workspace logo counts toward storage.
+              </td>
+              <td>Paperclip hover · storage error copy</td>
+            </tr>
+            <tr>
+              <td class="mono">07</td>
+              <td><b>Analytics</b></td>
+              <td>
+                The four cards in their real order — <b>Current distribution</b>,
+                <b>Progress</b> (the heatmap), <b>KPI progress</b>, <b>Activity over time</b> ·
+                heatmap cell states (<span class="ui-ref"
+                  >Not started · Upcoming · In progress · Completed · Overdue · Deadline day</span
+                >) and that one box is one day centred under its number · <b>Jump to month…</b> ·
+                why the chart is a fixed trailing 14 days with no range picker ·
+                <span class="ui-ref">n more tasks below</span> is a scroll cap, not missing data.
+              </td>
+              <td>Analytics heatmap hint line</td>
+            </tr>
+            <tr>
+              <td class="mono">08</td>
+              <td><b>Plans &amp; billing</b></td>
+              <td>
+                The open-core promise in the product's own words — capacity is the gate, never the
+                feature · what Free gives (3 members, personal + 1 team, 1 GB, 25 MB) · where the
+                upgrade lives (<b>Settings → Plan &amp; billing</b>, and only a workspace owner can
+                start checkout) · the amber grace strip after a failed payment · self-hosted runs
+                every cap unlimited with no payments. Mirrors <span class="mono">/pricing</span>
+                without repeating it — link, don't duplicate.
+              </td>
+              <td>Settings billing tile · cap error copy</td>
+            </tr>
+            <tr>
+              <td class="mono">09</td>
+              <td><b>Keyboard</b></td>
+              <td>
+                The complete honest list: <kbd>Esc</kbd> closes modal / drawer / menus / date picker
+                / lightbox / notification drawer, and cancels an in-progress rename, description
+                edit or reply · <kbd>Enter</kbd> commits a step or a rename ·
+                <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>Enter</kbd> saves a description or posts a comment
+                · double-click renames a task title or a checklist step.
+                <b>There is no ⌘K and no search yet</b> — the chapter must not imply one.
+              </td>
+              <td>Sidebar footer</td>
+            </tr>
+            <tr>
+              <td class="mono">10</td>
+              <td><b>Self-hosting</b></td>
+              <td>
+                Two paragraphs and a link out: the same images publish on every release tag, point
+                them at your own Postgres, Redis and S3-compatible bucket and every cap is off.
+                Detail stays in the README — the guide should not fork it.
+              </td>
+              <td>Landing · pricing section 02</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="two" style="margin-top: 16px">
+          <div class="panel">
+            <h4>Voice rules for the copy</h4>
+            <p class="cap">So it reads like the product, not like a manual.</p>
+            <ul class="tight">
+              <li>
+                Name the control by its <b>on-screen label</b>, in the same casing — “the
+                <b>+</b> on the Todo header”, not “the add button”.
+              </li>
+              <li>Say what happens, not what to feel. No “powerful”, no “seamless”.</li>
+              <li>
+                State limits in the same sentence as the feature. The product already does this
+                (<span class="ui-ref"
+                  >Team projects &amp; KPIs unlock when this workspace becomes a team</span
+                >).
+              </li>
+              <li>Never document a control that does nothing — see section 05.</li>
+              <li>
+                No emoji anywhere (house rule); keyboard glyphs <kbd>⌘</kbd> and <kbd>Esc</kbd> are
+                text and stay.
+              </li>
+              <li>
+                Numbers come from one source. Caps are already rendered from
+                <span class="mono">lib/plans.ts</span> via the API — the guide must not hand-type “3
+                members”.
+              </li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h4>Cheap wins that need no guide at all</h4>
+            <p class="cap">Do these regardless of which option you pick.</p>
+            <ul class="tight">
+              <li>
+                The board empty state (<span class="ui-ref"
+                  >No tasks yet · Capture a thought, get it done.</span
+                >) gains one line naming the <b>+</b> and the <b>Steps</b> field.
+              </li>
+              <li>
+                The <span class="ui-ref">None yet.</span> project/KPI empty states already say where
+                to go — make them links.
+              </li>
+              <li>
+                The drawer footer's <span class="ui-ref">Press Esc to close</span> is the natural
+                home for a “Guide” link.
+              </li>
+              <li>
+                The delete-in-drawer affordance has no confirmation: either add one, or the guide
+                must warn (chapter 03 does).
+              </li>
+              <li>
+                Tooltip text for the row's priority bars already exists (<span class="ui-ref"
+                  >Priority: high — click to cycle</span
+                >) — that is the pattern to extend, not reinvent.
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 05 · HONESTY ================= -->
+      <section class="sec" id="honest">
+        <div class="sec-head">
+          <span class="sec-num">05</span>
+          <h2>Do not document these — they render but do nothing</h2>
+          <span class="tag warn">found while inventorying</span>
+        </div>
+        <p class="sec-note">
+          A guide makes dead controls visible: the moment you write “click the filter icon”, someone
+          clicks it and nothing happens. These are all live in the current UI with no
+          <span class="mono">onClick</span>. Either wire them, hide them, or leave them out of every
+          chapter — but they should be a decision, not an accident.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 210px">Control</th>
+              <th style="width: 190px">Where</th>
+              <th>State</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>Star</b> icon (<span class="mono">aria-label="Star"</span>)</td>
+              <td>Every page's breadcrumb row</td>
+              <td>
+                Decorative — no handler, no <span class="mono">title</span>. Copied verbatim into
+                all five app pages, so it reads as a favourite/bookmark affordance everywhere.
+              </td>
+            </tr>
+            <tr>
+              <td><b>Filter settings</b> gear (round button beside the filter pills)</td>
+              <td>Tasks filter row</td>
+              <td>No handler.</td>
+            </tr>
+            <tr>
+              <td><b>Filter</b> funnel icon button</td>
+              <td>Tasks filter row, right side</td>
+              <td>
+                No handler — and it sits next to the working sort select, so it looks like part of
+                the same control group.
+              </td>
+            </tr>
+            <tr>
+              <td><b>Layout</b> icon button</td>
+              <td>Tasks filter row, far right</td>
+              <td>No handler. Implies a board/list/calendar toggle that does not exist.</td>
+            </tr>
+            <tr>
+              <td><b>Expand</b> icon button</td>
+              <td>New-task modal top bar</td>
+              <td>No handler.</td>
+            </tr>
+            <tr>
+              <td><b>“3 seats free”</b> note + invite form visibility</td>
+              <td>Team page rail</td>
+              <td>
+                Hardcoded to 3 and hidden at <span class="mono">members.length &gt;= 3</span>,
+                ignoring <span class="mono">member_limit</span> — so on Starter (8) the invite box
+                disappears at 3.
+                <b>A team chapter cannot describe seats until this is plan-driven.</b>
+              </td>
+            </tr>
+            <tr>
+              <td><b>“Invite up to 2 teammates”</b></td>
+              <td><span class="mono">/teams/new</span> subtitle</td>
+              <td>Hardcoded string, same drift.</td>
+            </tr>
+            <tr>
+              <td><b>Revoke an invitation</b></td>
+              <td>Team page rail</td>
+              <td>
+                Pending invites render as <span class="ui-ref">Invited: @alice</span> with no way to
+                cancel one. Chapter 05 must not promise it.
+              </td>
+            </tr>
+            <tr>
+              <td><b>Role chips</b> render the raw API value</td>
+              <td>Members card</td>
+              <td>
+                Shows lowercase <span class="ui-ref">owner</span> /
+                <span class="ui-ref">member</span> while the prose says “team leader”. Pick one word
+                and use it in both.
+              </td>
+            </tr>
+            <tr>
+              <td><b>Add a step after creation</b></td>
+              <td>Task drawer Checklist</td>
+              <td>
+                By design (creation-time only), and the API accepts it — the UI simply has no field.
+                Fine, but it is the first thing a new user looks for, so chapter 03 says it out
+                loud.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ================= 06 · PLAN ================= -->
+      <section class="sec" id="plan">
+        <div class="sec-head">
+          <span class="sec-num">06</span>
+          <h2>Phasing and the questions only you can answer</h2>
+        </div>
+        <div class="two">
+          <div class="panel">
+            <h4>Phase 1 — content, no state</h4>
+            <p class="cap">One route, one data module, one sidebar leaf.</p>
+            <ul class="tight">
+              <li>
+                <span class="mono">lib/guide.ts</span> — chapters as data (title, minutes, sections,
+                steps), the <span class="mono">lib/legal.ts</span> pattern.
+              </li>
+              <li>
+                <span class="mono">/guide</span> + <span class="mono">/guide/[chapter]</span> in the
+                (marketing) group; shared chrome component so the rail cannot drift.
+              </li>
+              <li>
+                Sidebar leaf <b>Guide</b> (or a footer link beside <b>Log out</b>) — decide which,
+                since (marketing) pages have no sidebar.
+              </li>
+              <li>Empty states and the drawer footer link into the right chapter.</li>
+              <li>No migration, no atoms, no effects beyond the sticky-rail scroll spy.</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h4>Phase 2 — the first-run card</h4>
+            <p class="cap">Only after the dismissal question is settled.</p>
+            <ul class="tight">
+              <li>
+                Decide (i) derived-only, (ii)
+                <span class="mono">users.onboarding_dismissed_at</span>, or (iii)
+                inferred-from-account-age.
+              </li>
+              <li>
+                If (ii): one migration + one nullable column, mirroring
+                <span class="mono">last_container_id</span>.
+              </li>
+              <li>Five items, all derived; each links to the chapter that explains it.</li>
+              <li>
+                Entrance uses the existing stagger constants in
+                <span class="mono">lib/motion.ts</span> — no new easings.
+              </li>
+            </ul>
+          </div>
+          <div class="panel bad">
+            <h4>Blocked / decide first</h4>
+            <p class="cap">Things that make a guide lie if written today.</p>
+            <ul class="tight">
+              <li>Dead controls in section 05 — wire, hide, or omit.</li>
+              <li>Hardcoded seat numbers on the team page.</li>
+              <li>
+                No task deep link → no tour of the drawer, and notification rows still cannot open
+                the task they are about.
+              </li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h4>Questions for you</h4>
+            <ul class="tight">
+              <li>
+                <b>Who is the guide for</b> — a signed-up user learning the board, or a visitor
+                deciding whether to sign up? (Drives (marketing) vs (app).)
+              </li>
+              <li>
+                <b>Public or private?</b> Indexable help pages are free SEO and free support
+                deflection; private keeps the product's internals out of search.
+              </li>
+              <li>
+                <b>Screenshots?</b> Every shot is a maintenance liability that goes stale on the
+                next redesign. Recommendation: no bitmaps — render real component markup as
+                illustration, the way this mockup does.
+              </li>
+              <li>
+                <b>Video?</b> Out of scope here; nothing in the stack serves it and it doubles the
+                copy workload.
+              </li>
+              <li>
+                <b>One page or ten?</b> Ten chapters is a rail + routing; a single long page is one
+                file and a sticky TOC (the legal docs already do this). The mockup draws ten; a
+                single page is a legitimate cheaper answer.
+              </li>
+              <li>
+                <b>Language</b> — English only for now, or written to be translatable later (all
+                strings in the data module either way)?
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

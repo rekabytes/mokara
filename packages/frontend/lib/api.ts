@@ -127,6 +127,21 @@ export type User = {
   created_at: string;
 };
 
+// PRD-13: the first-run tour's dismissal. Mirrors the backend enum + the DB
+// CHECK on users.tour_state.
+export type TourState = "completed" | "skipped";
+
+// The SESSION user — what /me, signup, login and PATCH /me return. Deliberately
+// not `User` widened: `User` is also the shape of a comment's `author`, which
+// never carries a tour flag, so putting it there would be a type lie about every
+// comment payload.
+export type SessionUser = User & {
+  /** null = never resolved, so the tour still runs. */
+  tour_state: TourState | null;
+  /** Bookkeeping only — no visibility rule reads it. */
+  tour_resolved_at: string | null;
+};
+
 // One row of the Settings device list (PRD-08). `current` marks the calling
 // device; revoking it is a logout.
 // One row of the notification drawer (PRD-05). The payload is type-shaped on
@@ -441,12 +456,12 @@ function uploadViaXhr(
 export const api = {
   // ---- Auth ----
   signUp: (data: { username: string; password: string; display_name?: string }) =>
-    req<{ user: User }>("/auth/signup", {
+    req<{ user: SessionUser }>("/auth/signup", {
       method: "POST",
       body: JSON.stringify(data),
     }),
   login: (data: { username: string; password: string }) =>
-    req<{ user: User }>("/auth/login", {
+    req<{ user: SessionUser }>("/auth/login", {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -469,8 +484,13 @@ export const api = {
   listSessions: () => req<{ sessions: SessionInfo[] }>("/auth/sessions"),
   revokeSession: (id: string) => req<void>(`/auth/sessions/${id}`, { method: "DELETE" }),
   updateMe: (data: { display_name: string | null }) =>
-    req<{ user: User }>("/me", { method: "PATCH", body: JSON.stringify(data) }),
-  me: () => req<{ user: User }>("/me"),
+    req<{ user: SessionUser }>("/me", { method: "PATCH", body: JSON.stringify(data) }),
+  me: () => req<{ user: SessionUser }>("/me"),
+  // PRD-13: record that the first-run tour was finished or skipped. Idempotent,
+  // and the enum has no null — nothing here can re-arm the tour. Fire-and-forget
+  // from the overlay (204, void → test `=== null`).
+  patchTourState: (state: TourState) =>
+    req<void>("/me/onboarding", { method: "PATCH", body: JSON.stringify({ state }) }),
 
   // ---- Billing (PRD-11 Phase 2) ----
   // GET /me/billing answers on every instance (self-hosted reads plan "free"

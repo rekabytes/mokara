@@ -31,6 +31,13 @@ model User {
   // (cookie policy: no localStorage). GET /teams filters it against live
   // membership; the FK clears it when the container is deleted.
   lastContainerId String? @map("last_container_id") @db.Uuid
+  // PRD-13: first-run spotlight tour. NULL = never resolved, so the tour runs —
+  // a fresh account, an account that predates the column, or one abandoned
+  // mid-tour. 'completed' (reached the last step) and 'skipped' (Skip / close /
+  // Esc) both mean never show it again. Exactly one writer: PATCH
+  // /me/onboarding. tourResolvedAt is bookkeeping — no visibility rule reads it.
+  tourState      String?   @map("tour_state")
+  tourResolvedAt DateTime? @map("tour_resolved_at") @db.Timestamptz(3)
   // PRD-11 Phase 2: Stripe billing linkage, maintained ONLY by the webhook
   // (+ the sync endpoint running the same mapping). All nullable: free and
   // self-hosted accounts have none. grace_until = paid features still on

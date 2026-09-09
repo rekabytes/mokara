@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo } from "react";
 import { atom, getDefaultStore, useAtom } from "jotai";
-import { api, type User } from "./api";
+import { api, type SessionUser, type TourState } from "./api";
 
 // PRD-06 §8: session is shared global state, so it lives in a module-level
 // Jotai atom — ONE value for every page. The /me probe runs once per app
@@ -14,7 +14,7 @@ import { api, type User } from "./api";
 // getDefaultStore() below and useAtom() read/write the same state.
 
 type SessionState =
-  { status: "loading" } | { status: "anonymous" } | { status: "authed"; user: User };
+  { status: "loading" } | { status: "anonymous" } | { status: "authed"; user: SessionUser };
 
 const sessionAtom = atom<SessionState>({ status: "loading" });
 let booted = false;
@@ -24,9 +24,23 @@ function store() {
 }
 
 /** Call after a successful login/signup — no /me round-trip needed. */
-export function setSessionUser(user: User) {
+export function setSessionUser(user: SessionUser) {
   booted = true;
   store().set(sessionAtom, { status: "authed", user });
+}
+
+/** PRD-13: fold the tour dismissal into the session user after the PATCH, so
+ * the overlay cannot re-open in this tab — the /me probe already ran and
+ * deliberately never runs again. Only `tour_state` is touched: the resolved
+ * timestamp is the server's, nothing client-side reads it, and inventing one
+ * here would be a small lie. The server stays the truth for the next load. */
+export function setSessionTourState(state: TourState): void {
+  const current = store().get(sessionAtom);
+  if (current.status !== "authed") return;
+  store().set(sessionAtom, {
+    status: "authed",
+    user: { ...current.user, tour_state: state },
+  });
 }
 
 function markAnonymous() {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PLAN_IDS } from "./plans.ts";
 
 // Username: 3-20 chars, lowercase letters / digits / underscore, case-insensitive
 // uniqueness is enforced by Postgres CITEXT. We lowercase+trim here so values
@@ -207,3 +208,20 @@ export const updateSubtaskSchema = z
 export const orderSubtasksSchema = z
   .object({ ids: z.array(z.uuid()).min(1, "at least one id is required") })
   .strict();
+
+// Operator console (packages/admin). Not the user-facing schemas above: the
+// admin username is free-form (it is an env value, never a `users` row), and
+// `url_key` is the secret carried by the login URL — the backend re-checks it
+// so that finding the form is not enough to try passwords against it.
+export const adminLoginSchema = z
+  .object({
+    username: z.string().min(1, "username is required").max(100, "username is too long"),
+    password: z.string().min(1, "password is required").max(200, "password is too long"),
+    url_key: z.string().min(1, "access key is required").max(200, "access key is too long"),
+  })
+  .strict();
+
+// The plan override. The enum comes from lib/plans.ts — the one tier table — so
+// the console can never write a value the DB CHECK would reject or that
+// limitsFor() would silently read as the tightest tier.
+export const adminPlanSchema = z.object({ plan: z.enum(PLAN_IDS) }).strict();

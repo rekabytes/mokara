@@ -55,6 +55,26 @@ const EnvSchema = z
     STRIPE_SECRET_KEY: z.string().default(""),
     STRIPE_WEBHOOK_SECRET: z.string().default(""),
     STRIPE_PRICE_STARTER: z.string().default(""),
+    // Operator console (packages/admin). Four values that turn the console on
+    // as a unit — `adminConfigured` below is the single switch and every admin
+    // route answers 404 without it, the way an unmounted feature should.
+    //
+    //   ADMIN_USERNAME / ADMIN_PASSWORD — the one operator login. Plain values
+    //     in the environment (not a `users` row: the console is not a product
+    //     account and must not be reachable by signing up). Compared
+    //     constant-time in routes/admin.ts.
+    //   ADMIN_TOKEN_SECRET — HS256 key for the console token. SHARED with
+    //     packages/admin's .env on purpose: the admin app verifies the token
+    //     the backend issued before it will serve a page, and the backend
+    //     verifies the same token again on every API call. Two independent
+    //     checks, one secret.
+    //   ADMIN_URL_KEY — the secret in the login URL (`/login?key=…`). The admin
+    //     app refuses to render the form without it and the backend refuses the
+    //     login without it, so finding the form is not enough to try passwords.
+    ADMIN_USERNAME: z.string().default(""),
+    ADMIN_PASSWORD: z.string().default(""),
+    ADMIN_TOKEN_SECRET: z.string().default(""),
+    ADMIN_URL_KEY: z.string().default(""),
   })
   // Same posture as the frontend's getBackendUrl(): a missing production secret
   // is a failed deploy, not a warning. Without this, ENV=production with no
@@ -93,3 +113,48 @@ export const storageConfigured =
 export const billingConfigured =
   isHosted && env.STRIPE_SECRET_KEY !== "" && env.STRIPE_WEBHOOK_SECRET !== "";
 export const checkoutConfigured = billingConfigured && env.STRIPE_PRICE_STARTER !== "";
+
+/**
+ * The operator console is OPTIONAL, so its config is a flag and never a boot
+ * failure — the opposite of AUTH_SECRET above, and deliberately so. A missing
+ * AUTH_SECRET would make every product token forgeable, so that one has to be
+ * fatal; a missing or weak ADMIN_* value only means the console does not exist,
+ * which is already the fail-closed answer (every /api/admin path 404s). Taking
+ * the whole API down over an optional console would be the worse failure.
+ *
+ * What is wrong, in words an operator can act on. Empty means "fine" — including
+ * the all-four-empty case, where the console is off on purpose and there is
+ * nothing to warn about.
+ *
+ * Floors apply in production only: a local password is allowed to be short and
+ * typable, the same way AUTH_SECRET's floor is production-only.
+ */
+export const adminConfigIssues: string[] = (() => {
+  const required = [
+    { name: "ADMIN_USERNAME", value: env.ADMIN_USERNAME, min: 1 },
+    { name: "ADMIN_PASSWORD", value: env.ADMIN_PASSWORD, min: isProd ? 8 : 1 },
+    { name: "ADMIN_TOKEN_SECRET", value: env.ADMIN_TOKEN_SECRET, min: isProd ? 32 : 1 },
+    { name: "ADMIN_URL_KEY", value: env.ADMIN_URL_KEY, min: isProd ? 16 : 1 },
+  ];
+  const missing = required.filter((r) => r.value === "").map((r) => r.name);
+  if (missing.length === required.length) return []; // off on purpose
+  if (missing.length > 0) {
+    return [`all four ADMIN_* values are needed together — missing ${missing.join(", ")}`];
+  }
+  return required
+    .filter((r) => r.value.length < r.min)
+    .map((r) => `${r.name} must be at least ${r.min} characters (got ${r.value.length})`);
+})();
+
+/**
+ * True when the console exists: all four ADMIN_* values present and none of them
+ * too weak for this environment. Deliberately NOT gated on `isHosted` — a
+ * self-hoster running their own instance is exactly the person who may want a
+ * console, and nothing here phones home or touches a plan that money did not buy.
+ */
+export const adminConfigured =
+  adminConfigIssues.length === 0 &&
+  env.ADMIN_USERNAME !== "" &&
+  env.ADMIN_PASSWORD !== "" &&
+  env.ADMIN_TOKEN_SECRET !== "" &&
+  env.ADMIN_URL_KEY !== "";

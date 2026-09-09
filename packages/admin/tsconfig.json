@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    // Same posture as packages/backend: the source imports with `.ts`
+    // extensions, which requires this flag — and this flag forbids emitting.
+    // The container runs the TypeScript source through `tsx` (scripts/start.sh);
+    // `tsc` is the type gate and nothing more.
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"]
+}

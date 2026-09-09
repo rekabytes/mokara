@@ -19,16 +19,18 @@ pattern rather than re-deriving one. Where this PRD deliberately differs from it
 
 ## 1. Goal
 
-`git tag v0.1.5 && git push origin v0.1.5` produces:
+`git tag v0.1.6 && git push origin v0.1.6` produces:
 
-- `ghcr.io/<owner>/mokara-frontend:0.1.5` (+ `:0.1`, `:latest`)
-- `ghcr.io/<owner>/mokara-backend:0.1.5` (+ same)
+- `ghcr.io/<owner>/mokara-frontend:0.1.6` (+ `:0.1`, `:latest`)
+- `ghcr.io/<owner>/mokara-backend:0.1.6` (+ same)
+- `ghcr.io/<owner>/mokara-admin:0.1.6` (+ same) — the operator console, added
+  2026-09-09; it joins the same matrix and sits behind the same gate
 
 The tag has to match the `version` in the root `package.json` — the gate job
 fails otherwise (verified: a `v0.1.1` tag pushed while the manifests still said
 `0.1.0` was rejected before any image was built).
 
-Coolify runs both as **Docker Image** services. Upgrade = new tag; rollback =
+Coolify runs all three as **Docker Image** services. Upgrade = new tag; rollback =
 redeploy the previous tag.
 
 ## 2. Non-goals

@@ -16,7 +16,9 @@ model User {
   displayName  String?  @map("display_name")
   // PRD-11: subscription tier (free | starter | pro | ultra). Lives on the
   // user, not the team — a workspace's tier is its leader's plan. Plain String
-  // + DB CHECK like kind/status; Phase 2 webhooks are the only writer.
+  // + DB CHECK like kind/status. Writers: the Phase 2 webhook/sync mapping
+  // (lib/billing.ts) and the operator console's override (routes/admin.ts),
+  // which is the comp/grant path and logs every change.
   plan         String   @default("free")
   // Owner (2026-09-06): last container the user selected — server-side UI
   // state so a refresh restores "where you work" without device storage

@@ -143,7 +143,7 @@ All routes are mounted under `/api`. Auth uses an HS256 JWT in the `mokara_token
 Releases are tag-driven; images are built **only** by CI, never on the deploy host.
 
 ```bash
-git tag v0.1.6 && git push origin v0.1.6
+git tag v0.1.7 && git push origin v0.1.7
 ```
 
 The tag must equal `version` in the root `package.json` (and in every workspace
@@ -156,9 +156,9 @@ frontend build · every migration applied to an empty Postgres · tag matches
 `package.json`), then publishes:
 
 ```
-ghcr.io/<owner>/mokara-frontend:0.1.6   (+ :0.1, :latest)
-ghcr.io/<owner>/mokara-backend:0.1.6    (+ :0.1, :latest)
-ghcr.io/<owner>/mokara-admin:0.1.6      (+ :0.1, :latest)
+ghcr.io/<owner>/mokara-frontend:0.1.7   (+ :0.1, :latest)
+ghcr.io/<owner>/mokara-backend:0.1.7    (+ :0.1, :latest)
+ghcr.io/<owner>/mokara-admin:0.1.7      (+ :0.1, :latest)
 ```
 
 Coolify runs all three as **Docker Image** services and pulls them. Full design and

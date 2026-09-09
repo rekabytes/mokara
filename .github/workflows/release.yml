@@ -1,14 +1,15 @@
-# Release — publish the frontend and backend Docker images to GHCR.
+# Release — publish the frontend, backend and admin Docker images to GHCR.
 #
 # Triggered by a version tag only:
 #
 #   git tag v0.1.5 && git push origin v0.1.5
 #
-# Coolify then pulls `ghcr.io/<owner>/mokara-frontend:0.1.5` and
-# `mokara-backend:0.1.5`; nothing is built on the server. Structure follows
-# jejak-athlete's release.yml (matrix over services, QEMU + Buildx, GHCR login
-# with the built-in GITHUB_TOKEN, metadata-action tag set, GHA layer caching,
-# provenance disabled). The addition here is the `gate` job — see its comment.
+# Coolify then pulls `ghcr.io/<owner>/mokara-frontend:0.1.5`,
+# `mokara-backend:0.1.5` and `mokara-admin:0.1.5`; nothing is built on the
+# server. Structure follows jejak-athlete's release.yml (matrix over services,
+# QEMU + Buildx, GHCR login with the built-in GITHUB_TOKEN, metadata-action tag
+# set, GHA layer caching, provenance disabled). The addition here is the `gate`
+# job — see its comment.
 #
 # `v*.*.*` deliberately excludes prereleases: a `v0.2.0-rc.1` tag never matches,
 # so `latest` can never be moved by one. When prereleases are actually wanted,
@@ -124,6 +125,12 @@ jobs:
             context: .
           - service: frontend
             dockerfile: packages/frontend/Dockerfile
+            context: .
+          # The operator console. Deliberately in the same matrix — and behind
+          # the same gate — so a console that does not typecheck can never be
+          # published next to a frontend and backend that do.
+          - service: admin
+            dockerfile: packages/admin/Dockerfile
             context: .
 
     steps:

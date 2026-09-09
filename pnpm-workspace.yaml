@@ -1,6 +1,7 @@
 packages:
   - "packages/frontend"
   - "packages/backend"
+  - "packages/admin"
   - "packages/db"
   - "packages/redis"
 

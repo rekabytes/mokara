@@ -11,7 +11,7 @@ import {
   syncBillingForUser,
 } from "../lib/billing.ts";
 import { limitsOfUser } from "../lib/entitlements.ts";
-import { limitsFor, PLAN_IDS, publicCap } from "../lib/plans.ts";
+import { effectivePlan, limitsFor, PLAN_IDS, publicCap } from "../lib/plans.ts";
 import { getTeamRole } from "../lib/team-membership.ts";
 import type { Vars } from "../middleware/auth.ts";
 
@@ -43,14 +43,23 @@ billingRoutes.get("/me/billing", async (c) => {
   const userId = c.get("userId");
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { plan: true, periodEnd: true, graceUntil: true, stripeCustomerId: true },
+    select: {
+      plan: true,
+      planOverride: true,
+      periodEnd: true,
+      graceUntil: true,
+      stripeCustomerId: true,
+    },
   });
   if (!user) {
     return c.json({ error: "not_found", message: "user not found" }, 404);
   }
   const limits = await limitsOfUser(userId);
   return c.json({
-    plan: user.plan,
+    // The tier the account actually gets: an operator grant wins over Stripe's
+    // column (effectivePlan). The frontend renders this word and the caps below,
+    // so both come from the same resolution and cannot drift apart.
+    plan: effectivePlan(user),
     billing_configured: billingConfigured,
     checkout_configured: checkoutConfigured,
     has_subscription: user.stripeCustomerId !== null,
@@ -107,6 +116,11 @@ billingRoutes.post("/teams/:id/billing/checkout", async (c) => {
   }
   // One subscription per payer: an upgrade or cancellation goes through the
   // portal, not a second checkout.
+  //
+  // Reads `users.plan` — Stripe's column — and NOT effectivePlan, deliberately:
+  // an operator grant must never lock someone out of paying. A comped account
+  // has plan 'free' plus an override, so it can still start a checkout; if it
+  // completes, the subscription retires the grant (lib/billing.ts).
   if (me.plan !== "free") {
     return c.json(
       {

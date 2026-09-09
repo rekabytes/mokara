@@ -96,6 +96,10 @@ td a:hover { text-decoration: underline; }
 .badge-pro { color: #9fc3e8; border-color: #2c3d4d; }
 .badge-ultra { color: #d9b8e8; border-color: #3d3346; }
 
+.badge-grant { color: #e3c98f; border-color: #4a4130; }
+
+.plan-cell { display: inline-flex; align-items: center; gap: 0.35rem; }
+
 .card { background: var(--panel); border: 1px solid var(--line); padding: 1rem 1.1rem; margin-bottom: 1rem; }
 
 .card h1 { margin: 0 0 0.2rem; font-size: 1.25rem; }
@@ -186,6 +190,24 @@ export const ADMIN_JS = `
     return span;
   }
 
+  function grantBadge() {
+    const span = document.createElement("span");
+    span.className = "badge badge-grant";
+    span.textContent = "granted";
+    span.title = "Operator grant — not a Stripe subscription";
+    return span;
+  }
+
+  // The list shows the tier the account actually gets, plus a marker when an
+  // operator granted it rather than a payment did.
+  function planCell(user) {
+    const wrap = document.createElement("span");
+    wrap.className = "plan-cell";
+    wrap.append(badge(String(user.plan)));
+    if (user.plan_override !== null && user.plan_override !== undefined) wrap.append(grantBadge());
+    return wrap;
+  }
+
   function table(headers, rows) {
     const el = document.createElement("table");
     const thead = document.createElement("thead");
@@ -272,7 +294,7 @@ export const ADMIN_JS = `
     const rows = users.map((u) => [
       link("/users/" + encodeURIComponent(u.id), String(u.username)),
       u.display_name === null || u.display_name === undefined ? "—" : String(u.display_name),
-      badge(String(u.plan)),
+      planCell(u),
       String(u.workspaces),
       when(u.created_at),
     ]);
@@ -280,7 +302,7 @@ export const ADMIN_JS = `
   }
 
   async function setPlan(id, plan) {
-    setNotice("Setting plan to " + plan + "…");
+    setNotice(plan === "free" ? "Revoking the grant…" : "Granting " + plan + "…");
     const res = await fetch("/api/users/" + encodeURIComponent(id) + "/plan", {
       method: "PATCH",
       headers: { "content-type": "application/json", accept: "application/json" },
@@ -299,7 +321,11 @@ export const ADMIN_JS = `
       );
       return;
     }
-    setNotice("Plan set to " + plan + ".");
+    setNotice(
+      plan === "free"
+        ? "Grant revoked — the account is back to its Stripe plan."
+        : "Granted " + plan + "."
+    );
     await loadUser(id);
   }
 
@@ -324,10 +350,19 @@ export const ADMIN_JS = `
     card.className = "card";
     const h1 = document.createElement("h1");
     h1.append(String(user.username), " ", badge(String(user.plan)));
+    if (user.plan_override !== null && user.plan_override !== undefined) h1.append(" ", grantBadge());
     card.append(h1);
     const facts = document.createElement("dl");
     facts.className = "facts";
     facts.append(
+      fact("Effective plan", String(user.plan)),
+      fact("Stripe plan", String(user.stripe_plan)),
+      fact(
+        "Operator grant",
+        user.plan_override === null || user.plan_override === undefined
+          ? "none"
+          : String(user.plan_override)
+      ),
       fact("Display name", user.display_name === null || user.display_name === undefined ? "—" : String(user.display_name)),
       fact("User id", String(user.id)),
       fact("Created", when(user.created_at)),
@@ -340,22 +375,38 @@ export const ADMIN_JS = `
     content.append(card);
 
     const planHeading = document.createElement("h2");
-    planHeading.textContent = "Plan override";
+    planHeading.textContent = "Operator grant";
     content.append(planHeading);
     const planNote = document.createElement("p");
     planNote.className = "muted small";
     planNote.textContent =
-      "Writes the plan directly. A user with a live subscription is set back by the next billing webhook or sync.";
+      "Writes an operator grant (users.plan_override) and never touches Stripe's own plan column, so a billing sync can no longer wipe it. A real paid subscription retires the grant, because money outranks an operator. Choosing free revokes the grant and hands the account back to billing — it never cancels a subscription.";
     content.append(planNote);
     const planRow = document.createElement("div");
     planRow.className = "plan-row";
+    const granted = user.plan_override !== null && user.plan_override !== undefined;
+    const stripePlan = String(user.stripe_plan);
     for (const plan of PLAN_IDS) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "plan-btn";
       const current = plan === String(user.plan);
-      button.textContent = current ? plan + " (current)" : plan;
-      button.disabled = current;
+      // "free" is the REVOKE action, not a tier to grant: it clears the override
+      // and the account falls back to whatever Stripe says. When the plan already
+      // comes from a subscription there is nothing to revoke, so the button would
+      // be a silent no-op — disable it and say where cancellations really happen.
+      const revokeNoop = plan === "free" && !granted && stripePlan !== "free";
+      if (plan === "free" && granted) {
+        button.textContent = "free (revoke grant)";
+        button.title = "Clears the operator grant; the account falls back to its Stripe plan";
+      } else if (revokeNoop) {
+        button.textContent = "free";
+        button.title = "This plan comes from a Stripe subscription — cancel it in the billing portal";
+        button.disabled = true;
+      } else {
+        button.textContent = current ? plan + " (current)" : plan;
+        button.disabled = current;
+      }
       button.addEventListener("click", () => {
         void setPlan(id, plan);
       });

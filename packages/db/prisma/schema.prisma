@@ -20,6 +20,12 @@ model User {
   // (lib/billing.ts) and the operator console's override (routes/admin.ts),
   // which is the comp/grant path and logs every change.
   plan         String   @default("free")
+  // Operator grants (2026-09-09): `plan` above is Stripe's opinion and only
+  // lib/billing.ts writes it. This column is the console's grant and it WINS at
+  // read time — every tier read goes through effectivePlan() in lib/plans.ts.
+  // NULL for almost everyone; applying a real paid subscription clears it, so
+  // money stays the source of truth. Two writers, two columns, no reconciliation.
+  planOverride   String?  @map("plan_override")
   // Owner (2026-09-06): last container the user selected — server-side UI
   // state so a refresh restores "where you work" without device storage
   // (cookie policy: no localStorage). GET /teams filters it against live

@@ -70,6 +70,40 @@ export function limitsFor(plan: string): PlanLimits {
 }
 
 /**
+ * The two columns that decide a tier: what Stripe says (`users.plan`, written
+ * only by lib/billing.ts) and any operator grant (`users.plan_override`, written
+ * only by routes/admin.ts).
+ *
+ * Every tier read takes this shape on purpose, so TypeScript forces each call
+ * site to select BOTH columns: a site holding only the raw plan cannot compile.
+ * That is the guard against the trap this repo has already paid for once —
+ * enforcement and display resolving a different switch than each other.
+ */
+export type PlanHolder = { plan: string; planOverride: string | null };
+
+/**
+ * The tier that actually applies: an operator grant wins over what Stripe says.
+ *
+ * Money still decides for anyone paying, just one level up — applying a
+ * subscription that resolves to a known tier clears the grant (lib/billing.ts),
+ * so this precedence can only ever favour an operator over a *non*-paying
+ * account. Unknown values fall back to the tightest tier, exactly like limitsFor.
+ */
+export function effectivePlan(holder: PlanHolder): Plan {
+  const value = holder.planOverride ?? holder.plan;
+  switch (value) {
+    case "starter":
+      return "starter";
+    case "pro":
+      return "pro";
+    case "ultra":
+      return "ultra";
+    default:
+      return "free";
+  }
+}
+
+/**
  * Infinity is a code-side sentinel; JSON has no such literal, so anything
  * crossing to the client reports `null` for "no cap".
  */

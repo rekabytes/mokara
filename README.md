@@ -143,7 +143,7 @@ All routes are mounted under `/api`. Auth uses an HS256 JWT in the `mokara_token
 Releases are tag-driven; images are built **only** by CI, never on the deploy host.
 
 ```bash
-git tag v0.1.5 && git push origin v0.1.5
+git tag v0.1.6 && git push origin v0.1.6
 ```
 
 The tag must equal `version` in the root `package.json` (and in every workspace
@@ -156,17 +156,24 @@ frontend build · every migration applied to an empty Postgres · tag matches
 `package.json`), then publishes:
 
 ```
-ghcr.io/<owner>/mokara-frontend:0.1.5   (+ :0.1, :latest)
-ghcr.io/<owner>/mokara-backend:0.1.5    (+ :0.1, :latest)
+ghcr.io/<owner>/mokara-frontend:0.1.6   (+ :0.1, :latest)
+ghcr.io/<owner>/mokara-backend:0.1.6    (+ :0.1, :latest)
+ghcr.io/<owner>/mokara-admin:0.1.6      (+ :0.1, :latest)
 ```
 
-Coolify runs both as **Docker Image** services and pulls them. Full design and the
-reasoning behind each choice: `docs/development/PRD-07.md`.
+Coolify runs all three as **Docker Image** services and pulls them. Full design and
+the reasoning behind each choice: `docs/development/PRD-07.md`.
 
-| Service  | Port | Reads                                                                |
-| -------- | ---- | -------------------------------------------------------------------- |
-| frontend | 4701 | `BACKEND_URL` (runtime — the browser only ever calls `/api`)         |
-| backend  | 4700 | `DATABASE_URL`, `REDIS_URL`, `AUTH_SECRET`, `ENV=production`, `PORT` |
+| Service  | Port | Reads                                                                                                                |
+| -------- | ---- | -------------------------------------------------------------------------------------------------------------------- |
+| frontend | 4701 | `BACKEND_URL` (runtime — the browser only ever calls `/api`)                                                         |
+| backend  | 4700 | `DATABASE_URL`, `REDIS_URL`, `AUTH_SECRET`, `ENV=production`, `PORT`                                                 |
+| admin    | 4702 | `BACKEND_URL`, `ADMIN_PORT`, `ENV=production`, `ADMIN_TOKEN_SECRET`, `ADMIN_URL_KEY` (both must equal the backend's) |
+
+The backend additionally reads `DEPLOY_MODE`, the `S3_*` storage block, the
+`STRIPE_*` billing block and the four `ADMIN_*` console values — each is
+optional and documented in `packages/backend/.env.example`, which is the env
+contract for a self-hosted deploy.
 
 The backend container applies pending migrations on start (`packages/backend/
 scripts/start.sh`) before the server binds, so it can never come up against a

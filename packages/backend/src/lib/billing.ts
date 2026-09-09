@@ -7,9 +7,17 @@ import { PLAN_BY_PRICE_LOOKUP_KEY, type Plan } from "./plans.ts";
 // PRD-11 Phase 2 — the ONLY module that talks to Stripe. Everything the
 // processor knows about "who pays for what" funnels through here into the
 // three columns `users` carries (stripe_customer_id, grace_until,
-// period_end) plus `users.plan`, and `users.plan` is written by exactly two
-// paths: the webhook and the sync endpoint — both of which run the SAME
-// mapping below. The checkout redirect never grants anything (PRD §2.2), and
+// period_end) plus `users.plan` — and this module is the ONLY writer of
+// `users.plan`: the webhook and the sync endpoint, both running the SAME
+// mapping below.
+//
+// Operator grants live in their own column (`users.plan_override`, written only
+// by routes/admin.ts), so the two writers never reconcile against each other;
+// effectivePlan() in lib/plans.ts is the one place that decides which applies.
+// A subscription resolving to a known tier clears the grant, so money still
+// outranks an operator for anyone actually paying.
+//
+// The checkout redirect never grants anything (PRD §2.2), and
 // a price whose lookup_key is not in PLAN_BY_PRICE_LOOKUP_KEY grants nothing
 // either — this account also bills for another product, and its prices must
 // never be able to touch a Mokara plan.
@@ -50,12 +58,19 @@ function periodEndForSubscription(sub: Stripe.Subscription): Date | null {
 
 async function writePlan(
   userId: string,
-  data: { plan?: Plan; graceUntil: Date | null; periodEnd: Date | null }
+  data: {
+    plan?: Plan;
+    graceUntil: Date | null;
+    periodEnd: Date | null;
+    /** Retire an operator grant — see the active/trialing branch below. */
+    clearGrant?: boolean;
+  }
 ): Promise<void> {
   await prisma.user.update({
     where: { id: userId },
     data: {
       ...(data.plan ? { plan: data.plan } : {}),
+      ...(data.clearGrant ? { planOverride: null } : {}),
       graceUntil: data.graceUntil,
       periodEnd: data.periodEnd,
     },
@@ -77,6 +92,11 @@ export async function applySubscription(userId: string, sub: Stripe.Subscription
       }
       await writePlan(userId, {
         plan: plan ?? "free",
+        // Money outranks an operator: a subscription that resolves to a known
+        // tier retires the grant, so the two writers cannot disagree afterwards.
+        // An UNMAPPED price is a config bug (warned about above), not a purchase
+        // — it must not silently revoke someone's comp.
+        clearGrant: plan !== null,
         graceUntil: null,
         periodEnd: periodEndForSubscription(sub),
       });
@@ -143,6 +163,18 @@ export async function syncBillingForUser(userId: string): Promise<void> {
     status: "all",
     limit: 10,
   });
+  // A customer with NO subscription at all has nothing to reconcile, and that
+  // state is routine rather than rare: starting a checkout persists the customer
+  // (routes/billing.ts) whether or not anyone ever pays, so an abandoned Stripe
+  // page leaves exactly this shape. Writing `free` here was a harmless no-op
+  // while Stripe was the plan's only writer — and destructive the moment an
+  // operator grant existed, because it wiped the grant on every /settings load.
+  // "Never subscribed" is not "the subscription ended", so it gets no opinion.
+  //
+  // A CANCELED subscription is still in this list (status: "all"), so the
+  // cancel → free fallthrough below is untouched and a churned payer still drops.
+  if (list.data.length === 0) return;
+
   const live =
     list.data.find((s) => s.status === "active" || s.status === "trialing") ??
     list.data.find((s) => s.status === "past_due");

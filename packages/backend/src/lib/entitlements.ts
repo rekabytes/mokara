@@ -1,6 +1,13 @@
 import { prisma } from "../db.ts";
 import { isHosted } from "../env.ts";
-import { limitsFor, publicCap, UNLIMITED, type PlanLimits } from "./plans.ts";
+import {
+  effectivePlan,
+  limitsFor,
+  publicCap,
+  UNLIMITED,
+  type PlanHolder,
+  type PlanLimits,
+} from "./plans.ts";
 import type { Prisma } from "@mokara/db/prisma/generated/client";
 
 // PRD-11 Phase 1.1 - plan-aware caps. Deliberately the same shape as
@@ -22,17 +29,20 @@ export async function limitsOfTeam(teamId: string): Promise<PlanLimits | null> {
   if (!isHosted) return UNLIMITED;
   const team = await prisma.team.findUnique({
     where: { id: teamId },
-    select: { owner: { select: { plan: true } } },
+    select: { owner: { select: { plan: true, planOverride: true } } },
   });
   if (!team) return null;
-  return limitsFor(team.owner.plan);
+  return limitsFor(effectivePlan(team.owner));
 }
 
 /** The limits that govern one account (how many teams it may lead, etc). */
 export async function limitsOfUser(userId: string): Promise<PlanLimits> {
   if (!isHosted) return UNLIMITED;
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { plan: true } });
-  return limitsFor(user?.plan ?? "free");
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { plan: true, planOverride: true },
+  });
+  return limitsFor(effectivePlan(user ?? { plan: "free", planOverride: null }));
 }
 
 /**
@@ -58,11 +68,11 @@ export async function joinDenial(
 
   const team = await client.team.findUnique({
     where: { id: teamId },
-    select: { kind: true, ownerId: true, owner: { select: { plan: true } } },
+    select: { kind: true, ownerId: true, owner: { select: { plan: true, planOverride: true } } },
   });
   if (!team) return { status: 404, error: "not_found", message: "team not found" };
 
-  const limits = limitsFor(team.owner.plan);
+  const limits = limitsFor(effectivePlan(team.owner));
 
   const members = await client.teamMember.count({ where: { teamId } });
   if (members + 1 > limits.members) {
@@ -108,15 +118,19 @@ export async function teamCountDenial(userId: string): Promise<EntitlementDenial
 }
 
 /**
- * member_limit as the client sees it (a number, null for "no cap") straight
- * from a plan string - so routes that already joined the owner's plan answer
- * for a whole list in one query instead of one per row.
+ * member_limit as the client sees it (a number, null for "no cap") - straight
+ * from the leader's TWO plan columns, so routes that already joined the owner
+ * answer for a whole list in one query instead of one per row.
+ *
+ * Takes the holder rather than a plan string on purpose: a caller that selected
+ * only `plan` cannot compile. That is the guard against this repo's known trap —
+ * a grant enforced in one place and displayed in another.
  *
  * DEPLOY_MODE applies here too, not just to enforcement: a self-hosted
  * instance adds members freely, so printing the plan's number would advertise a
  * limit that nothing enforces. The UI renders a bare count for null.
  */
-export function memberLimitForPlan(plan: string): number | null {
+export function memberLimitForOwner(owner: PlanHolder): number | null {
   if (!isHosted) return null;
-  return publicCap(limitsFor(plan).members);
+  return publicCap(limitsFor(effectivePlan(owner)).members);
 }

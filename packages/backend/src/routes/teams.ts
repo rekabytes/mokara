@@ -8,7 +8,7 @@ import { getTeamRole } from "../lib/team-membership.ts";
 import {
   joinDenial,
   limitsOfUser,
-  memberLimitForPlan,
+  memberLimitForOwner,
   teamCountDenial,
 } from "../lib/entitlements.ts";
 import { publicCap } from "../lib/plans.ts";
@@ -33,11 +33,11 @@ async function teamPayload(teamId: string) {
   const [team, members] = await Promise.all([
     prisma.team.findUnique({
       where: { id: teamId },
-      include: { owner: { select: { plan: true } } },
+      include: { owner: { select: { plan: true, planOverride: true } } },
     }),
     prisma.teamMember.count({ where: { teamId } }),
   ]);
-  return team ? toTeam(team, members, memberLimitForPlan(team.owner.plan)) : null;
+  return team ? toTeam(team, members, memberLimitForOwner(team.owner)) : null;
 }
 
 teamRoutes.post("/", validate("json", createTeamSchema), async (c) => {
@@ -80,7 +80,7 @@ teamRoutes.get("/", async (c) => {
     where: { userId },
     // The owner's plan rides along in the same join so member_limit costs no
     // extra query per row (PRD-11).
-    include: { team: { include: { owner: { select: { plan: true } } } } },
+    include: { team: { include: { owner: { select: { plan: true, planOverride: true } } } } },
     orderBy: { team: { createdAt: "desc" } },
   });
   // One grouped count for the whole list — the switcher needs member_count
@@ -105,7 +105,7 @@ teamRoutes.get("/", async (c) => {
       : null;
   return c.json({
     teams: rows.map((m) => ({
-      ...toTeam(m.team, countOf.get(m.teamId) ?? 1, memberLimitForPlan(m.team.owner.plan)),
+      ...toTeam(m.team, countOf.get(m.teamId) ?? 1, memberLimitForOwner(m.team.owner)),
       role: m.role,
     })),
     last_container_id: lastContainerId,
@@ -123,7 +123,7 @@ teamRoutes.get("/:id", async (c) => {
 
   const team = await prisma.team.findUnique({
     where: { id: teamId },
-    include: { owner: { select: { plan: true } } },
+    include: { owner: { select: { plan: true, planOverride: true } } },
   });
   if (!team) {
     return c.json({ error: "not_found", message: "team not found" }, 404);
@@ -145,7 +145,7 @@ teamRoutes.get("/:id", async (c) => {
   });
 
   return c.json({
-    team: toTeam(team, members.length, memberLimitForPlan(team.owner.plan)),
+    team: toTeam(team, members.length, memberLimitForOwner(team.owner)),
     role,
     members: members.map(toTeamMember),
     invitations: openInvites.map(toInvitation),

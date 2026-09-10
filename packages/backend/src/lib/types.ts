@@ -202,6 +202,37 @@ export function toUser(
   };
 }
 
+// PRD-13: the first-run tour's dismissal state. The DB CHECK allows exactly
+// these two values or NULL.
+export type TourState = "completed" | "skipped";
+
+// The SESSION user: what GET /me, signup, login and PATCH /me hand back. This
+// is deliberately not toUser() widened — toUser is embedded in comment payloads
+// (toComment), so putting the tour flag on it would leak one user's onboarding
+// state into every comment and force every comment query to select the column.
+// Two mappers, two audiences.
+export type MeResponse = UserResponse & {
+  tour_state: TourState | null;
+  tour_resolved_at: string | null;
+};
+
+export function toMe(
+  u: Pick<
+    PrismaUser,
+    "id" | "username" | "displayName" | "createdAt" | "tourState" | "tourResolvedAt"
+  >
+): MeResponse {
+  return {
+    ...toUser(u),
+    // Narrowed by comparison, never cast. A value outside the enum cannot exist
+    // (the CHECK forbids it) but if one ever did — a hand-written UPDATE, say —
+    // it reads as NULL, which means "show the tour". Non-destructive, and the
+    // same posture effectivePlan() takes with a garbage plan_override.
+    tour_state: u.tourState === "completed" || u.tourState === "skipped" ? u.tourState : null,
+    tour_resolved_at: u.tourResolvedAt ? u.tourResolvedAt.toISOString() : null,
+  };
+}
+
 // member_count is not on the row — callers pass the count they already have
 // (list route group-bys it, detail route uses its members array, create is 1).
 // member_limit likewise comes from lib/entitlements, never from the row.

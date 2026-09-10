@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { corsMiddleware } from "./middleware/cors.ts";
 import { requestLogger } from "./middleware/request-log.ts";
 import { authRequired, type Vars } from "./middleware/auth.ts";
-import { authRoutes, meHandler, updateMe, setLastContainer } from "./routes/auth.ts";
+import { authRoutes, meHandler, updateMe, setLastContainer, setTourState } from "./routes/auth.ts";
 import { notificationRoutes } from "./routes/notifications.ts";
 import { mountEventsRoute } from "./routes/events.ts";
 import { teamRoutes } from "./routes/teams.ts";
@@ -18,7 +18,7 @@ import { billingRoutes, billingWebhook } from "./routes/billing.ts";
 import { adminRoutes } from "./routes/admin.ts";
 import { analyticsRoutes } from "./routes/analytics.ts";
 import { validate } from "./lib/validate.ts";
-import { updateMeSchema, lastContainerSchema } from "./lib/validation.ts";
+import { updateMeSchema, lastContainerSchema, tourStateSchema } from "./lib/validation.ts";
 import { env, adminConfigIssues } from "./env.ts";
 import { connectDB, disconnectDB } from "./db.ts";
 import { connectRedis, disconnectRedis } from "./redis.ts";
@@ -97,6 +97,13 @@ async function main() {
     if (!ok) {
       return c.json({ error: "forbidden", message: "not a member of this team" }, 403);
     }
+    return c.body(null, 204);
+  });
+  // PRD-13: the first-run tour's dismissal. Fire-and-forget from the client (it
+  // hides the overlay locally whether or not this lands), hence a bare 204.
+  // Idempotent, and the enum has no null — nothing here can re-arm the tour.
+  authed.patch("/me/onboarding", validate("json", tourStateSchema), async (c) => {
+    await setTourState(c.get("userId"), c.req.valid("json").state);
     return c.body(null, 204);
   });
   authed.route("/notifications", notificationRoutes);

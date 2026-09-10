@@ -8,6 +8,7 @@ import { signOutServer, useSession } from "@/lib/session";
 import { useContainers } from "@/lib/containers";
 import { ContainerSwitcher } from "./ContainerSwitcher";
 import { NotificationDrawer } from "./NotificationDrawer";
+import type { TourTargetId } from "@/lib/onboarding";
 import { DUR, snap } from "@/lib/motion";
 import { cn } from "@/lib/cn";
 
@@ -108,7 +109,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className="mt-2 mb-1.5 border-t border-[var(--color-border-soft)]"
                 role="separator"
               />
-              <NavLeaf {...teamItem} active={isActive("/teams")} />
+              <NavLeaf {...teamItem} active={isActive("/teams")} tourId="nav-team" />
             </>
           )}
         </nav>
@@ -177,15 +178,20 @@ function NavLeaf({
   label,
   icon,
   active,
+  tourId,
 }: {
   href: string;
   label: string;
   icon: React.ReactNode;
   active: boolean;
+  /** PRD-13: marks this leaf as a spotlight-tour target. Only the Team leaf
+   * carries one — it is where projects, KPIs and invitations live. */
+  tourId?: TourTargetId;
 }) {
   return (
     <Link
       href={href}
+      data-tour={tourId}
       className={cn(
         "relative flex items-center gap-[0.7rem] rounded-[10px] px-[0.7rem] py-[0.55rem] text-[0.92rem] font-medium text-[var(--color-ink-muted)] no-underline transition-colors duration-[160ms]",
         "hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]",

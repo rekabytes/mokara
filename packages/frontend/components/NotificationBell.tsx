@@ -13,6 +13,7 @@ export function NotificationBell() {
     <button
       type="button"
       aria-label={`Notifications${unread > 0 ? ` — ${unread} unread` : ""}`}
+      data-tour="notifications-bell"
       onClick={openNotificationCenter}
       className="relative grid size-8 cursor-pointer place-items-center rounded-md text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
     >

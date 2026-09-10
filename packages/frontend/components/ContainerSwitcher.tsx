@@ -40,6 +40,7 @@ export function ContainerSwitcher() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-label="Switch workspace or team"
+        data-tour="container-switcher"
         className={cn(
           "flex w-full cursor-pointer items-center gap-2 rounded-[10px] px-[0.65rem] py-[0.5rem] text-left text-[0.88rem] font-semibold text-[var(--color-ink)]",
           "transition-colors duration-[160ms] hover:bg-[var(--color-surface-2)]"

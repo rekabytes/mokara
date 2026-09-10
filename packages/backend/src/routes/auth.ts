@@ -22,7 +22,7 @@ import { authRequired } from "../middleware/auth.ts";
 import { getTeamRole } from "../lib/team-membership.ts";
 import { getRedis } from "../redis.ts";
 import { log } from "../lib/logger.ts";
-import { toUser } from "../lib/types.ts";
+import { toMe, type TourState } from "../lib/types.ts";
 import { ensureUniqueSlug, slugify } from "../lib/slug.ts";
 import type { Vars } from "../middleware/auth.ts";
 
@@ -57,7 +57,7 @@ authRoutes.post("/signup", validate("json", signUpSchema), async (c) => {
     });
     const token = await issueToken(u.id, u.username);
     setAuthCookie(c, token);
-    return c.json({ user: toUser(u) }, 201);
+    return c.json({ user: toMe(u) }, 201);
   } catch (e) {
     if (isUniqueViolation(e, "users_username_key")) {
       return c.json({ error: "username_taken", message: "username already exists" }, 409);
@@ -71,7 +71,15 @@ authRoutes.post("/login", validate("json", loginSchema), async (c) => {
 
   const u = await prisma.user.findUnique({
     where: { username },
-    select: { id: true, username: true, displayName: true, createdAt: true, passwordHash: true },
+    select: {
+      id: true,
+      username: true,
+      displayName: true,
+      createdAt: true,
+      passwordHash: true,
+      tourState: true,
+      tourResolvedAt: true,
+    },
   });
 
   // Constant-ish response on any failure (don't leak whether the user exists).
@@ -84,7 +92,7 @@ authRoutes.post("/login", validate("json", loginSchema), async (c) => {
 
   const token = await issueToken(u.id, u.username);
   setAuthCookie(c, token);
-  return c.json({ user: toUser(u) });
+  return c.json({ user: toMe(u) });
 });
 
 authRoutes.post("/logout", async (c) => {
@@ -177,9 +185,16 @@ export async function updateMe(userId: string, displayName: string | null) {
   const u = await prisma.user.update({
     where: { id: userId },
     data: { displayName },
-    select: { id: true, username: true, displayName: true, createdAt: true },
+    select: {
+      id: true,
+      username: true,
+      displayName: true,
+      createdAt: true,
+      tourState: true,
+      tourResolvedAt: true,
+    },
   });
-  return toUser(u);
+  return toMe(u);
 }
 
 // Owner (2026-09-06): last-selected-container pointer. Same inline-route +
@@ -196,16 +211,34 @@ export async function setLastContainer(userId: string, teamId: string): Promise<
   return true;
 }
 
+// PRD-13: the first-run tour's dismissal — the ONLY writer of users.tour_state.
+// Idempotent: writing the state it already has is the same fact, not an error,
+// so a retried fire-and-forget PATCH cannot fail. The timestamp rides along so
+// a skip can be told from a completion in time; no visibility rule reads it.
+export async function setTourState(userId: string, state: TourState): Promise<void> {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { tourState: state, tourResolvedAt: new Date() },
+  });
+}
+
 // `me` lives on the authed surface; export the handler so index.ts can mount
 // it there without re-fetching through the auth sub-app.
 export async function meHandler(c: Context<{ Variables: Vars }>) {
   const userId = c.get("userId");
   const u = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, username: true, displayName: true, createdAt: true },
+    select: {
+      id: true,
+      username: true,
+      displayName: true,
+      createdAt: true,
+      tourState: true,
+      tourResolvedAt: true,
+    },
   });
   if (!u) {
     return c.json({ error: "lookup_failed", message: "user not found" }, 500);
   }
-  return c.json({ user: toUser(u) });
+  return c.json({ user: toMe(u) });
 }

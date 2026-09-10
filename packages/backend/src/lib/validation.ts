@@ -66,6 +66,18 @@ export const inviteSchema = z.object({
 // shape.
 export const lastContainerSchema = z.object({ team_id: z.uuid() }).strict();
 
+// PRD-13: the first-run tour's dismissal (PATCH /me/onboarding). Strict, and a
+// closed enum on purpose — there is no `null` here, so nothing reachable with a
+// user session can put the tour back. A replay affordance would be a separate,
+// deliberate widening of this schema.
+export const tourStateSchema = z
+  .object({
+    state: z.enum(["completed", "skipped"], {
+      error: "state must be completed or skipped",
+    }),
+  })
+  .strict();
+
 export const respondSchema = z.object({
   action: z.enum(["accept", "decline"], { error: "action must be accept or decline" }),
 });

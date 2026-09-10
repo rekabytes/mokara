@@ -111,6 +111,21 @@ export const tickVariants: Variants = {
   exit: { opacity: 0, scale: 0.6, transition: { duration: 0.08, ease: EASE_SNAP } },
 };
 
+// ---- First-run tour (PRD-13) ------------------------------------------------
+// The scrim and the coach card fade with the same inline-opacity idiom the
+// mobile nav backdrop uses. What needs a named constant is the GLIDE: the hole
+// and the card both travel from one control to the next, and they must share one
+// timing or the card drifts away from the thing it is describing.
+//
+// MotionConfig reducedMotion="user" strips TRANSFORMS only, which is why the
+// overlay positions the hole with top/left/width/height instead of x/y (a
+// transform would be dropped and the hole would sit at the viewport origin).
+// The flip side: reducedMotion then does NOT calm this glide either, so the
+// overlay gates the transition on useReducedMotion() and jumps between steps.
+// That gate cannot live here — this module is not a component, and
+// useReducedMotion() is a hook.
+export const tourGlide: Transition = snap(DUR.panel);
+
 // ---- Landing: hero entrance, scroll reveal, tilt ----------------------------
 // All one-shot (load / whileInView once) — the page's identity is calm, so
 // nothing loops. MotionConfig reducedMotion="user" strips the transforms for

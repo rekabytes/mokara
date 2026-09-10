@@ -37,6 +37,7 @@ export function TaskRow({
   return (
     <motion.li
       onClick={onOpen}
+      data-tour="task-row"
       // `position`, not `layout`: rows glide to their new slot when the sort
       // or filter changes (today they teleport) without projecting a size,
       // which is what goes wrong inside an overflow-clipped scroll area.

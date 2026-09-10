@@ -65,7 +65,11 @@ export function AttachmentsSection({
   if (!files || files.length === 0) return null;
 
   return (
-    <div className="mt-2 flex flex-wrap items-start gap-1.5" aria-label="Files">
+    <div
+      className="mt-2 flex flex-wrap items-start gap-1.5"
+      aria-label="Files"
+      data-tour="drawer-files"
+    >
       {files.map((f) => {
         const mine = currentUser?.id === f.uploader.id;
         return (

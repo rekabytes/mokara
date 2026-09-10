@@ -96,7 +96,7 @@ export function SubtasksSection({ task }: { task: Task }) {
   if (items.length === 0) return null;
 
   return (
-    <section className="mt-5 shrink-0" aria-label="Checklist">
+    <section className="mt-5 shrink-0" aria-label="Checklist" data-tour="drawer-checklist">
       <div className="flex items-center gap-2">
         <h3 className="text-[0.74rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-muted)]">
           Checklist

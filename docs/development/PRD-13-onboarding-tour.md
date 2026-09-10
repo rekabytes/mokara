@@ -160,7 +160,13 @@ sites need no edit.
 
 `lib/api.ts` gains `patchTourState(state: TourState): Promise<void>`.
 
-## 5. The five steps
+## 5. The five steps — SUPERSEDED 2026-09-09 by §14
+
+> The owner then asked for the detailed walkthrough this section's short tour
+> could not carry; §14 is the live design and the shipped behaviour. §5's copy
+> survives almost verbatim inside the longer step table — the overlay, the
+> predicate and the persistence did not change, only the number of steps and
+> what waits on the user.
 
 Copy names the control by its **on-screen label** in its real casing, and never
 names a control that does nothing (§7.1). Targets are the `data-tour` contract
@@ -514,3 +520,209 @@ with tasks (the Todo `+` is framed), at 1280 / 1440 / 1600 / 1920, plus one pass
 with the OS "reduce motion" setting on. The screenshot rig in `/tmp/mokara-shot`
 is broken (its `puppeteer-core` has no `package.json` or entry point) and
 repairing it means an unprompted install, so nothing here was visually checked.
+
+## 14. Second pass — the guided walkthrough (2026-09-09, BUILT, uncommitted)
+
+Owner ask, verbatim intent: _"a detail more guide like — start with add your
+task, then task form guide, then after complete click task explain task drawer,
+then guide comment (dont ask user to add image just show it we can add image)
+and etc."_ So the five static coach marks became a **21-step walkthrough that
+follows the user through doing the work**: add a task, walk the form, open the
+task, walk the drawer, end on the chrome.
+
+### 14.1 Three kinds of step
+
+| Kind | Meaning                                                                       | Card shows                                             | Interaction                             |
+| ---- | ----------------------------------------------------------------------------- | ------------------------------------------------------ | --------------------------------------- |
+| LOOK | frame a control, explain it                                                   | `Next`                                                 | blocked (one full-viewport catcher)     |
+| ACT  | the highlighted control stays **live** — the user is meant to use it          | `Next`                                                 | four catcher bands around the hole      |
+| WAIT | an ACT step that the walkthrough will not leave until the app reports it done | `Next` + a live hint; **hidden while holding** (§14.7) | the hole is live; the app auto-advances |
+
+ACT is what makes "walk me through creating a task" possible at all, and it is
+the one real mechanism change: `scrimPanels(hole, vw, vh)` renders four
+transparent catcher bands around the hole (top / left / right / bottom) so the
+framed control stays clickable while everything else stays dark. LOOK steps
+render one full-viewport catcher instead. The bands are the exact complement of
+`clampedHole(hole)` — together they tile the viewport with no gaps and no
+overlaps, which is asserted for 8 hole shapes × 5 viewports.
+
+### 14.2 What waits on the user — and what deliberately never does
+
+Exactly **three** things are required, because only they can be reached no other
+way: open the form (`create-empty` waits for `modal-open`), submit it
+(`form-submit` waits for `task-created` — the modal closed AND a task exists),
+open a task (`open-task` waits for `task-opened`). Every WAIT card keeps
+`Skip step`, so no step can trap anyone, and every step keeps `Skip tour`.
+
+**Never required, only shown** (the owner's explicit rule): attaching an image or
+PDF, writing a description, adding steps, posting a comment. The attach cluster
+in the form (`form-attach`) and the drawer's footer (`drawer-footer`) are LOOK
+steps on purpose — the attach step's copy says outright _"this walkthrough will
+not ask you to"_, and the footer's `Delete` has no confirmation, so it must stay
+out of reach. The composer (`drawer-composer`) is the one ACT step in the drawer:
+typing and posting are safe and reversible, and its copy explains the paperclip
+without demanding a file.
+
+### 14.3 The phases, and why resume is free
+
+| Phase  | Steps                                                                                     | Gate                    |
+| ------ | ----------------------------------------------------------------------------------------- | ----------------------- |
+| Intro  | switcher                                                                                  | always                  |
+| Create | `create-empty` (WAIT, when `taskCount === 0`) · `create-any` (LOOK, when `taskCount > 0`) | one of the two, by data |
+| Form   | fields → chips → `…` → steps → attach → submit                                            | while `modalOpen`       |
+| Open   | `open-task` (WAIT, when a task exists and the form is closed)                             | by data                 |
+| Inside | title → description → chips → `…` → checklist → files → composer → footer                 | while `taskOpen`        |
+| Around | board controls → bell → Team                                                              | when the form is closed |
+
+Two facts make this resumable **without a new column**: every step carries a
+`when` over the same three facts (`taskCount`, `modalOpen`, `taskOpen`), so
+
+- the walkthrough _starts_ at the first step whose moment has not passed
+  (`firstVisibleIndex`), and a step whose moment HAS passed is skipped as the
+  walk advances — a user who abandoned mid-form restarts at the chrome, not at
+  step 1; a user who created a task skips the create phase entirely;
+- the two create steps share one `data-tour` id and are mutually exclusive by
+  `taskCount`, which is also why the step list stays a constant array.
+
+The three waits reuse state the tasks page already owns — passed down as one
+memoised `progress` prop (`taskCount`, `modalOpen`, `taskOpen`), never a new
+fetch and never lifted comment state. `tour_state` and migration 28 are
+**unchanged**: finishing the walk (its `-1`) writes `completed`, Skip/✕/Esc write
+`skipped`, abandoning writes nothing, and either resolved value silences it
+forever.
+
+### 14.4 Interaction rules this pass had to settle
+
+1. **The overlay root must be click-transparent — found by the owner.** The
+   first ACT step in the wild did nothing: a bare `fixed inset-0` root div
+   hit-tests across its whole bounds even with no background, so the ROOT was
+   the click target everywhere and the hole's own `pointer-events-none` never
+   came into play — the catcher bands were irrelevant. Three class names carry
+   the contract now: the root is `pointer-events-none`, the catchers and the
+   coach card are `pointer-events-auto`, and the hole stays `pointer-events-none`
+   (a child of a click-transparent parent opts back in per element). This is a
+   CSS fact the pure-function harness cannot see, so the harness greps the three
+   class names and the absence of the old label — 5 assertions added, 447 total.
+2. **A WAIT step's button is `Next`, not `Skip step`** (owner, same screenshot
+   session). The accent hint above the buttons is what says the framed control
+   is live; `Next` is simply how you move on without doing it, and it advances
+   past every step whose moment has passed — skipping the form phase lands you
+   on the board walkthrough, not on a step for a closed modal.
+3. **z-[70] → z-[55].** The portal'd `Dropdown` and `DatePicker` menus sit at
+   z-[60]; at z-70 an ACT step could open a chip menu that was dimmed and dead
+   behind the scrim. The overlay now clears the modal, drawer, lightbox and
+   notification drawer (all z-50) and deliberately sits UNDER the menus, so a
+   menu opened from a framed chip is bright and usable.
+4. **Esc no longer skips while typing.** Esc in the title field used to skip the
+   tour AND close the modal in one keystroke. The handler now returns early when
+   the focus is in an `INPUT`/`TEXTAREA`/contentEditable — the same suppression
+   the task drawer's own Esc handler applies — so the modal's Esc still closes
+   the form and the walkthrough degrades to the next applicable step instead of
+   dying.
+5. **The focus trap is lifted on ACT steps.** `aria-modal="true"` plus a trap
+   would make the framed control unreachable by keyboard; on a LOOK step the
+   trap stays, on an ACT step Tab may leave the card like anywhere else.
+6. **Measurement had to track moving targets.** The drawer's width animation
+   (240ms) and the modal's entrance keep moving the target after the step flips,
+   so the hole re-reads its target on a **bounded** frame loop (~750ms) after
+   each step, plus on window resize and on capture-phase scroll (an ACT step lets
+   the user scroll the board or the comment list, which can move the target out
+   from under the hole). Bounded on purpose: measurement, not an animation rig —
+   presence still belongs to `AnimatePresence`.
+7. **The dot row is gone.** At five steps it was information; at 21 it was noise.
+   `Step N of 21` (aria-live) carries the position alone.
+8. **`Back` walks visible steps only** (`prevVisibleIndex`), so it can never
+   land on a step whose moment has passed and bounce forward again.
+
+### 14.5 Deltas from §13's file list
+
+New since §13: **nothing** — the walkthrough lives in the same three modules
+(`lib/onboarding.ts` grew the engine + 21 steps, `lib/tour-geometry.ts` grew
+`clampedHole` + `scrimPanels`, `TourOverlay` grew the act/wait machinery) plus
+**`data-tour` attributes in 8 tasks modules** (`NewTaskModal` ×6 targets,
+`TaskDetailDrawer` ×4 + both `DescriptionField` branches, `SubtasksSection`,
+`AttachmentsSection`, `CommentsSection`, `TaskRow`, with `Board.tsx` already
+carrying the board chrome) and one `progress` prop in `page.tsx`. The 2026-09-09
+structural split moved the carriers into their own modules; the contract
+survived it, which the harness re-proves.
+
+Two carriers needed a wrapper rather than an attribute: `ChipShell` forwards no
+extra props, so both `…` triggers carry `data-tour` on a `<span>` inside the
+`Dropdown` trigger — the same node the menu is measured from, so positioning is
+unaffected.
+
+### 14.6 Verification (second pass)
+
+- **447 pure assertions, 0 failures** (same one-shot harness, extended): the
+  10-case visibility truth table; step-table integrity (21 unique ids, no dead
+  control named in any copy, every target present in source with the exact
+  expected element count); the full simulated walk of a fresh user (20 steps in
+  order, terminating), plus four degradation paths (abandon the form → chrome,
+  close the drawer mid-walk → chrome, skip the create phase → open-task, create
+  from the last form step → open-task); act/wait pairing (exactly three WAIT
+  steps; the footer's Delete and the form's attach cluster are never framed
+  live); `scrimPanels` tiling the viewport for 8 holes × 5 viewports including
+  holes hanging off the edges; the Zod schema; `toMe`/`toUser` leak checks.
+- **One real bug the harness caught:** `scrimPanels` did not clamp a hole that
+  hangs off a viewport edge (the bell at 1280, the composer at 800×700) — a band
+  went negative and two overlapped, which would have let clicks through the
+  wrong region. Fixed with `clampedHole`, and the tiling property is now a
+  permanent assertion.
+- Gates: `pnpm typecheck` exit 0 across five workspaces · lint 0 errors (the
+  same 5 pre-existing `no-img-element` warnings) · prettier clean.
+- **The browser pass is still owed** and is now bigger: the three WAIT steps
+  (open the form → create → open the task), an ACT step with an open chip menu
+  (the z-order claim), Esc while typing, and Skip step / Skip tour / Back from
+  every phase — at 1280/1440/1600/1920, plus reduce-motion.
+
+### 14.7 The flow fix — the end is the last station, not the snapshot (owner-reported)
+
+The owner's first full walk found the flow bug this design had baked in: they
+walked the form with `Next`, reached step 9 (`form-submit`), and the button read
+**"Start using Mokara"** — the finish label — at 9 of 21. Clicking it wrote
+`completed` and skipped open-task, the entire drawer walkthrough, the comments
+and the chrome. "Skips everything else."
+
+Two stacked causes, one under the other:
+
+1. **The finish label was computed from a progress snapshot**
+   (`nextVisibleIndex(…) === -1`). At form-submit the form is open and no task
+   exists, so every later phase is gated off _in that snapshot_ — `open-task`
+   needs a task, the drawer steps need an open drawer, the chrome steps need
+   `!modalOpen` because the modal covers the board. "Nothing ahead right now"
+   is not "the walkthrough is over"; it is "the walkthrough is waiting on you".
+2. **Mid-array exhaustion was treated as finishing**: `advance()` on `-1` called
+   `dismiss("completed")` — the permanent never-again write. It is the only
+   mid-array exhaustion point in the design, which is why it felt like the
+   walkthrough simply stopped.
+
+The fix, three parts:
+
+- **`atWalkthroughEnd(steps, index)`** — the walkthrough's end is the array's
+  LAST step (`nav-team`), and only that step's button may read the finish label.
+  The pure predicate lives beside the other engine helpers so it is
+  truth-tableable.
+- **Exhaustion mid-array = HOLD, never finish.** `advance()` returns without
+  writing anything; the card stays on a step that is still real (the form is
+  open, the button framed and live), and the existing progress effect resumes
+  the walk automatically when the state changes — creating the task advances
+  `form-submit → open-task`, closing the form without creating degrades to the
+  chrome phase exactly as before. Nothing is written on a hold.
+- **The forward button hides while holding.** A `Next` that does nothing is a
+  lie; at the hold point the card shows the waiting hint plus `Skip tour`
+  (and `Back`), so the only way out mid-walkthrough is an explicit skip — which
+  writes `skipped`, not `completed`.
+
+The owner's exact path now runs: create → form → press `Create task` → "Open it"
+→ the full drawer walkthrough → comments → chrome → **then** `Start using
+Mokara`, at step 21, where it belongs. Verified in the harness as the
+reconstructed flow: the snapshot exhausts at form-submit (the hold case),
+`atWalkthroughEnd` says no, creating resumes at `open-task`, closing without
+creating degrades to the chrome — plus source greps asserting the old
+snapshot label is gone and the finish write is guarded by the true end.
+
+One cosmetic left open by choice: the counter shows ARRAY positions, so a
+skipped station leaves a gap in the numbers (a fresh user sees 1, 2, 4…9, 19–21 —
+station 3 `create-any` does not apply). The numbers match the PRD's step table;
+renumbering to "stations actually shown" would make the total unknowable ahead.
+Kept as-is unless the owner wants it changed.

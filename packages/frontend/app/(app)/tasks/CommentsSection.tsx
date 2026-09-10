@@ -323,7 +323,13 @@ export function CommentComposer({
   }
 
   return (
-    <div className="mt-2.5 border-t border-[var(--color-border-soft)] pt-2.5">
+    // PRD-13: the walkthrough frames the composer as a whole on an ACT step, so
+    // typing, the paperclip (never required) and the Comment button are all
+    // live at once.
+    <div
+      className="mt-2.5 border-t border-[var(--color-border-soft)] pt-2.5"
+      data-tour="drawer-composer"
+    >
       {replyTo && (
         <div className="mb-1.5 flex items-center justify-between rounded-md bg-[var(--color-surface)] px-2.5 py-1.5">
           <span className="truncate text-[0.72rem] text-[var(--color-ink-muted)]">

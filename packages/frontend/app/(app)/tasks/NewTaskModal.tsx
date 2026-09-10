@@ -167,7 +167,9 @@ export function NewTaskModal({
 
         <form onSubmit={onSubmit}>
           {/* Body: title + description */}
-          <div className="px-4 pt-3 pb-2">
+          {/* PRD-13: one target for both fields — the walkthrough frames them
+              together and leaves them typable (act step). */}
+          <div className="px-4 pt-3 pb-2" data-tour="task-fields">
             <input
               type="text"
               required
@@ -190,7 +192,7 @@ export function NewTaskModal({
           </div>
 
           {/* Chip row: status, priority, due date, more */}
-          <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
+          <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3" data-tour="task-chips">
             <Dropdown
               trigger={(open) => (
                 <ChipShell open={open}>
@@ -268,13 +270,17 @@ export function NewTaskModal({
             />
 
             {/* The "…" — project and KPIs fold in here, identical to the
-                drawer's panel; each chip still opens its own menu inside. */}
+                drawer's panel; each chip still opens its own menu inside. The
+                span only carries the tour target (PRD-13): ChipShell forwards
+                no extra props, and this is the element the walkthrough frames. */}
             <Dropdown
               trigger={(open) => (
-                <ChipShell open={open}>
-                  <DotsIcon />
-                  <ChevronIcon />
-                </ChipShell>
+                <span data-tour="task-more" className="inline-flex">
+                  <ChipShell open={open}>
+                    <DotsIcon />
+                    <ChevronIcon />
+                  </ChipShell>
+                </span>
               )}
             >
               <div className="flex flex-col items-start gap-1 p-1.5">
@@ -287,8 +293,9 @@ export function NewTaskModal({
           </div>
 
           {/* Steps — creation-time checklist (PRD-11). Drafted here; uploaded
-              right after the task exists. */}
-          <div className="px-4 pb-3">
+              right after the task exists. The wrapper is a walkthrough target
+              (PRD-13): new steps can only be added here. */}
+          <div className="px-4 pb-3" data-tour="task-steps">
             <p className="m-0 mb-1 text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-muted)]">
               Steps
             </p>
@@ -368,7 +375,7 @@ export function NewTaskModal({
 
           {/* Footer: attachment + Cancel + Create */}
           <div className="flex items-center justify-between border-t border-[var(--color-border-soft)] px-4 py-2.5">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5" data-tour="task-attach">
               {/* PRD-11: files exist only at creation — image and PDF only,
                   enforced by the route. The paperclip here was a dead button
                   before; it opens the picker now. */}
@@ -411,6 +418,7 @@ export function NewTaskModal({
               </button>
               <button
                 type="submit"
+                data-tour="task-submit"
                 className="btn-base btn-primary"
                 style={{ padding: "0.45rem 0.95rem", fontSize: "0.82rem" }}
                 disabled={!title.trim() || creating}

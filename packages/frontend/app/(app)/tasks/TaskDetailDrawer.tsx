@@ -190,6 +190,7 @@ export function TaskDetailDrawer({
           />
         ) : (
           <h2
+            data-tour="drawer-title"
             onDoubleClick={startRename}
             title="Double-click to rename"
             className={cn(
@@ -209,7 +210,9 @@ export function TaskDetailDrawer({
           </p>
         )}
 
-        {/* Description — click to edit */}
+        {/* Description — click to edit. Both render branches carry the same
+            tour target (PRD-13): only one is ever on screen, and the edit box
+            must be frameable too. */}
         <DescriptionField
           value={task.description ?? ""}
           onSave={(text) => {
@@ -226,7 +229,7 @@ export function TaskDetailDrawer({
         {/* Chip row — ONE line (owner): status / priority / due date / assignee
             stay inline; project, KPIs and flag fold into the "…" panel, which
             keeps them fully editable (each chip still opens its own menu). */}
-        <div className="mt-5 flex items-center gap-1.5">
+        <div className="mt-5 flex items-center gap-1.5" data-tour="drawer-chips">
           <Dropdown
             trigger={(open) => (
               <ChipShell open={open}>
@@ -294,13 +297,16 @@ export function TaskDetailDrawer({
           />
 
           {/* The "…" — everything below the owner's priority line lives here,
-              still editable. */}
+              still editable. The span only carries the tour target (PRD-13):
+              ChipShell forwards no extra props. */}
           <Dropdown
             trigger={(open) => (
-              <ChipShell open={open}>
-                <DotsIcon />
-                <ChevronIcon />
-              </ChipShell>
+              <span data-tour="drawer-more" className="inline-flex">
+                <ChipShell open={open}>
+                  <DotsIcon />
+                  <ChevronIcon />
+                </ChipShell>
+              </span>
             )}
           >
             <div className="flex flex-col items-start gap-1 p-1.5">
@@ -349,8 +355,12 @@ export function TaskDetailDrawer({
         <CommentsSection taskId={task.id} currentUser={currentUser} />
       </div>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between border-t border-[var(--color-border-soft)] px-5 py-3">
+      {/* Footer — the walkthrough frames this on a LOOK step on purpose: the
+          Delete button has no confirmation, so it must stay out of reach. */}
+      <div
+        className="flex items-center justify-between border-t border-[var(--color-border-soft)] px-5 py-3"
+        data-tour="drawer-footer"
+      >
         <span className="text-[0.74rem] text-[var(--color-ink-faint)]">
           Press{" "}
           <kbd className="rounded border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-1 font-mono text-[0.7rem]">
@@ -398,6 +408,7 @@ export function DescriptionField({
     return (
       <textarea
         autoFocus
+        data-tour="drawer-description"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
@@ -406,7 +417,11 @@ export function DescriptionField({
             e.preventDefault();
             setDraft(value);
             setEditing(false);
-          } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+          }
+          // Owner (2026-09-10): Enter saves, Shift+Enter is a newline — the
+          // chat-input grammar, since ⌘+Enter was undiscoverable. ⌘/Ctrl+Enter
+          // still saves (same action, and it matches the composer's hint).
+          else if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             commit();
           }
@@ -421,6 +436,7 @@ export function DescriptionField({
   return (
     <div
       onClick={startEdit}
+      data-tour="drawer-description"
       // line-clamp-3 keeps a long description from pushing the compact
       // drawer taller than its content-allocated height (no internal scroll).
       // whitespace-pre-wrap keeps the newlines typed in the textarea — HTML

@@ -18,6 +18,7 @@ import { useContainerMeta } from "@/lib/meta";
 import { useSession } from "@/lib/session";
 import { onSse } from "@/lib/sse";
 import { taskFilterAtom, taskSortAtom, useCollapsedGroups, type GroupId } from "@/lib/tasksView";
+import type { TourProgress } from "@/lib/onboarding";
 import { DUR, snap } from "@/lib/motion";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { PageHeader } from "@/components/PageHeader";
@@ -276,6 +277,19 @@ export default function TasksPage() {
     [visibleByGroup]
   );
 
+  // PRD-13: the walkthrough's only window into the app — everything the steps
+  // wait on (the form opened, a task exists, a drawer is open) is state this
+  // page already owns. Memoised so the overlay's advance effect re-runs when
+  // the FACTS change, not on every keystroke in a form field.
+  const tourProgress = useMemo<TourProgress>(
+    () => ({
+      taskCount: totalTasks,
+      modalOpen,
+      taskOpen: selectedTaskId !== null,
+    }),
+    [totalTasks, modalOpen, selectedTaskId]
+  );
+
   if (bootError) {
     return (
       <div className="grid min-h-[60vh] place-items-center">
@@ -406,11 +420,12 @@ export default function TasksPage() {
         )}
       </AnimatePresence>
 
-      {/* PRD-13: the first-run tour. Mounted here rather than in AppShell so it
-          can wait on this page's own `boardReady` — see the comment on the
-          component. It decides for itself whether to appear (session, route,
-          viewport, dismissal). */}
-      <TourOverlay boardReady={boardReady} />
+      {/* PRD-13: the first-run walkthrough. Mounted here rather than in AppShell
+          so it can wait on this page's own `boardReady`, and so the steps can
+          read this page's own state (the form being open, a task existing, a
+          drawer open) instead of lifting any of it. It decides for itself
+          whether to appear (session, route, viewport, dismissal). */}
+      <TourOverlay boardReady={boardReady} progress={tourProgress} />
     </div>
   );
 }

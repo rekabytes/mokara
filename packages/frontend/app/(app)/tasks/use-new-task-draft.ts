@@ -102,7 +102,17 @@ export function useNewTaskDraft({
     // Only close the modal and add to the board when the refetch succeeds.
     // On failure the error stays visible and the user can retry.
     if (!fresh) return;
-    setTasks((prev) => [fresh, ...prev]);
+    // Upsert, not prepend: the task's own SSE echo (task_created publishes to
+    // the actor's channel too) usually lands DURING the step/file uploads above,
+    // and an unconditional prepend raced it into a duplicate row — React's
+    // "two children with the same key" error, hit through the walkthrough
+    // (2026-09-10). The SSE handler already upserts by id, so this side
+    // converges with it no matter which arrives first.
+    setTasks((prev) =>
+      prev.some((x) => x.id === fresh.id)
+        ? prev.map((x) => (x.id === fresh.id ? fresh : x))
+        : [fresh, ...prev]
+    );
     resetAndCloseModal();
   }
 

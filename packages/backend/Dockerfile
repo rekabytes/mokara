@@ -13,7 +13,7 @@
 
 # ---- base: Node + the package manager the lockfile was written with ----
 FROM node:24-alpine AS base
-RUN corepack enable && corepack prepare pnpm@11.13.0 --activate
+RUN corepack enable && corepack prepare pnpm@11.13.1 --activate
 WORKDIR /app
 
 # ---- deps: install from manifests only, so a source edit never re-resolves ----

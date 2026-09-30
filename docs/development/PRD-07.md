@@ -19,16 +19,17 @@ pattern rather than re-deriving one. Where this PRD deliberately differs from it
 
 ## 1. Goal
 
-`git tag v0.1.8 && git push origin v0.1.8` produces:
+`git tag v0.1.9 && git push origin v0.1.9` produces:
 
-- `ghcr.io/<owner>/mokara-frontend:0.1.8` (+ `:0.1`, `:latest`)
-- `ghcr.io/<owner>/mokara-backend:0.1.8` (+ same)
-- `ghcr.io/<owner>/mokara-admin:0.1.8` (+ same) — the operator console, added
+- `ghcr.io/<owner>/mokara-frontend:0.1.9` (+ `:0.1`, `:latest`)
+- `ghcr.io/<owner>/mokara-backend:0.1.9` (+ same)
+- `ghcr.io/<owner>/mokara-admin:0.1.9` (+ same) — the operator console, added
   2026-09-09; it joins the same matrix and sits behind the same gate
 
-The tag has to match the `version` in the root `package.json` — the gate job
-fails otherwise (verified: a `v0.1.1` tag pushed while the manifests still said
-`0.1.0` was rejected before any image was built).
+The tag has to match `version` in the root and every workspace `package.json`,
+and the maintained release examples must agree too. The gate job fails otherwise
+(verified: a `v0.1.1` tag pushed while the manifests still said `0.1.0` was
+rejected before any image was built).
 
 Coolify runs all three as **Docker Image** services. Upgrade = new tag; rollback =
 redeploy the previous tag.
@@ -137,7 +138,7 @@ Why this is the right shape, not just the familiar one:
 
 | Stage    | Contents                                                                                                                                                                                              |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `base`   | `node:24-alpine`, `corepack enable` + `corepack prepare pnpm@11.13.0`                                                                                                                                 |
+| `base`   | `node:24-alpine`, `corepack enable` + `corepack prepare pnpm@11.13.1`                                                                                                                                 |
 | `deps`   | copy `pnpm-workspace.yaml package.json pnpm-lock.yaml` + each workspace `package.json`, `pnpm install --frozen-lockfile`                                                                              |
 | `build`  | copy frontend source, `pnpm build` (standalone)                                                                                                                                                       |
 | `runner` | `node:24-alpine`, `ENV NODE_ENV=production PORT=3000`, copy `.next/standalone` → `/app`, `.next/static` → `packages/frontend/.next/static`; `USER node`; `CMD ["node","packages/frontend/server.js"]` |
@@ -220,9 +221,11 @@ check that turns "the tag is the release" into something trustworthy.
 
 ### 6.3 Versioning
 
-The git tag is the source of truth; package.json versions may lag without breaking
-anything. Release.yml warns (does not fail) when the root `package.json` version
-disagrees with the tag.
+Run `pnpm release:bump <patch|minor|major|x.y.z>` before creating a release. The
+script updates the root and every workspace manifest together with the maintained
+README, workflow, and PRD release examples. `release.yml` runs the same script in
+`--check` mode and fails before publishing when the tag, any manifest, or a release
+reference disagrees.
 
 ## 7. Where this PRD deliberately differs from the reference
 

@@ -53,19 +53,27 @@ export function ProgressGantt({
 
   // PRD-09: the native scrollbars are hidden; these thumbs stand in for them
   // and fade in while the card is hovered (the fade is pure CSS group-hover —
-  // no JS in the animation). Thumb math is 1:1: within a track as wide as the
-  // visible area, a thumb sized to the visible fraction moves exactly
-  // scrollLeft px, so position and size come straight off the live values.
+  // no JS in the animation). Scale the content scroll range onto each visible
+  // indicator track; using raw scrollLeft/scrollTop would move a thumb outside
+  // its track and make the whole document overflow.
   const syncIndicators = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
     if (hThumbRef.current) {
-      hThumbRef.current.style.width = `${(el.clientWidth / el.scrollWidth) * el.clientWidth}px`;
-      hThumbRef.current.style.transform = `translateX(${el.scrollLeft}px)`;
+      const thumbWidth = (el.clientWidth / el.scrollWidth) * el.clientWidth;
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      const maxTravel = el.clientWidth - thumbWidth;
+      const thumbX = maxScroll > 0 ? (el.scrollLeft / maxScroll) * maxTravel : 0;
+      hThumbRef.current.style.width = `${thumbWidth}px`;
+      hThumbRef.current.style.transform = `translateX(${thumbX}px)`;
     }
     if (vThumbRef.current) {
-      vThumbRef.current.style.height = `${(el.clientHeight / el.scrollHeight) * el.clientHeight}px`;
-      vThumbRef.current.style.transform = `translateY(${el.scrollTop}px)`;
+      const thumbHeight = (el.clientHeight / el.scrollHeight) * el.clientHeight;
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      const maxTravel = el.clientHeight - thumbHeight;
+      const thumbY = maxScroll > 0 ? (el.scrollTop / maxScroll) * maxTravel : 0;
+      vThumbRef.current.style.height = `${thumbHeight}px`;
+      vThumbRef.current.style.transform = `translateY(${thumbY}px)`;
     }
   }, [scrollRef]);
 
@@ -263,120 +271,122 @@ export function ProgressGantt({
   }
 
   return (
-    <div className="group relative min-w-0">
-      <div
-        ref={scrollRef}
-        // Native scrollbars off (both axes) — the hover-fading thumbs below
-        // are the only scroll affordance. The capped body keeps the page from
-        // stretching with the task count (PRD-09); the axis row pins to the
-        // top and task titles stay pinned left.
-        className={`relative overflow-auto min-w-0 max-w-full rounded-[6px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
-          dragging ? "cursor-grabbing select-none" : "cursor-grab"
-        }`}
-        style={{ maxHeight: AXIS_HEIGHT + LIST_VISIBLE_ROWS * ROW_H }}
-        onScroll={syncIndicators}
-        onMouseDown={onMouseDown}
-      >
-        <div style={{ width: `${TITLE_COL + trackWidth}px` }}>
-          {/* Axis row: pins to the top of the capped scroller (PRD-09); its
+    <div className="min-w-0">
+      <div className="group relative">
+        <div
+          ref={scrollRef}
+          // Native scrollbars off (both axes) — the hover-fading thumbs below
+          // are the only scroll affordance. The capped body keeps the page from
+          // stretching with the task count (PRD-09); the axis row pins to the
+          // top and task titles stay pinned left.
+          className={`relative overflow-auto min-w-0 max-w-full rounded-[6px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
+            dragging ? "cursor-grabbing select-none" : "cursor-grab"
+          }`}
+          style={{ maxHeight: AXIS_HEIGHT + LIST_VISIBLE_ROWS * ROW_H }}
+          onScroll={syncIndicators}
+          onMouseDown={onMouseDown}
+        >
+          <div style={{ width: `${TITLE_COL + trackWidth}px` }}>
+            {/* Axis row: pins to the top of the capped scroller (PRD-09); its
               blank corner is already sticky-left, so it pins both ways. */}
-          <div className="sticky top-0 z-20 flex bg-[var(--color-surface-solid)]">
-            <div
-              className="sticky left-0 z-10 flex-none bg-[var(--color-surface-solid)] border-r border-[var(--color-border-soft)]"
-              style={{ width: `${TITLE_COL}px`, height: `${AXIS_HEIGHT}px` }}
-            />
+            <div className="sticky top-0 z-20 flex bg-[var(--color-surface-solid)]">
+              <div
+                className="sticky left-0 z-10 flex-none bg-[var(--color-surface-solid)] border-r border-[var(--color-border-soft)]"
+                style={{ width: `${TITLE_COL}px`, height: `${AXIS_HEIGHT}px` }}
+              />
+              <div
+                className="relative"
+                style={{ width: `${trackWidth}px`, height: `${AXIS_HEIGHT}px` }}
+              >
+                {/* Month labels */}
+                <div className="absolute inset-x-0 top-0 h-5 border-b border-[var(--color-border-soft)]">
+                  {months.map((m, idx) => {
+                    const next = months[idx + 1];
+                    const endDayIdx = next ? next.dayIdx : totalDays;
+                    const w = (endDayIdx - m.dayIdx) * DAY_WIDTH;
+                    return (
+                      <div
+                        key={m.name + idx}
+                        className="absolute top-0 flex h-full items-center px-2 text-[0.7rem] font-semibold text-[var(--color-ink-muted)]"
+                        style={{ left: `${m.dayIdx * DAY_WIDTH}px`, width: `${w}px` }}
+                      >
+                        {m.name}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Day labels (every day) */}
+                <div className="absolute inset-x-0 bottom-0 h-[18px]">
+                  {dayLabels.map((dl) => (
+                    <div
+                      key={dl.dayIdx}
+                      className="absolute inset-y-0 flex items-start justify-center text-[0.6rem] text-[var(--color-ink-faint)]"
+                      style={{ left: `${dl.dayIdx * DAY_WIDTH}px`, width: `${DAY_WIDTH}px` }}
+                    >
+                      {dl.label}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Task rows — one box per calendar day, aligned under its number */}
             <div
               className="relative"
-              style={{ width: `${trackWidth}px`, height: `${AXIS_HEIGHT}px` }}
+              onMouseMove={onCellMove}
+              onMouseOver={onCellMove}
+              onMouseLeave={() => setHover(null)}
             >
-              {/* Month labels */}
-              <div className="absolute inset-x-0 top-0 h-5 border-b border-[var(--color-border-soft)]">
-                {months.map((m, idx) => {
-                  const next = months[idx + 1];
-                  const endDayIdx = next ? next.dayIdx : totalDays;
-                  const w = (endDayIdx - m.dayIdx) * DAY_WIDTH;
-                  return (
-                    <div
-                      key={m.name + idx}
-                      className="absolute top-0 flex h-full items-center px-2 text-[0.7rem] font-semibold text-[var(--color-ink-muted)]"
-                      style={{ left: `${m.dayIdx * DAY_WIDTH}px`, width: `${w}px` }}
-                    >
-                      {m.name}
-                    </div>
-                  );
-                })}
-              </div>
-              {/* Day labels (every day) */}
-              <div className="absolute inset-x-0 bottom-0 h-[18px]">
-                {dayLabels.map((dl) => (
+              {/* Weekend + today column tints (behind the cells) */}
+              <div
+                className="pointer-events-none absolute inset-y-0"
+                style={{ left: `${TITLE_COL}px`, width: `${trackWidth}px` }}
+              >
+                {tints.map((t) => (
                   <div
-                    key={dl.dayIdx}
-                    className="absolute inset-y-0 flex items-start justify-center text-[0.6rem] text-[var(--color-ink-faint)]"
-                    style={{ left: `${dl.dayIdx * DAY_WIDTH}px`, width: `${DAY_WIDTH}px` }}
+                    key={`${t.col}:${t.layer}`}
+                    className="absolute inset-y-0"
+                    style={{
+                      left: `${t.col * DAY_WIDTH}px`,
+                      width: `${DAY_WIDTH}px`,
+                      background:
+                        t.layer === "today" ? "rgba(99,102,241,0.06)" : "rgba(15,23,42,0.028)",
+                    }}
                   >
-                    {dl.label}
+                    {t.layer === "today" && (
+                      <div className="absolute inset-y-0 left-1/2 border-l border-dashed border-[rgba(15,23,42,0.35)]" />
+                    )}
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-
-          {/* Task rows — one box per calendar day, aligned under its number */}
-          <div
-            className="relative"
-            onMouseMove={onCellMove}
-            onMouseOver={onCellMove}
-            onMouseLeave={() => setHover(null)}
-          >
-            {/* Weekend + today column tints (behind the cells) */}
-            <div
-              className="pointer-events-none absolute inset-y-0"
-              style={{ left: `${TITLE_COL}px`, width: `${trackWidth}px` }}
-            >
-              {tints.map((t) => (
-                <div
-                  key={`${t.col}:${t.layer}`}
-                  className="absolute inset-y-0"
-                  style={{
-                    left: `${t.col * DAY_WIDTH}px`,
-                    width: `${DAY_WIDTH}px`,
-                    background:
-                      t.layer === "today" ? "rgba(99,102,241,0.06)" : "rgba(15,23,42,0.028)",
-                  }}
-                >
-                  {t.layer === "today" && (
-                    <div className="absolute inset-y-0 left-1/2 border-l border-dashed border-[rgba(15,23,42,0.35)]" />
-                  )}
-                </div>
+              {rowsData.map((r) => (
+                <HeatRow key={r.id} row={r} totalDays={totalDays} />
               ))}
             </div>
-            {rowsData.map((r) => (
-              <HeatRow key={r.id} row={r} totalDays={totalDays} />
-            ))}
           </div>
         </div>
-      </div>
 
-      {/* PRD-09: overflow affordance — only while the payload exceeds the
-          cap. Static (no scroll listeners); pointer-events-none so cell hover
-          and drag-scroll pass through. */}
-      {tasks.length > LIST_VISIBLE_ROWS && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center">
-          <span className="rounded-[999px] bg-[var(--color-surface-solid)]/90 px-3 py-1 text-[0.72rem] text-[var(--color-ink-faint)] shadow-[var(--shadow-card)]">
-            {tasks.length - LIST_VISIBLE_ROWS} more tasks below
-          </span>
-        </div>
-      )}
+        {/* PRD-09: overflow affordance — only while the payload exceeds the
+            cap. Static (no scroll listeners); pointer-events-none so cell hover
+            and drag-scroll pass through. */}
+        {tasks.length > LIST_VISIBLE_ROWS && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center">
+            <span className="rounded-[999px] bg-[var(--color-surface-solid)]/90 px-3 py-1 text-[0.72rem] text-[var(--color-ink-faint)] shadow-[var(--shadow-card)]">
+              {tasks.length - LIST_VISIBLE_ROWS} more tasks below
+            </span>
+          </div>
+        )}
 
-      {/* Hover-revealed scroll thumbs — see syncIndicators above. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-1 z-30 h-1 opacity-0 transition-opacity duration-200 ease-[var(--ease-snap)] group-hover:opacity-100">
-        <div ref={hThumbRef} className="h-full rounded-[999px] bg-[rgba(15,23,42,0.22)]" />
-      </div>
-      {tasks.length > LIST_VISIBLE_ROWS && (
-        <div className="pointer-events-none absolute bottom-1 right-1 top-1 z-30 w-1 opacity-0 transition-opacity duration-200 ease-[var(--ease-snap)] group-hover:opacity-100">
-          <div ref={vThumbRef} className="w-full rounded-[999px] bg-[rgba(15,23,42,0.22)]" />
+        {/* Hover-revealed scroll thumbs — see syncIndicators above. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-1 z-30 h-1 overflow-hidden opacity-0 transition-opacity duration-200 ease-[var(--ease-snap)] group-hover:opacity-100">
+          <div ref={hThumbRef} className="h-full rounded-[999px] bg-[rgba(15,23,42,0.22)]" />
         </div>
-      )}
+        {tasks.length > LIST_VISIBLE_ROWS && (
+          <div className="pointer-events-none absolute bottom-1 right-1 top-1 z-30 w-1 overflow-hidden opacity-0 transition-opacity duration-200 ease-[var(--ease-snap)] group-hover:opacity-100">
+            <div ref={vThumbRef} className="w-full rounded-[999px] bg-[rgba(15,23,42,0.22)]" />
+          </div>
+        )}
+      </div>
 
       <AnimatePresence>
         {hover &&

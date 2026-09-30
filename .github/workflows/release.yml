@@ -2,10 +2,10 @@
 #
 # Triggered by a version tag only:
 #
-#   git tag v0.1.8 && git push origin v0.1.8
+#   git tag v0.1.9 && git push origin v0.1.9
 #
-# Coolify then pulls `ghcr.io/<owner>/mokara-frontend:0.1.8`,
-# `mokara-backend:0.1.8` and `mokara-admin:0.1.8`; nothing is built on the
+# Coolify then pulls `ghcr.io/<owner>/mokara-frontend:0.1.9`,
+# `mokara-backend:0.1.9` and `mokara-admin:0.1.9`; nothing is built on the
 # server. Structure follows jejak-athlete's release.yml (matrix over services,
 # QEMU + Buildx, GHCR login with the built-in GITHUB_TOKEN, metadata-action tag
 # set, GHA layer caching, provenance disabled). The addition here is the `gate`
@@ -62,7 +62,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 11.13.0
+          version: 11.13.1
 
       - uses: actions/setup-node@v4
         with:
@@ -96,15 +96,10 @@ jobs:
           DATABASE_URL: postgresql://mokara:mokara@localhost:5432/mokara
         run: pnpm db:migrate:deploy
 
-      # Fail the tag rather than publish images whose version disagrees with it.
-      - name: Tag matches package version
-        run: |
-          pkg="$(node -p "require('./package.json').version")"
-          tag="${GITHUB_REF_NAME#v}"
-          if [ "$pkg" != "$tag" ]; then
-            echo "::error::tag v$tag does not match package.json version $pkg"
-            exit 1
-          fi
+      # Fail the tag rather than publish images whose manifest versions or
+      # documented release references disagree with it.
+      - name: Tag matches synchronized release version
+        run: node scripts/bump-version.mjs --check "${GITHUB_REF_NAME#v}"
 
   build:
     name: Build ${{ matrix.service }} image

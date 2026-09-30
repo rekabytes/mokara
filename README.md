@@ -27,7 +27,7 @@ mokara/
 
 ## Prerequisites
 
-- **Node.js** 24+ and **pnpm** 11.13 — `npm i -g pnpm@11.13.0` (or Corepack)
+- **Node.js** 24+ and **pnpm** 11.13 — `npm i -g pnpm@11.13.1` (or Corepack)
 - **Docker** + Docker Compose
 
 > No Go, no separate language toolchain. Everything in the workspace is TypeScript.
@@ -141,24 +141,28 @@ All routes are mounted under `/api`. Auth uses an HS256 JWT in the `mokara_token
 ## Release (container images)
 
 Releases are tag-driven; images are built **only** by CI, never on the deploy host.
+Use the release script to update every workspace manifest and release example,
+then commit and tag that version:
 
 ```bash
-git tag v0.1.8 && git push origin v0.1.8
+pnpm release:bump patch
+git commit -am "chore(release): 0.1.9"
+git tag v0.1.9 && git push origin v0.1.9
 ```
 
-The tag must equal `version` in the root `package.json` (and in every workspace
-`package.json`) — CI's release gate fails the tag otherwise, which is exactly how
-the first `v0.1.1` attempt died on 2026-09-03. Bump the manifests, commit, then
-tag.
+The tag must equal `version` in the root `package.json` and every workspace
+`package.json`. CI runs the script's synchronization check and fails the tag if
+any manifest or release reference disagrees, which is exactly how the first
+`v0.1.1` attempt died on 2026-09-03.
 
 `.github/workflows/release.yml` gates the tag (typecheck · lint · format · the real
-frontend build · every migration applied to an empty Postgres · tag matches
-`package.json`), then publishes:
+frontend build · every migration applied to an empty Postgres · synchronized
+release version matches the tag), then publishes:
 
 ```
-ghcr.io/<owner>/mokara-frontend:0.1.8   (+ :0.1, :latest)
-ghcr.io/<owner>/mokara-backend:0.1.8    (+ :0.1, :latest)
-ghcr.io/<owner>/mokara-admin:0.1.8      (+ :0.1, :latest)
+ghcr.io/<owner>/mokara-frontend:0.1.9   (+ :0.1, :latest)
+ghcr.io/<owner>/mokara-backend:0.1.9    (+ :0.1, :latest)
+ghcr.io/<owner>/mokara-admin:0.1.9      (+ :0.1, :latest)
 ```
 
 Coolify runs all three as **Docker Image** services and pulls them. Full design and

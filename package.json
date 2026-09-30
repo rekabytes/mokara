@@ -1,6 +1,6 @@
 {
   "name": "mokara",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "private": true,
   "scripts": {
     "dev:frontend": "pnpm db:bootstrap && pnpm --filter @mokara/frontend dev",
@@ -17,6 +17,8 @@
     "typecheck:redis": "pnpm --filter @mokara/redis typecheck",
     "typecheck": "pnpm typecheck:frontend && pnpm typecheck:backend && pnpm typecheck:admin && pnpm typecheck:db && pnpm typecheck:redis",
     "lint": "pnpm -r --if-present run lint",
+    "release:bump": "node scripts/bump-version.mjs",
+    "release:check": "node scripts/bump-version.mjs --check",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "db:migrate": "pnpm --filter @mokara/db migrate",
@@ -28,7 +30,7 @@
     "db:bootstrap": "pnpm --filter @mokara/db bootstrap",
     "db:seed": "pnpm --filter @mokara/db seed"
   },
-  "packageManager": "pnpm@11.13.0",
+  "packageManager": "pnpm@11.13.1",
   "engines": {
     "node": ">=24"
   },

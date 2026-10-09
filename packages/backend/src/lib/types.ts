@@ -15,6 +15,7 @@ import type {
   Notification as PrismaNotification,
   SubtaskItem as PrismaSubtaskItem,
   Attachment as PrismaAttachment,
+  GitHubIssueLink as PrismaGitHubIssueLink,
 } from "@mokara/db/prisma/generated/client";
 
 export type UserResponse = {
@@ -64,6 +65,16 @@ export type TeamInvitationResponse = {
   responded_at: string | null;
 };
 
+export type GitHubIssueResponse = {
+  status: string;
+  repository_id: string;
+  repository_full_name: string;
+  issue_number: number | null;
+  issue_url: string | null;
+  created_by_user_id: string | null;
+  last_error_code: string | null;
+};
+
 export type TaskResponse = {
   id: string;
   team_id: string;
@@ -81,6 +92,7 @@ export type TaskResponse = {
   assignee: UserRefResponse | null;
   due_date: string | null;
   flagged: boolean;
+  github_issue: GitHubIssueResponse | null;
   created_at: string;
   updated_at: string;
 };
@@ -333,6 +345,7 @@ export function toTask(
     creator?: Pick<PrismaUser, "id" | "username" | "displayName"> | null;
     assignee?: Pick<PrismaUser, "id" | "username" | "displayName"> | null;
     subtaskItems?: PrismaSubtaskItem[];
+    githubIssueLink?: PrismaGitHubIssueLink | null;
   },
   kpis: TaskKpiResponse[] = []
 ): TaskResponse {
@@ -353,6 +366,17 @@ export function toTask(
     assignee: t.assignee ? toUserRef(t.assignee) : null,
     due_date: t.dueDate ? t.dueDate.toISOString() : null,
     flagged: t.flagged,
+    github_issue: t.githubIssueLink
+      ? {
+          status: t.githubIssueLink.status,
+          repository_id: t.githubIssueLink.repositoryId,
+          repository_full_name: t.githubIssueLink.repositoryFullName,
+          issue_number: t.githubIssueLink.issueNumber,
+          issue_url: t.githubIssueLink.issueUrl,
+          created_by_user_id: t.githubIssueLink.createdByUserId,
+          last_error_code: t.githubIssueLink.lastErrorCode,
+        }
+      : null,
     created_at: t.createdAt.toISOString(),
     updated_at: t.updatedAt.toISOString(),
   };

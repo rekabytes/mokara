@@ -42,6 +42,7 @@ const TASK_INCLUDE = {
   // PRD-11: the checklist rides along so a task response can replace the
   // client's copy without wiping it (same reason as creator/assignee).
   subtaskItems: true,
+  githubIssueLink: true,
 } as const;
 
 type TaskWithBindings = Prisma.TaskGetPayload<{ include: typeof TASK_INCLUDE }>;

@@ -51,6 +51,7 @@ export function TaskDetailDrawer({
   onUpdate,
   onSetKpis,
   onToggleFlag,
+  onRetryGitHub,
   onDelete,
 }: {
   task: Task;
@@ -61,6 +62,7 @@ export function TaskDetailDrawer({
   onUpdate: (patch: TaskPatch) => void;
   onSetKpis: (bindings: BindingDraft[]) => void;
   onToggleFlag: () => void;
+  onRetryGitHub: () => void;
   onDelete: () => void;
 }) {
   // ---- Title rename (double-click in drawer) ----
@@ -208,6 +210,35 @@ export function TaskDetailDrawer({
             Created by {task.creator.display_name || task.creator.username}
             {task.creator.id === currentUser?.id ? " (you)" : ""}
           </p>
+        )}
+        {task.github_issue && (
+          <div className="mt-2 flex items-center gap-2 rounded-[var(--radius-btn)] border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-2.5 py-2 text-[0.76rem]">
+            {task.github_issue.status === "linked" && task.github_issue.issue_url ? (
+              <a
+                href={task.github_issue.issue_url}
+                target="_blank"
+                rel="noreferrer"
+                className="min-w-0 truncate font-semibold text-[var(--color-accent)] hover:underline"
+              >
+                {task.github_issue.repository_full_name}#{task.github_issue.issue_number}
+              </a>
+            ) : (
+              <span className="min-w-0 flex-1 truncate text-[var(--color-ink-muted)]">
+                GitHub issue {task.github_issue.status === "creating" ? "is publishing" : "failed"}
+                {` · ${task.github_issue.repository_full_name}`}
+              </span>
+            )}
+            {task.github_issue.status === "failed" &&
+              task.github_issue.created_by_user_id === currentUser?.id && (
+                <button
+                  type="button"
+                  onClick={onRetryGitHub}
+                  className="btn-base btn-ghost btn-small shrink-0"
+                >
+                  Retry
+                </button>
+              )}
+          </div>
         )}
 
         {/* Description — click to edit. Both render branches carry the same

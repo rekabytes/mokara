@@ -8,6 +8,7 @@ import { useAsyncError } from "@/hooks/useAsyncError";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { BillingTile } from "./BillingTile";
+import { GitHubTile } from "./GitHubTile";
 import { setSessionUser, signOutServer, useSession } from "@/lib/session";
 import { useContainers } from "@/lib/containers";
 import { tileIn, tileStagger } from "@/lib/motion";
@@ -317,6 +318,9 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
           onUpgrade={onUpgrade}
           onManage={onManage}
         />
+
+        {/* ======== Personal integrations ======== */}
+        <GitHubTile run={run} />
 
         {/* ======== Devices ======== */}
         <motion.section variants={tileIn} className={`${TILE} col-span-12`}>

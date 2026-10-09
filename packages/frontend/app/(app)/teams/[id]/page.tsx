@@ -256,7 +256,8 @@ export default function TeamDetailPage() {
                   </motion.div>
                 ))}
               </div>
-              {detail.members.length < 3 && (
+              {(detail.team.member_limit === null ||
+                detail.members.length < detail.team.member_limit) && (
                 <>
                   <form onSubmit={invite} className="mt-3 flex gap-2">
                     <input
@@ -279,7 +280,10 @@ export default function TeamDetailPage() {
                     </button>
                   </form>
                   <p className="mb-0 mt-2 px-1.5 text-[0.72rem] text-[var(--color-ink-faint)]">
-                    {3 - detail.members.length} seats free · they join the moment they accept
+                    {detail.team.member_limit === null
+                      ? "Unlimited seats"
+                      : `${detail.team.member_limit - detail.members.length} seats free`}{" "}
+                    · they join the moment they accept
                   </p>
                 </>
               )}

@@ -6,8 +6,8 @@
 // WHY THIS IS A HOOK AND NOT A COMPONENT: the twelve `useState` calls must run
 // in the SAME ORDER, at the SAME POSITION in `TasksPage`'s render, as they did
 // when they were written out inline. So the call site sits exactly where
-// `const [modalOpen, setModalOpen] = useState(false)` used to, and this body
-// contains those twelve `useState` calls and NOTHING else — no `useCallback`,
+// `const [modalOpen, setModalOpen] = useState(false)` used to. This body keeps
+// the draft's state calls and plain handlers together — no `useCallback`,
 // no `useMemo`, no `useEffect`. The handlers stay plain functions declared in
 // the body, as they were. `/tmp/mokara-verify/hooks.mjs` asserts the flattened
 // sequence matches the baseline; breaking that rule is how a refactor like this
@@ -49,6 +49,8 @@ export function useNewTaskDraft({
   // and uploaded right after the task exists (two-phase, like comments).
   const [newSubtasks, setNewSubtasks] = useState<string[]>([]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [publishToGitHub, setPublishToGitHub] = useState(false);
+  const [githubRepositoryId, setGitHubRepositoryId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   async function createTaskFromModal(e: React.FormEvent) {
@@ -92,6 +94,14 @@ export function useNewTaskDraft({
         fallback: "Failed to attach the file",
       });
     }
+    // GitHub is a second, non-atomic side effect. A failure leaves the Mokara
+    // task intact and stores a retryable failed link on it; the refetch below
+    // brings that state into the drawer.
+    if (publishToGitHub && githubRepositoryId) {
+      await run(() => api.publishGitHubIssue(created.id, githubRepositoryId), {
+        fallback: "Task created, but the GitHub issue could not be created.",
+      });
+    }
 
     // The created row predates its own steps/files — refetch so the board and
     // the drawer start from the complete payload.
@@ -125,6 +135,8 @@ export function useNewTaskDraft({
     setNewProjectId(null);
     setNewKpis([]);
     setNewAssigneeId(null);
+    setPublishToGitHub(false);
+    setGitHubRepositoryId(null);
     setModalOpen(true);
   }
 
@@ -139,6 +151,8 @@ export function useNewTaskDraft({
     setNewAssigneeId(null);
     setNewSubtasks([]);
     setNewFiles([]);
+    setPublishToGitHub(false);
+    setGitHubRepositoryId(null);
     setModalOpen(false);
   }
 
@@ -171,6 +185,10 @@ export function useNewTaskDraft({
     setNewSubtasks,
     newFiles,
     setNewFiles,
+    publishToGitHub,
+    setPublishToGitHub,
+    githubRepositoryId,
+    setGitHubRepositoryId,
     creating,
     createTaskFromModal,
     openModal,

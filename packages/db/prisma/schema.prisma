@@ -61,6 +61,8 @@ model User {
   createdTasks      Task[]           @relation("TaskCreator")
   assignedTasks     Task[]           @relation("TaskAssignee")
   attachments       Attachment[]
+  githubConnection  GitHubAccountConnection?
+  githubIssueLinks  GitHubIssueLink[] @relation("GitHubIssueCreator")
   lastContainer     Team?            @relation("LastContainer", fields: [lastContainerId], references: [id], onDelete: SetNull)
 
   @@map("users")
@@ -155,6 +157,7 @@ model Task {
   kpiBindings TaskKpi[]
   subtaskItems SubtaskItem[]
   attachments Attachment[]
+  githubIssueLink GitHubIssueLink?
 
   @@index([teamId, status])
   @@index([status])
@@ -167,6 +170,120 @@ model Task {
 // than child tasks — no recursion, no per-item assignee or due date; those
 // would each drag the whole task surface into the model. Order is client-drawn
 // and stored in `position`.
+// GitHub App integration: identity is user-scoped, while installations are
+// normalized because several connected users may access the same organization
+// installation. No GitHub credential is persisted in PostgreSQL.
+model GitHubAccountConnection {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String   @unique @map("user_id") @db.Uuid
+  githubUserId BigInt   @map("github_user_id")
+  githubLogin  String   @map("github_login")
+  status       String   @default("active")
+  verifiedAt   DateTime @map("verified_at") @db.Timestamptz(3)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user          User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  installations GitHubAccountInstallation[]
+  repositories  GitHubAccountRepository[]
+  issueLinks    GitHubIssueLink[]
+
+  @@map("github_account_connections")
+}
+
+model GitHubInstallation {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  githubInstallationId BigInt   @unique @map("github_installation_id")
+  accountId            BigInt   @map("account_id")
+  accountLogin         String   @map("account_login")
+  accountType          String   @map("account_type")
+  status               String   @default("active")
+  lastVerifiedAt       DateTime @map("last_verified_at") @db.Timestamptz(3)
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  connections GitHubAccountInstallation[]
+  repositories GitHubRepository[]
+
+  @@map("github_installations")
+}
+
+model GitHubAccountInstallation {
+  connectionId   String   @map("connection_id") @db.Uuid
+  installationId String   @map("installation_id") @db.Uuid
+  verifiedAt     DateTime @map("verified_at") @db.Timestamptz(3)
+
+  connection   GitHubAccountConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  installation GitHubInstallation      @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
+  @@id([connectionId, installationId])
+  @@index([installationId])
+  @@map("github_account_installations")
+}
+
+model GitHubRepository {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  installationId     String   @map("installation_id") @db.Uuid
+  githubRepositoryId BigInt   @unique @map("github_repository_id")
+  ownerLogin         String   @map("owner_login")
+  name               String
+  fullName           String   @map("full_name")
+  private            Boolean  @default(false)
+  active             Boolean  @default(true)
+  lastVerifiedAt     DateTime @map("last_verified_at") @db.Timestamptz(3)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  installation GitHubInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  connections  GitHubAccountRepository[]
+  issueLinks    GitHubIssueLink[]
+
+  @@unique([installationId, githubRepositoryId])
+  @@index([installationId, active])
+  @@map("github_repositories")
+}
+
+model GitHubAccountRepository {
+  connectionId String   @map("connection_id") @db.Uuid
+  repositoryId String   @map("repository_id") @db.Uuid
+  verifiedAt   DateTime @map("verified_at") @db.Timestamptz(3)
+
+  connection GitHubAccountConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  repository GitHubRepository        @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@id([connectionId, repositoryId])
+  @@index([repositoryId])
+  @@map("github_account_repositories")
+}
+
+model GitHubIssueLink {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId                 String    @unique @map("task_id") @db.Uuid
+  repositoryId           String    @map("repository_id") @db.Uuid
+  createdByUserId        String?   @map("created_by_user_id") @db.Uuid
+  connectionId           String?   @map("connection_id") @db.Uuid
+  githubIssueId          BigInt?   @map("github_issue_id")
+  issueNumber            Int?      @map("issue_number")
+  issueUrl               String?   @map("issue_url")
+  repositoryFullName     String    @map("repository_full_name")
+  status                 String    @default("creating")
+  attemptCount           Int       @default(1) @map("attempt_count")
+  lastErrorCode          String?   @map("last_error_code")
+  lastAttemptAt          DateTime  @default(now()) @map("last_attempt_at") @db.Timestamptz(3)
+  linkedAt               DateTime? @map("linked_at") @db.Timestamptz(3)
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  task          Task                     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  repository    GitHubRepository         @relation(fields: [repositoryId], references: [id], onDelete: Restrict)
+  createdByUser User?                    @relation("GitHubIssueCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  connection    GitHubAccountConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+
+  @@index([repositoryId])
+  @@index([createdByUserId])
+  @@map("github_issue_links")
+}
+
 model SubtaskItem {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   taskId    String   @map("task_id") @db.Uuid

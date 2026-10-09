@@ -124,6 +124,8 @@ export const createTaskSchema = z.object({
   kpis: taskKpiBindings.optional(),
 });
 
+export const githubIssueSchema = z.object({ repository_id: z.uuid() }).strict();
+
 export const updateTaskSchema = z
   .object({
     title: z.string().min(1, "title is required").optional(),

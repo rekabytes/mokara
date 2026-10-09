@@ -1,35 +1,64 @@
 import Link from "next/link";
+import { BrandMark } from "@/components/BrandMark";
 import { OPERATOR } from "@/lib/legal";
 
-/**
- * Public marketing header, shared by the landing page and the legal documents
- * so the two can't drift. The caller resolves the session cookie and passes the
- * CTA down, which keeps this a pure server component.
- */
+const LINKS = [
+  { href: "/#product", label: "Product" },
+  { href: "/#faq", label: "FAQs" },
+  { href: "/pricing", label: "Pricing" },
+];
+
+/** Public navigation; the caller resolves the session, not the browser. */
 export function SiteHeader({ authHref, authLabel }: { authHref: string; authLabel: string }) {
+  const startHref = authHref === "/tasks" ? "/tasks" : "/signup";
+  const startLabel = authHref === "/tasks" ? "Open workspace" : "Start free";
+
   return (
-    <header className="sticky top-0 z-10 border-b border-[var(--color-border-soft)] bg-[var(--color-surface)] backdrop-blur-[22px]">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="block size-2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_4px_var(--color-accent-soft)]" />
-          <span className="font-display text-[1.05rem] font-semibold tracking-[0.01em]">
-            {OPERATOR.productName}
-          </span>
+    <header className="public-header">
+      <div className="public-container public-header-inner">
+        <Link href="/" className="public-brand" aria-label={`${OPERATOR.productName} home`}>
+          <BrandMark />
+          <span>{OPERATOR.productName.toLowerCase()}</span>
         </Link>
-        <nav className="flex items-center gap-2">
-          <Link
-            href={authHref}
-            className="rounded-[var(--radius-btn)] px-3.5 py-1.5 text-[0.9rem] font-semibold text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
-          >
+        <nav className="public-desktop-nav" aria-label="Main navigation">
+          {LINKS.map((link) => (
+            <Link key={link.href} href={link.href}>
+              {link.label}
+            </Link>
+          ))}
+        </nav>
+        <div className="public-header-actions">
+          <Link href={authHref} className="public-login">
             {authLabel}
           </Link>
           <Link
-            href="/signup"
-            className="rounded-[var(--radius-btn)] bg-[var(--color-accent)] px-3.5 py-1.5 text-[0.9rem] font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)]"
+            href={startHref}
+            className="public-button public-button-primary public-button-small"
           >
-            Get started
+            {startLabel}
           </Link>
-        </nav>
+          <details className="public-mobile-menu">
+            <summary aria-label="Toggle navigation">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                aria-hidden
+              >
+                <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
+              </svg>
+            </summary>
+            <nav aria-label="Mobile navigation">
+              {LINKS.map((link) => (
+                <Link key={link.href} href={link.href}>
+                  {link.label}
+                </Link>
+              ))}
+              <Link href={authHref}>{authLabel}</Link>
+            </nav>
+          </details>
+        </div>
       </div>
     </header>
   );

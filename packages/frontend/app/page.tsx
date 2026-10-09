@@ -1,252 +1,332 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Image, { type StaticImageData } from "next/image";
+import Image from "next/image";
 import { cookies } from "next/headers";
-import { AmbientCanvas } from "@/components/AmbientCanvas";
-import { HeroSplit } from "@/components/HeroSplit";
-import { Reveal } from "@/components/Reveal";
-import { TiltPanel } from "@/components/TiltPanel";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { AUTH_COOKIE } from "@/lib/cookies";
+import shotBoard from "../public/landing/hero-board.webp";
 import shotDrawer from "../public/landing/shot-drawer.webp";
 import shotTeam from "../public/landing/shot-team.webp";
 import shotAnalytics from "../public/landing/shot-analytics.webp";
+import "./homepage.css";
 
-// The front door, v3: a designed page, not a template. Fraunces (display,
-// italic accent) + Instrument Sans (body) + IBM Plex Mono (labels), self-hosted
-// in the root layout; an ambient WebGL field behind everything; an asymmetric
-// split hero; a mono ticker; zig-zag rows; a feature ledger. Pure server
-// component except AmbientCanvas; the only dynamic read is the session cookie,
-// which flips the navbar CTA. Header and footer are shared with the legal
-// documents, so the public pages stay one system.
 export const metadata: Metadata = {
-  title: "Mokara — task boards for small teams",
+  title: "Mokara — clearer task and project tracking for small teams",
   description:
-    "Tasks, projects and weighted KPIs in one quiet board. Built for small teams; ships as Docker images.",
+    "Keep tasks, deadlines, and project progress in one shared workspace. Mokara helps small teams see what needs doing and keep work moving.",
   openGraph: {
-    title: "Mokara — task boards for small teams",
-    description: "Tasks, projects and weighted KPIs in one quiet board.",
+    title: "Mokara — your team's work, clearly in view",
+    description: "Tasks, deadlines, and project progress in one shared workspace for small teams.",
     images: ["/landing/og.jpg"],
   },
 };
 
-const TICKER = [
-  "statuses",
-  "priorities",
-  "due dates",
-  "projects",
-  "weighted KPIs",
-  "comments",
-  "heatmap",
-  "workspaces",
-  "invitations",
-  "self-hosted",
-  "docker releases",
+const VIEWS = [
+  {
+    id: "tasks",
+    label: "Tasks",
+    image: shotBoard,
+    alt: "Mokara task board with task groups, priorities, project labels, and due dates.",
+    caption: "Give the work a clear place to live, with priorities and deadlines in view.",
+  },
+  {
+    id: "projects",
+    label: "Projects",
+    image: shotTeam,
+    alt: "Mokara team workspace with project progress, team members, and personal KPIs.",
+    caption: "Keep projects, people, and progress connected in your team's workspace.",
+  },
+  {
+    id: "progress",
+    label: "Progress",
+    image: shotAnalytics,
+    alt: "Mokara progress heatmap showing task timelines and deadlines.",
+    caption: "See each task's progress against its deadline, not just a list of things to do.",
+  },
 ];
 
-const LEDGER: [string, string][] = [
-  ["01", "Threaded comments, one level deep, next to the task they're about"],
-  ["02", "Flags for the tasks that need attention today"],
-  ["03", "Filter, sort and group — remembered per view"],
-  ["04", "Personal workspace becomes a team on the first accepted invite"],
-  ["05", "Per-task KPI weights, capped at 100%"],
-  ["06", "Archived projects stay out of the way, never deleted by accident"],
-  ["07", "365-day deadline heatmap with hover detail on every cell"],
-  ["08", "Docker images on every release tag — deploy is a pull"],
+const BENEFITS = [
+  {
+    title: "Make responsibility clear.",
+    body: "Give a task an owner and a priority. Help people see what needs doing, and who is taking it forward.",
+    detail: "Task assignment · Priorities · Shared workspaces",
+    path: "M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM2 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6m1 4a5 5 0 0 1 5 5",
+  },
+  {
+    title: "Keep deadlines in sight.",
+    body: "Focus on today, look ahead to the week, and get in-app reminders when a due date is approaching.",
+    detail: "Due dates · Today / this week · Reminders",
+    path: "M8 3v4m8-4v4M4 10h16M8 15h3M7 5h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3Z",
+  },
+  {
+    title: "See the work moving.",
+    body: "Follow project progress and task activity. See what's getting done, without assembling another update.",
+    detail: "Projects · Progress heatmap · Activity analytics",
+    path: "M4 4v16h16M8 15l4-5 4 3 4-7",
+  },
 ];
 
 export default async function LandingPage() {
   const hasSession = (await cookies()).has(AUTH_COOKIE);
-  const authHref = hasSession ? "/tasks" : "/login";
-  const authLabel = hasSession ? "Open app" : "Log in";
+  const startHref = hasSession ? "/tasks" : "/signup";
+  const startLabel = hasSession ? "Open your workspace" : "Start free";
 
   return (
-    <main className="min-h-dvh font-body">
-      <AmbientCanvas />
-
-      <SiteHeader authHref={authHref} authLabel={authLabel} />
-
-      {/* hero — type left, product right (contained card, no bleed) */}
-      <section className="mx-auto max-w-6xl px-6 pt-14 sm:pt-20">
-        <HeroSplit authHref={authHref} authLabel={authLabel} />
-      </section>
-
-      {/* mono ticker */}
-      <div className="mt-14 overflow-hidden border-y border-[var(--color-border-soft)] py-3 sm:mt-20">
-        <div className="ticker-track flex w-max animate-[ticker_46s_linear_infinite] items-center gap-8 whitespace-nowrap font-label text-[0.7rem] font-medium uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">
-          {[...TICKER, ...TICKER].map((item, i) => (
-            <span key={i} className="flex items-center gap-8">
-              <span>{item}</span>
-              <span aria-hidden className="text-[var(--color-accent)]">
-                ·
-              </span>
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <Row
-        index="01"
-        kicker="Context"
-        title="Every task carries its conversation."
-        body="Open a task and the thread is right there — comments beside the status, priority and due date they're about. Nothing to link, nothing to lose."
-        items={[
-          "Threaded replies, one level deep",
-          "Author-only edit and delete",
-          "Posts optimistically, no spinners",
-        ]}
-        image={shotDrawer}
-        alt="A task drawer with status, priority and due-date chips, a project chip, weighted KPIs and a threaded comment"
-        flip
-        eager
+    <div className="public-site homepage">
+      <a className="homepage-skip" href="#main">
+        Skip to content
+      </a>
+      <SiteHeader
+        authHref={hasSession ? "/tasks" : "/login"}
+        authLabel={hasSession ? "Open app" : "Log in"}
       />
-      <Row
-        index="02"
-        kicker="Weight"
-        title="Progress you can weigh."
-        body="Bind KPIs to tasks with weights; progress is the weighted share of work actually done — per project and per KPI, computed from real task states."
-        items={[
-          "Personal KPIs, team projects",
-          "Per-task weights capped at 100%",
-          "Archived projects stay out of the way",
-        ]}
-        image={shotTeam}
-        alt="A workspace page with stacked project layers showing progress bars, beside the member list"
-      />
-      <Row
-        index="03"
-        kicker="Signal"
-        title="Charts that answer, not decorate."
-        body="A day-cell heatmap lays every task's runway against its deadline; activity lines are cumulative, so a quiet week still reads honestly."
-        items={[
-          "365-day heatmap, hover anywhere",
-          "Cumulative created / done lines",
-          "Trailing 14-day window, ending today",
-        ]}
-        image={shotAnalytics}
-        alt="The day-cell progress heatmap with overdue, in-progress and upcoming states"
-        flip
-      />
-
-      {/* feature ledger */}
-      <section className="border-t border-[var(--color-border-soft)]">
-        <div className="mx-auto max-w-6xl px-6 py-14 md:py-20">
-          <p className="m-0 font-label text-[0.7rem] font-medium uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">
-            <span className="text-[var(--color-accent)]">04</span> · Battery included
+      <main id="main">
+        <section className="home-hero public-container" aria-labelledby="hero-title">
+          <p className="home-eyebrow">Task and project tracking for small teams</p>
+          <h1 id="hero-title">
+            Your team’s work.
+            <br />
+            <span>Clearly in view.</span>
+          </h1>
+          <p className="home-lede">
+            Keep tasks, deadlines, and project progress in one shared workspace. A clearer picture
+            for the people doing the work—and the people keeping it on track.
           </p>
-          <h2 className="m-0 mt-3 font-display text-[2rem] font-semibold tracking-[-0.01em] sm:text-[2.4rem]">
-            Everything else, already.
-          </h2>
-          <div className="mt-8 grid gap-x-12 sm:grid-cols-2">
-            {LEDGER.map(([n, text]) => (
-              <div
-                key={n}
-                className="flex items-baseline gap-4 border-t border-[var(--color-border-soft)] py-3"
-              >
-                <span className="font-label text-[0.72rem] font-medium text-[var(--color-accent)]">
-                  {n}
-                </span>
-                <span className="text-[0.92rem] leading-relaxed text-[var(--color-ink-muted)]">
-                  {text}
-                </span>
+          <div className="home-actions">
+            <Link href={startHref} className="public-button public-button-primary">
+              {startLabel} <Arrow />
+            </Link>
+            <a href="#product" className="public-button public-button-secondary">
+              See Mokara in action
+            </a>
+          </div>
+          <p className="home-reassurance">
+            {hasSession
+              ? "Your shared workspace is ready when you are."
+              : "No credit card required · Built for small teams"}
+          </p>
+        </section>
+
+        <section
+          id="product"
+          className="home-product public-container"
+          aria-label="Mokara product screenshots"
+        >
+          <fieldset className="home-showcase">
+            <legend className="sr-only">Choose a Mokara screenshot to preview</legend>
+            {VIEWS.map((view, index) => (
+              <input
+                key={view.id}
+                type="radio"
+                name="product-view"
+                id={`view-${view.id}`}
+                className="sr-only home-view-control"
+                defaultChecked={index === 0}
+                aria-label={`${view.label} preview`}
+              />
+            ))}
+            <div className="home-showcase-heading">
+              <p>A closer look at Mokara</p>
+              <div className="home-view-options">
+                {VIEWS.map((view) => (
+                  <label key={view.id} htmlFor={`view-${view.id}`}>
+                    {view.label}
+                  </label>
+                ))}
               </div>
+              <span>Actual product screenshots</span>
+            </div>
+            <div className="home-showcase-stage">
+              {VIEWS.map((view, index) => (
+                <figure key={view.id} className={`home-preview home-preview-${view.id}`}>
+                  <a
+                    href={view.image.src}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`View ${view.label.toLowerCase()} screenshot full size (opens a new tab)`}
+                  >
+                    <Image
+                      src={view.image}
+                      alt={view.alt}
+                      sizes="(max-width: 600px) calc(100vw - 48px), (max-width: 1224px) calc(100vw - 96px), 1128px"
+                      loading={index === 0 ? "eager" : "lazy"}
+                      unoptimized
+                    />
+                    <span className="home-enlarge">
+                      View full size <Arrow />
+                    </span>
+                  </a>
+                  <figcaption>{view.caption}</figcaption>
+                </figure>
+              ))}
+            </div>
+          </fieldset>
+        </section>
+
+        <section className="home-benefits public-container" aria-labelledby="benefits-title">
+          <div className="home-section-heading">
+            <p className="home-eyebrow">Less coordinating. More moving forward.</p>
+            <h2 id="benefits-title">
+              A shared plan.
+              <br />A clearer working day.
+            </h2>
+            <p>
+              The essentials your team needs to make progress, without making the process the
+              biggest task of all.
+            </p>
+          </div>
+          <div className="home-benefit-grid">
+            {BENEFITS.map((benefit) => (
+              <article key={benefit.title} className="home-benefit">
+                <svg
+                  className="home-feature-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d={benefit.path} />
+                </svg>
+                <h3>{benefit.title}</h3>
+                <p>{benefit.body}</p>
+                <small>{benefit.detail}</small>
+              </article>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* final CTA */}
-      <section className="border-t border-[var(--color-border-soft)]">
-        <div className="mx-auto max-w-6xl px-6 py-16 text-center sm:py-24">
-          <h2 className="m-0 font-display text-[2.2rem] font-semibold tracking-[-0.01em] sm:text-[2.8rem]">
-            Start alone. <em className="italic text-[var(--color-accent)]">Invite when ready.</em>
-          </h2>
-          <p className="mx-auto mt-4 mb-0 max-w-md text-[0.98rem] leading-relaxed text-[var(--color-ink-muted)]">
-            Your workspace becomes a team the moment the first invitation is accepted — not before.
-          </p>
-          <Link
-            href="/signup"
-            className="mt-8 inline-block rounded-[var(--radius-btn)] bg-[var(--color-accent)] px-6 py-3 text-[0.95rem] font-semibold text-white shadow-[var(--shadow-accent)] transition-colors hover:bg-[var(--color-accent-hover)]"
-          >
-            Get started
-          </Link>
-          <p className="mb-0 mt-6 font-label text-[0.72rem] tracking-[0.06em] text-[var(--color-ink-faint)]">
-            free · self-hostable · your data, your server
-          </p>
-        </div>
-      </section>
+        <section className="home-context" aria-labelledby="context-title">
+          <div className="public-container home-context-layout">
+            <div className="home-context-copy">
+              <p className="home-eyebrow">Keep the context with the task</p>
+              <h2 id="context-title">
+                Less searching.
+                <br />
+                More getting it done.
+              </h2>
+              <p>
+                The conversation, the details, and the work itself shouldn’t live in three different
+                places. Open a task and keep the discussion right beside it.
+              </p>
+              <ul>
+                <li>Comments and replies stay with the task</li>
+                <li>Checklists break the work into smaller steps</li>
+                <li>Attachments keep useful files within reach</li>
+              </ul>
+              <a href="#product" className="home-text-link">
+                Take a closer look at Mokara <Arrow />
+              </a>
+            </div>
+            <figure className="home-context-image">
+              <a
+                href={shotDrawer.src}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="View task detail screenshot full size (opens a new tab)"
+              >
+                <Image
+                  src={shotDrawer}
+                  alt="Mokara task drawer showing the description, status, priority, due date, and threaded comments."
+                  sizes="(max-width: 600px) calc(100vw - 60px), (max-width: 1224px) 50vw, 600px"
+                  unoptimized
+                />
+                <span className="home-enlarge">
+                  View full size <Arrow />
+                </span>
+              </a>
+              <figcaption>Task details and discussion, together.</figcaption>
+            </figure>
+          </div>
+        </section>
 
+        <section id="faq" className="home-faq public-container" aria-labelledby="faq-title">
+          <div className="home-faq-heading">
+            <p className="home-eyebrow">Before you get started</p>
+            <h2 id="faq-title">
+              A few things
+              <br />
+              worth knowing.
+            </h2>
+            <p>Straight answers to the questions a small team is likely to ask first.</p>
+          </div>
+          <div className="home-faq-list">
+            <details>
+              <summary>Is Mokara for teams or individuals?</summary>
+              <p>
+                Both. Organise your own tasks in a personal workspace, or bring teammates into a
+                shared workspace. Mokara focuses on small teams who need a clear way to manage tasks
+                and projects together.
+              </p>
+            </details>
+            <details>
+              <summary>Can we try it for free?</summary>
+              <p>
+                Yes. The Free plan supports up to three people per team and includes the core task
+                features. You don’t need a credit card to create an account. See{" "}
+                <Link href="/pricing">Pricing</Link> for all plans and capacity limits.
+              </p>
+            </details>
+            <details>
+              <summary>How do I bring in my team?</summary>
+              <p>
+                Your teammates create an account, then you invite them by username from the Team
+                page. When the first invitation is accepted, your workspace becomes a team and the
+                work is shared.
+              </p>
+            </details>
+            <details>
+              <summary>Can we run it on our own server?</summary>
+              <p>
+                Yes. Self-hosting is available for free, without the hosted capacity caps. You
+                manage your own infrastructure and data. If you’d rather not manage a server, use
+                the hosted service.
+              </p>
+            </details>
+          </div>
+        </section>
+
+        <section className="home-closing public-container" aria-labelledby="closing-title">
+          <div>
+            <p className="home-eyebrow">Give everyone a clear next step</p>
+            <h2 id="closing-title">
+              Bring your team’s work
+              <br />
+              into clearer view.
+            </h2>
+            <p>
+              Start with one project. Add the next task.
+              <br />
+              Give your team a shared place to move forward.
+            </p>
+            <Link href={startHref} className="public-button public-button-light">
+              {hasSession ? "Open your workspace" : "Start your workspace for free"} <Arrow />
+            </Link>
+            {!hasSession && <small>No credit card required.</small>}
+          </div>
+        </section>
+      </main>
       <SiteFooter />
-    </main>
+    </div>
   );
 }
 
-function Row({
-  index,
-  kicker,
-  title,
-  body,
-  items,
-  image,
-  alt,
-  flip = false,
-  eager = false,
-}: {
-  index: string;
-  kicker: string;
-  title: string;
-  body: string;
-  items: string[];
-  image: StaticImageData;
-  alt: string;
-  flip?: boolean;
-  // The first row's screenshot is Chrome's LCP element on this page — the hero
-  // image starts at opacity 0 (its entrance animation), so invisible elements
-  // are skipped and this one wins. Eager-loading it still satisfies LCP; the
-  // lower rows stay lazy.
-  eager?: boolean;
-}) {
+function Arrow() {
   return (
-    <section className="border-t border-[var(--color-border-soft)]">
-      <div className="mx-auto grid max-w-6xl items-center gap-8 px-6 py-12 md:grid-cols-12 md:gap-10 md:py-16">
-        <div className={flip ? "md:order-2 md:col-span-5" : "md:col-span-5"}>
-          <Reveal>
-            <p className="m-0 flex items-baseline gap-2 font-label text-[0.7rem] font-medium uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">
-              <span className="text-[var(--color-accent)]">{index}</span> {kicker}
-            </p>
-            <h2 className="m-0 mt-3 font-display text-[1.8rem] font-semibold leading-[1.12] tracking-[-0.01em]">
-              {title}
-            </h2>
-            <p className="mb-0 mt-3 text-[0.98rem] leading-relaxed text-[var(--color-ink-muted)]">
-              {body}
-            </p>
-            <ul className="m-0 mt-6 list-none p-0">
-              {items.map((item) => (
-                <li
-                  key={item}
-                  className="border-t border-[var(--color-border-soft)] py-2 text-[0.88rem] text-[var(--color-ink-muted)]"
-                >
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </Reveal>
-        </div>
-        <div className={flip ? "md:order-1 md:col-span-7" : "md:col-span-7"}>
-          <Reveal>
-            <TiltPanel className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] shadow-[var(--shadow-card)] transition-[box-shadow] duration-200 ease-[var(--ease-snap)] hover:shadow-[var(--shadow-lift)]">
-              <Image
-                src={image}
-                alt={alt}
-                className="h-auto w-full"
-                unoptimized
-                loading={eager ? "eager" : undefined}
-              />
-            </TiltPanel>
-          </Reveal>
-        </div>
-      </div>
-    </section>
+    <svg
+      className="home-arrow"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M5 12h14m-5-5 5 5-5 5" />
+    </svg>
   );
 }

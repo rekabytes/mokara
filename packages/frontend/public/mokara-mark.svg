@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <title>Mokara curved M</title>
+  <rect width="64" height="64" rx="16" fill="#4338CA"/>
+  <path d="M16 45V26C16 22 18 19 22 19C25 19 27 21 29 25L32 33L35 25C37 21 39 19 42 19C46 19 48 22 48 26V45" stroke="#FFFFFF" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

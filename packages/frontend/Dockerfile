@@ -41,9 +41,11 @@ RUN pnpm build
 # ---- runner: no pnpm, no node_modules install, no toolchain ----
 FROM node:24-alpine AS runner
 WORKDIR /app
+# Production keeps 4701; the dev workflow builds this runner with 4704.
+ARG APP_PORT=4701
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
-    PORT=4701
+    PORT=${APP_PORT}
 # HOSTNAME must be explicit. The standalone server reads process.env.HOSTNAME,
 # and a container runtime sets that to the container id — binding to it works
 # only if that name resolves, so pin it to all interfaces instead.
@@ -58,7 +60,7 @@ COPY --from=build --chown=node:node /app/packages/frontend/.next/static ./packag
 COPY --from=build --chown=node:node /app/packages/frontend/public ./packages/frontend/public
 
 USER node
-EXPOSE 4701
+EXPOSE ${APP_PORT}
 
 # Any answer below 500 proves the server process is up and routing — / is a
 # redirect and protected pages answer 307, so requiring 2xx would report a

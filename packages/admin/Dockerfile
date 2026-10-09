@@ -38,8 +38,10 @@ COPY packages/admin packages/admin
 # ---- runner ----
 FROM node:24-alpine AS runner
 WORKDIR /app
+# Production keeps 4702; the dev workflow builds this runner with 4705.
+ARG APP_PORT=4702
 ENV NODE_ENV=production \
-    ADMIN_PORT=4702
+    ADMIN_PORT=${APP_PORT}
 
 # node_modules comes from the build stage whole: with shamefullyHoist the tree
 # is flat at /app/node_modules, and packages/admin/node_modules/.bin holds the
@@ -51,7 +53,7 @@ COPY --from=build /app/package.json /app/pnpm-workspace.yaml ./
 RUN chmod +x /app/packages/admin/scripts/start.sh
 
 USER node
-EXPOSE 4702
+EXPOSE ${APP_PORT}
 
 # /health answers without calling the backend (see src/index.ts), so this
 # reports "the console process is serving" — a down backend shows up as a 502 in

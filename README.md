@@ -211,9 +211,20 @@ the same internal Docker network:
 
 | Service  | Image tag | Domain                | Container port |
 | -------- | --------- | --------------------- | -------------- |
-| frontend | `dev`     | `dev.mokara.my`       | 4701           |
-| backend  | `dev`     | `dev-api.mokara.my`   | 4700           |
-| admin    | `dev`     | `dev-admin.mokara.my` | 4702           |
+| frontend | `dev`     | `dev.mokara.my`       | 4704           |
+| backend  | `dev`     | `dev-api.mokara.my`   | 4703           |
+| admin    | `dev`     | `dev-admin.mokara.my` | 4705           |
+
+The dev workflow passes `APP_PORT` to each Dockerfile. Dev images actually
+listen on and expose the ports above; production builds retain their defaults
+of backend 4700, frontend 4701, and admin 4702.
+
+In Coolify, set **Ports Exposes** to the service's dev port. If using host ports
+for a Cloudflare Tunnel, set matching **Ports Mappings**: backend `4703:4703`,
+frontend `4704:4704`, and admin `4705:4705`. Update only the dev tunnel origins to
+those ports, keeping the appropriate origin hostname for your tunnel setup.
+Remove or update any existing Coolify `PORT`/`ADMIN_PORT` overrides pointing at
+4700–4702; runtime environment variables override the image's defaults.
 
 Point those domains at the Coolify server and enable HTTPS. Supply registry
 credentials in Coolify if the GHCR packages are private. Publishing images does
@@ -224,18 +235,26 @@ fixed test build, use the same `dev-<full-commit-sha>` tag on all three services
 Image publication is not atomic across services, and rolling back images does
 not roll back migrations.
 
+Backend runtime settings:
+
+```dotenv
+PORT=4703
+ENV=production
+```
+
 Frontend runtime settings:
 
 ```dotenv
-BACKEND_URL=http://<dev-backend-internal-host>:4700
+PORT=4704
+BACKEND_URL=http://<dev-backend-internal-host>:4703
 NEXT_PUBLIC_SITE_URL=https://dev.mokara.my
 ```
 
 Admin runtime settings:
 
 ```dotenv
-BACKEND_URL=http://<dev-backend-internal-host>:4700
-ADMIN_PORT=4702
+BACKEND_URL=http://<dev-backend-internal-host>:4703
+ADMIN_PORT=4705
 ENV=production
 ```
 
@@ -252,7 +271,7 @@ The environment **mode** is the same, but the environment **values** are not:
 | ----------------------- | --------------------------------------------------------------------------------- |
 | `NODE_ENV`              | Keep `production` (already set in the images).                                    |
 | Backend/admin `ENV`     | Set `production` on both; HTTPS cookies must match the production-built client.   |
-| `PORT` / `ADMIN_PORT`   | Keep the service's normal container port.                                         |
+| `PORT` / `ADMIN_PORT`   | Backend `PORT=4703`, frontend `PORT=4704`, admin `ADMIN_PORT=4705`.               |
 | `DEPLOY_MODE`           | Match the behaviour being tested; use `hosted` to test hosted plan limits.        |
 | `DATABASE_URL`          | Separate staging database and credentials; never the production database.         |
 | `REDIS_URL`             | Separate staging Redis instance.                                                  |

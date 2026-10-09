@@ -49,8 +49,10 @@ RUN pnpm --filter @mokara/db generate
 # ---- runner ----
 FROM node:24-alpine AS runner
 WORKDIR /app
+# Production keeps 4700; the dev workflow builds this runner with 4703.
+ARG APP_PORT=4700
 ENV NODE_ENV=production \
-    PORT=4700
+    PORT=${APP_PORT}
 
 # node_modules and the workspace packages both come from the build stage, so the
 # `node_modules/@mokara/db` symlink still resolves to a real, generated-client-
@@ -64,7 +66,7 @@ COPY --from=build /app/package.json /app/pnpm-workspace.yaml ./
 RUN chmod +x /app/packages/backend/scripts/start.sh
 
 USER node
-EXPOSE 4700
+EXPOSE ${APP_PORT}
 
 # /health answers without touching the database (see routes + the request log
 # skip), so this reports "the process is serving" and a DB outage shows up as a

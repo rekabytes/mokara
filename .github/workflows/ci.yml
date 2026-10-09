@@ -90,10 +90,13 @@ jobs:
         include:
           - service: frontend
             dockerfile: packages/frontend/Dockerfile
+            port: 4704
           - service: backend
             dockerfile: packages/backend/Dockerfile
+            port: 4703
           - service: admin
             dockerfile: packages/admin/Dockerfile
+            port: 4705
 
     steps:
       - name: Checkout
@@ -128,6 +131,8 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
+          build-args: |
+            APP_PORT=${{ matrix.port }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

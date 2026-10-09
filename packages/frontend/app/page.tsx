@@ -9,6 +9,7 @@ import shotBoard from "../public/landing/hero-board.webp";
 import shotDrawer from "../public/landing/shot-drawer.webp";
 import shotTeam from "../public/landing/shot-team.webp";
 import shotAnalytics from "../public/landing/shot-analytics.webp";
+import { HomeBenefit } from "./HomeBenefit";
 import "./homepage.css";
 
 export const metadata: Metadata = {
@@ -82,87 +83,87 @@ export default async function LandingPage() {
         authLabel={hasSession ? "Open app" : "Log in"}
       />
       <main id="main">
-        <section className="home-hero public-container" aria-labelledby="hero-title">
-          <p className="home-eyebrow">Task and project tracking for small teams</p>
-          <h1 id="hero-title">
-            Your team’s work.
-            <br />
-            <span>Clearly in view.</span>
-          </h1>
-          <p className="home-lede">
-            Keep tasks, deadlines, and project progress in one shared workspace. A clearer picture
-            for the people doing the work—and the people keeping it on track.
-          </p>
-          <div className="home-actions">
-            <Link href={startHref} className="public-button public-button-primary">
-              {startLabel} <Arrow />
-            </Link>
-            <a href="#product" className="public-button public-button-secondary">
-              See Mokara in action
-            </a>
-          </div>
-          <p className="home-reassurance">
-            {hasSession
-              ? "Your shared workspace is ready when you are."
-              : "No credit card required · Built for small teams"}
-          </p>
-        </section>
+        <div className="home-intro public-container">
+          <section className="home-hero" aria-labelledby="hero-title">
+            <p className="home-eyebrow">Task and project tracking for small teams</p>
+            <h1 id="hero-title">
+              Your team’s work.
+              <br />
+              <span>Clearly in view.</span>
+            </h1>
+            <div className="home-hero-content">
+              <p className="home-lede">
+                Keep tasks, deadlines, and project progress in one shared workspace. A clearer
+                picture for the people doing the work—and the people keeping it on track.
+              </p>
+              <div className="home-actions">
+                <Link href={startHref} className="public-button public-button-primary">
+                  {startLabel} <Arrow />
+                </Link>
+                <a href="#product" className="public-button public-button-secondary">
+                  See Mokara in action
+                </a>
+              </div>
+              <p className="home-reassurance">
+                {hasSession
+                  ? "Your shared workspace is ready when you are."
+                  : "No credit card required · Built for small teams"}
+              </p>
+            </div>
+          </section>
 
-        <section
-          id="product"
-          className="home-product public-container"
-          aria-label="Mokara product screenshots"
-        >
-          <fieldset className="home-showcase">
-            <legend className="sr-only">Choose a Mokara screenshot to preview</legend>
-            {VIEWS.map((view, index) => (
-              <input
-                key={view.id}
-                type="radio"
-                name="product-view"
-                id={`view-${view.id}`}
-                className="sr-only home-view-control"
-                defaultChecked={index === 0}
-                aria-label={`${view.label} preview`}
-              />
-            ))}
-            <div className="home-showcase-heading">
-              <p>A closer look at Mokara</p>
-              <div className="home-view-options">
-                {VIEWS.map((view) => (
-                  <label key={view.id} htmlFor={`view-${view.id}`}>
-                    {view.label}
-                  </label>
+          <section id="product" className="home-product" aria-label="Mokara product screenshots">
+            <fieldset className="home-showcase">
+              <legend className="sr-only">Choose a Mokara screenshot to preview</legend>
+              {VIEWS.map((view, index) => (
+                <input
+                  key={view.id}
+                  type="radio"
+                  name="product-view"
+                  id={`view-${view.id}`}
+                  className="sr-only home-view-control"
+                  defaultChecked={index === 0}
+                  aria-label={`${view.label} preview`}
+                />
+              ))}
+              <div className="home-showcase-heading">
+                <p>A closer look at Mokara</p>
+                <div className="home-view-options">
+                  {VIEWS.map((view) => (
+                    <label key={view.id} htmlFor={`view-${view.id}`}>
+                      {view.label}
+                    </label>
+                  ))}
+                </div>
+                <span>Actual product screenshots</span>
+              </div>
+              <div className="home-showcase-stage">
+                {VIEWS.map((view, index) => (
+                  <figure key={view.id} className={`home-preview home-preview-${view.id}`}>
+                    <a
+                      href={view.image.src}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`View ${view.label.toLowerCase()} screenshot full size (opens a new tab)`}
+                    >
+                      <Image
+                        src={view.image}
+                        alt={view.alt}
+                        sizes="(max-width: 900px) calc(100vw - 64px), (max-width: 1440px) 54vw, 720px"
+                        loading={index === 0 ? "eager" : "lazy"}
+                        unoptimized
+                      />
+                      <span className="home-enlarge">
+                        View full size <Arrow />
+                      </span>
+                    </a>
+                    <figcaption>{view.caption}</figcaption>
+                  </figure>
                 ))}
               </div>
-              <span>Actual product screenshots</span>
-            </div>
-            <div className="home-showcase-stage">
-              {VIEWS.map((view, index) => (
-                <figure key={view.id} className={`home-preview home-preview-${view.id}`}>
-                  <a
-                    href={view.image.src}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`View ${view.label.toLowerCase()} screenshot full size (opens a new tab)`}
-                  >
-                    <Image
-                      src={view.image}
-                      alt={view.alt}
-                      sizes="(max-width: 600px) calc(100vw - 48px), (max-width: 1224px) calc(100vw - 96px), 1128px"
-                      loading={index === 0 ? "eager" : "lazy"}
-                      unoptimized
-                    />
-                    <span className="home-enlarge">
-                      View full size <Arrow />
-                    </span>
-                  </a>
-                  <figcaption>{view.caption}</figcaption>
-                </figure>
-              ))}
-            </div>
-          </fieldset>
-        </section>
+            </fieldset>
+          </section>
+        </div>
 
         <section className="home-benefits public-container" aria-labelledby="benefits-title">
           <div className="home-section-heading">
@@ -177,8 +178,8 @@ export default async function LandingPage() {
             </p>
           </div>
           <div className="home-benefit-grid">
-            {BENEFITS.map((benefit) => (
-              <article key={benefit.title} className="home-benefit">
+            {BENEFITS.map((benefit, index) => (
+              <HomeBenefit key={benefit.title} index={index}>
                 <svg
                   className="home-feature-icon"
                   viewBox="0 0 24 24"
@@ -194,7 +195,7 @@ export default async function LandingPage() {
                 <h3>{benefit.title}</h3>
                 <p>{benefit.body}</p>
                 <small>{benefit.detail}</small>
-              </article>
+              </HomeBenefit>
             ))}
           </div>
         </section>
@@ -291,21 +292,25 @@ export default async function LandingPage() {
 
         <section className="home-closing public-container" aria-labelledby="closing-title">
           <div>
-            <p className="home-eyebrow">Give everyone a clear next step</p>
-            <h2 id="closing-title">
-              Bring your team’s work
-              <br />
-              into clearer view.
-            </h2>
-            <p>
-              Start with one project. Add the next task.
-              <br />
-              Give your team a shared place to move forward.
-            </p>
-            <Link href={startHref} className="public-button public-button-light">
-              {hasSession ? "Open your workspace" : "Start your workspace for free"} <Arrow />
-            </Link>
-            {!hasSession && <small>No credit card required.</small>}
+            <div className="home-closing-copy">
+              <p className="home-eyebrow">Give everyone a clear next step</p>
+              <h2 id="closing-title">
+                Bring your team’s work
+                <br />
+                into clearer view.
+              </h2>
+              <p>
+                Start with one project. Add the next task.
+                <br />
+                Give your team a shared place to move forward.
+              </p>
+            </div>
+            <div className="home-closing-action">
+              <Link href={startHref} className="public-button public-button-light">
+                {hasSession ? "Open your workspace" : "Start your workspace for free"} <Arrow />
+              </Link>
+              {!hasSession && <small>No credit card required.</small>}
+            </div>
           </div>
         </section>
       </main>

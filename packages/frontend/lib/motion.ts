@@ -161,3 +161,12 @@ export const tiltSpring: Transition & { stiffness: number; damping: number; mass
   damping: 24,
   mass: 0.6,
 };
+
+/** Viewport-triggered keyframes keep homepage cards visible in server HTML. */
+export const homepageBenefitReveal: Variants = {
+  show: (index: number) => ({
+    opacity: [0, 1],
+    y: [14, 0],
+    transition: { ...snap(DUR.panel + DUR.fast), delay: index * DUR.fast },
+  }),
+};

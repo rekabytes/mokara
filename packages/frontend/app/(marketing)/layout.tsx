@@ -16,7 +16,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
   const hasSession = (await cookies()).has(AUTH_COOKIE);
 
   return (
-    <div className="public-site flex min-h-dvh flex-col font-body">
+    <div className="public-site public-marketing flex min-h-dvh flex-col font-body">
       <SiteHeader
         authHref={hasSession ? "/tasks" : "/login"}
         authLabel={hasSession ? "Open app" : "Log in"}

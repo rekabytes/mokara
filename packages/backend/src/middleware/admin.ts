@@ -1,5 +1,5 @@
 import type { Context, Next } from "hono";
-import { adminConfigured } from "../env.ts";
+import { adminConfigured, env } from "../env.ts";
 import { verifyAdminToken } from "../lib/admin-token.ts";
 
 // The console's gate. Two deliberate differences from middleware/auth.ts:
@@ -16,6 +16,7 @@ import { verifyAdminToken } from "../lib/admin-token.ts";
 // No Redis here on purpose: an 8h expiry is the whole revocation story for a
 // single operator (see lib/admin-token.ts).
 export async function adminRequired(c: Context, next: Next): Promise<Response | void> {
+  c.header("cache-control", "no-store");
   if (!adminConfigured) {
     return c.json({ error: "not_found", message: "not found" }, 404);
   }
@@ -25,5 +26,7 @@ export async function adminRequired(c: Context, next: Next): Promise<Response | 
   if (claims === null) {
     return c.json({ error: "admin_unauthorized", message: "admin login required" }, 401);
   }
+  // Single configured operator account; never infer an actor from input.
+  c.set("adminActor", env.ADMIN_USERNAME);
   await next();
 }

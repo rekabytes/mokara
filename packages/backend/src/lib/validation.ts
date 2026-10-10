@@ -246,3 +246,47 @@ export const adminLoginSchema = z
 // the console can never write a value the DB CHECK would reject or that
 // limitsFor() would silently read as the tightest tier.
 export const adminPlanSchema = z.object({ plan: z.enum(PLAN_IDS) }).strict();
+export const adminUserParamSchema = z.object({ id: z.uuid() }).strict();
+const adminSearch = z.string().trim().max(100).default("");
+export const adminSupportQuerySchema = z
+  .object({ page: z.coerce.number().int().min(1).max(10000).default(1), q: adminSearch })
+  .strict();
+export const adminBillingQuerySchema = adminSupportQuerySchema
+  .extend({
+    status: z
+      .enum([
+        "",
+        "unknown",
+        "none",
+        "active",
+        "trialing",
+        "past_due",
+        "unpaid",
+        "canceled",
+        "paused",
+        "incomplete",
+        "incomplete_expired",
+        "error",
+        "canceling",
+        "payment_failed",
+        "grant",
+      ])
+      .default(""),
+  })
+  .strict();
+export const adminAuditQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).max(10000).default(1),
+    actor: adminSearch,
+    user: adminSearch,
+    action: z.enum(["", "plan_override_changed"]).default(""),
+    from: z.iso.date().optional(),
+    to: z.iso.date().optional(),
+  })
+  .strict()
+  .refine((value) => !value.from || !value.to || value.from <= value.to, {
+    message: "from must not be after to",
+  });
+export const adminPageSchema = z
+  .object({ page: z.coerce.number().int().min(1).max(10000).default(1) })
+  .strict();

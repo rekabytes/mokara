@@ -8,7 +8,18 @@ import { safeEqual } from "./lib/safe-equal.ts";
 import { securityHeaders } from "./lib/security.ts";
 import { backend, messageFrom, tokenFrom } from "./lib/backend.ts";
 import { ADMIN_CSS, ADMIN_JS } from "./assets.ts";
-import { loginPage, signedOutPage, userPage, usersPage } from "./pages.ts";
+import {
+  loginPage,
+  signedOutPage,
+  userPage,
+  usersPage,
+  overviewPage,
+  attentionPage,
+  auditPage,
+  workspacesPage,
+  workspacePage,
+  billingPage,
+} from "./pages.ts";
 
 // The operator console: a session gate and a proxy, nothing else. It holds no
 // database URL and no Stripe key — every read and write goes through the
@@ -102,7 +113,7 @@ app.post("/login", async (c) => {
       path: "/",
       maxAge: ADMIN_TOKEN_TTL_S,
     });
-    return c.redirect("/users");
+    return c.redirect("/overview");
   }
 
   if (answer.status === 401) {
@@ -156,7 +167,17 @@ async function sessionRequired(c: Context, next: Next): Promise<Response | void>
 
 // ---- pages ----------------------------------------------------------------
 
-app.get("/", sessionRequired, (c) => c.redirect("/users"));
+app.get("/", sessionRequired, (c) => c.redirect("/overview"));
+app.get("/overview", sessionRequired, (c) => c.html(overviewPage()));
+app.get("/attention", sessionRequired, (c) => c.html(attentionPage()));
+app.get("/audit", sessionRequired, (c) => c.html(auditPage()));
+app.get("/workspaces", sessionRequired, (c) => c.html(workspacesPage()));
+app.get("/workspaces/:id", sessionRequired, (c) => {
+  const id = c.req.param("id");
+  if (id === undefined || !UUID_RE.test(id)) return c.body("Not found", 404);
+  return c.html(workspacePage(id));
+});
+app.get("/billing", sessionRequired, (c) => c.html(billingPage()));
 
 app.get("/users", sessionRequired, (c) => c.html(usersPage()));
 
@@ -175,6 +196,51 @@ function mirror(c: Context, answer: { status: number; json: unknown }): Response
     "content-type": "application/json; charset=utf-8",
   });
 }
+
+app.get("/api/overview", sessionRequired, async (c) =>
+  mirror(c, await backend("GET", "/api/admin/overview", { token: sessionToken(c) }))
+);
+for (const resource of [
+  "attention",
+  "audit",
+  "workspaces",
+  "billing",
+  "billing/history",
+] as const) {
+  app.get(`/api/${resource}`, sessionRequired, async (c) => {
+    const query = new URLSearchParams();
+    const keys =
+      resource === "audit"
+        ? ["page", "actor", "user", "action", "from", "to"]
+        : resource === "billing"
+          ? ["page", "q", "status"]
+          : resource === "attention"
+            ? ["page"]
+            : ["page", "q"];
+    for (const key of keys) {
+      const value = c.req.query(key);
+      if (value !== undefined && value !== "") query.set(key, value);
+    }
+    return mirror(
+      c,
+      await backend("GET", `/api/admin/${resource}?${query}`, {
+        token: sessionToken(c),
+      })
+    );
+  });
+}
+
+app.get("/api/workspaces/:id", sessionRequired, async (c) => {
+  const id = c.req.param("id");
+  if (id === undefined || !UUID_RE.test(id))
+    return c.json({ error: "not_found", message: "workspace not found" }, 404);
+  return mirror(
+    c,
+    await backend("GET", `/api/admin/workspaces/${encodeURIComponent(id)}`, {
+      token: sessionToken(c),
+    })
+  );
+});
 
 app.get("/api/users", sessionRequired, async (c) =>
   mirror(c, await backend("GET", "/api/admin/users", { token: sessionToken(c) }))

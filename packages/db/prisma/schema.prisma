@@ -10,62 +10,103 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  username     String   @unique @db.Citext
-  passwordHash String   @map("password_hash")
-  displayName  String?  @map("display_name")
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username         String    @unique @db.Citext
+  passwordHash     String    @map("password_hash")
+  displayName      String?   @map("display_name")
   // PRD-11: subscription tier (free | starter | pro | ultra). Lives on the
   // user, not the team — a workspace's tier is its leader's plan. Plain String
   // + DB CHECK like kind/status. Writers: the Phase 2 webhook/sync mapping
   // (lib/billing.ts) and the operator console's override (routes/admin.ts),
   // which is the comp/grant path and logs every change.
-  plan         String   @default("free")
+  plan             String    @default("free")
   // Operator grants (2026-09-09): `plan` above is Stripe's opinion and only
   // lib/billing.ts writes it. This column is the console's grant and it WINS at
   // read time — every tier read goes through effectivePlan() in lib/plans.ts.
   // NULL for almost everyone; applying a real paid subscription clears it, so
   // money stays the source of truth. Two writers, two columns, no reconciliation.
-  planOverride   String?  @map("plan_override")
+  planOverride     String?   @map("plan_override")
   // Owner (2026-09-06): last container the user selected — server-side UI
   // state so a refresh restores "where you work" without device storage
   // (cookie policy: no localStorage). GET /teams filters it against live
   // membership; the FK clears it when the container is deleted.
-  lastContainerId String? @map("last_container_id") @db.Uuid
+  lastContainerId  String?   @map("last_container_id") @db.Uuid
   // PRD-13: first-run spotlight tour. NULL = never resolved, so the tour runs —
   // a fresh account, an account that predates the column, or one abandoned
   // mid-tour. 'completed' (reached the last step) and 'skipped' (Skip / close /
   // Esc) both mean never show it again. Exactly one writer: PATCH
   // /me/onboarding. tourResolvedAt is bookkeeping — no visibility rule reads it.
-  tourState      String?   @map("tour_state")
-  tourResolvedAt DateTime? @map("tour_resolved_at") @db.Timestamptz(3)
+  tourState        String?   @map("tour_state")
+  tourResolvedAt   DateTime? @map("tour_resolved_at") @db.Timestamptz(3)
   // PRD-11 Phase 2: Stripe billing linkage, maintained ONLY by the webhook
   // (+ the sync endpoint running the same mapping). All nullable: free and
   // self-hosted accounts have none. grace_until = paid features still on
   // while a failed payment recovers; period_end = current paid period.
+  billingStatus String? @map("billing_status")
+  billingCancelAtPeriodEnd Boolean? @map("billing_cancel_at_period_end")
+  billingCancelAt DateTime? @map("billing_cancel_at") @db.Timestamptz(3)
+  billingVerifiedAt DateTime? @map("billing_verified_at") @db.Timestamptz(3)
+  billingAttemptedAt DateTime? @map("billing_attempted_at") @db.Timestamptz(3)
+  billingErrorCode String? @map("billing_error_code")
+  billingInvoiceStatus String? @map("billing_invoice_status")
+  billingInvoiceObservedAt DateTime? @map("billing_invoice_observed_at") @db.Timestamptz(3)
+  billingReconciliations BillingReconciliationEvent[]
   stripeCustomerId String?   @map("stripe_customer_id")
-  graceUntil       DateTime?  @map("grace_until") @db.Timestamptz(3)
-  periodEnd        DateTime?  @map("period_end") @db.Timestamptz(3)
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  graceUntil       DateTime? @map("grace_until") @db.Timestamptz(3)
+  periodEnd        DateTime? @map("period_end") @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  ownedTeams        Team[]           @relation("TeamOwner")
+  ownedTeams        Team[]                   @relation("TeamOwner")
   memberships       TeamMember[]
-  invitationsSent   TeamInvitation[] @relation("Inviter")
-  invitationsTarget TeamInvitation[] @relation("Invitee")
+  invitationsSent   TeamInvitation[]         @relation("Inviter")
+  invitationsTarget TeamInvitation[]         @relation("Invitee")
   comments          Comment[]
-  taskEvents        TaskEvent[]      @relation("TaskEventActor")
-  taskDueChanges    TaskDueChange[]  @relation("TaskDueChangeActor")
-  projects          Project[]        @relation("ProjectOwner")
-  kpis              Kpi[]            @relation("KpiOwner")
+  taskEvents        TaskEvent[]              @relation("TaskEventActor")
+  taskDueChanges    TaskDueChange[]          @relation("TaskDueChangeActor")
+  projects          Project[]                @relation("ProjectOwner")
+  kpis              Kpi[]                    @relation("KpiOwner")
   notifications     Notification[]
-  createdTasks      Task[]           @relation("TaskCreator")
-  assignedTasks     Task[]           @relation("TaskAssignee")
+  createdTasks      Task[]                   @relation("TaskCreator")
+  assignedTasks     Task[]                   @relation("TaskAssignee")
   attachments       Attachment[]
+  adminAuditEvents  AdminAuditEvent[]
   githubConnection  GitHubAccountConnection?
-  githubIssueLinks  GitHubIssueLink[] @relation("GitHubIssueCreator")
-  lastContainer     Team?            @relation("LastContainer", fields: [lastContainerId], references: [id], onDelete: SetNull)
+  githubIssueLinks  GitHubIssueLink[]        @relation("GitHubIssueCreator")
+  lastContainer     Team?                    @relation("LastContainer", fields: [lastContainerId], references: [id], onDelete: SetNull)
 
   @@map("users")
+}
+
+// Classified provider reconciliation outcomes, never raw provider payloads.
+model BillingReconciliationEvent {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String? @map("user_id") @db.Uuid
+  source String
+  outcome String
+  errorCode String? @map("error_code")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  @@index([createdAt, id])
+  @@index([userId])
+  @@map("billing_reconciliation_events")
+}
+
+// Durable operator-account audit; a deleted target keeps its username snapshot.
+model AdminAuditEvent {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actor          String
+  action         String
+  targetUserId   String?  @map("target_user_id") @db.Uuid
+  targetUsername String   @map("target_username")
+  fromPlan       String?  @map("from_plan")
+  toPlan         String?  @map("to_plan")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  targetUser     User?    @relation(fields: [targetUserId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt, id])
+  @@index([targetUserId])
+  @@map("admin_audit_events")
 }
 
 model Team {
@@ -83,15 +124,15 @@ model Team {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  owner       User             @relation("TeamOwner", fields: [ownerId], references: [id])
-  lastSelectedBy User[]        @relation("LastContainer")
-  members     TeamMember[]
-  invitations TeamInvitation[]
-  tasks       Task[]
-  taskEvents  TaskEvent[]
-  projects    Project[]
-  kpis        Kpi[]
-  attachments Attachment[]
+  owner          User             @relation("TeamOwner", fields: [ownerId], references: [id])
+  lastSelectedBy User[]           @relation("LastContainer")
+  members        TeamMember[]
+  invitations    TeamInvitation[]
+  tasks          Task[]
+  taskEvents     TaskEvent[]
+  projects       Project[]
+  kpis           Kpi[]
+  attachments    Attachment[]
 
   @@map("teams")
 }
@@ -147,16 +188,16 @@ model Task {
   creatorId   String?   @map("creator_id") @db.Uuid
   assigneeId  String?   @map("assignee_id") @db.Uuid
 
-  team       Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  project    Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  creator    User?           @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: SetNull)
-  assignee   User?           @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  comments   Comment[]
-  events     TaskEvent[]
-  dueChanges TaskDueChange[]
-  kpiBindings TaskKpi[]
-  subtaskItems SubtaskItem[]
-  attachments Attachment[]
+  team            Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  project         Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  creator         User?            @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  assignee        User?            @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  comments        Comment[]
+  events          TaskEvent[]
+  dueChanges      TaskDueChange[]
+  kpiBindings     TaskKpi[]
+  subtaskItems    SubtaskItem[]
+  attachments     Attachment[]
   githubIssueLink GitHubIssueLink?
 
   @@index([teamId, status])
@@ -202,7 +243,7 @@ model GitHubInstallation {
   createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  connections GitHubAccountInstallation[]
+  connections  GitHubAccountInstallation[]
   repositories GitHubRepository[]
 
   @@map("github_installations")
@@ -234,9 +275,9 @@ model GitHubRepository {
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  installation GitHubInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  installation GitHubInstallation        @relation(fields: [installationId], references: [id], onDelete: Cascade)
   connections  GitHubAccountRepository[]
-  issueLinks    GitHubIssueLink[]
+  issueLinks   GitHubIssueLink[]
 
   @@unique([installationId, githubRepositoryId])
   @@index([installationId, active])
@@ -258,31 +299,31 @@ model GitHubAccountRepository {
 }
 
 model GitHubIssueLink {
-  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  taskId                 String    @unique @map("task_id") @db.Uuid
-  repositoryId           String    @map("repository_id") @db.Uuid
-  createdByUserId        String?   @map("created_by_user_id") @db.Uuid
-  connectionId           String?   @map("connection_id") @db.Uuid
-  githubIssueId          BigInt?   @map("github_issue_id")
-  issueNumber            Int?      @map("issue_number")
-  issueUrl               String?   @map("issue_url")
-  repositoryFullName     String    @map("repository_full_name")
-  status                 String    @default("creating")
-  attemptCount           Int       @default(1) @map("attempt_count")
-  lastErrorCode          String?   @map("last_error_code")
-  lastAttemptAt          DateTime  @default(now()) @map("last_attempt_at") @db.Timestamptz(3)
-  linkedAt               DateTime? @map("linked_at") @db.Timestamptz(3)
-  syncStatus             String    @default("idle") @map("sync_status")
-  syncErrorCode          String?   @map("sync_error_code")
-  issueState             String?   @map("issue_state")
-  lastSyncedAt           DateTime? @map("last_synced_at") @db.Timestamptz(3)
-  githubUpdatedAt        DateTime? @map("github_updated_at") @db.Timestamptz(3)
-  localStatusAt          DateTime? @map("local_status_at") @db.Timestamptz(3)
-  syncRevision           Int       @default(0) @map("sync_revision")
-  desiredState           String?   @map("desired_state")
-  pullRequests           GitHubPullRequestLink[]
-  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                 String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId             String                  @unique @map("task_id") @db.Uuid
+  repositoryId       String                  @map("repository_id") @db.Uuid
+  createdByUserId    String?                 @map("created_by_user_id") @db.Uuid
+  connectionId       String?                 @map("connection_id") @db.Uuid
+  githubIssueId      BigInt?                 @map("github_issue_id")
+  issueNumber        Int?                    @map("issue_number")
+  issueUrl           String?                 @map("issue_url")
+  repositoryFullName String                  @map("repository_full_name")
+  status             String                  @default("creating")
+  attemptCount       Int                     @default(1) @map("attempt_count")
+  lastErrorCode      String?                 @map("last_error_code")
+  lastAttemptAt      DateTime                @default(now()) @map("last_attempt_at") @db.Timestamptz(3)
+  linkedAt           DateTime?               @map("linked_at") @db.Timestamptz(3)
+  syncStatus         String                  @default("idle") @map("sync_status")
+  syncErrorCode      String?                 @map("sync_error_code")
+  issueState         String?                 @map("issue_state")
+  lastSyncedAt       DateTime?               @map("last_synced_at") @db.Timestamptz(3)
+  githubUpdatedAt    DateTime?               @map("github_updated_at") @db.Timestamptz(3)
+  localStatusAt      DateTime?               @map("local_status_at") @db.Timestamptz(3)
+  syncRevision       Int                     @default(0) @map("sync_revision")
+  desiredState       String?                 @map("desired_state")
+  pullRequests       GitHubPullRequestLink[]
+  createdAt          DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   task          Task                     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   repository    GitHubRepository         @relation(fields: [repositoryId], references: [id], onDelete: Restrict)
@@ -296,9 +337,9 @@ model GitHubIssueLink {
 }
 
 model GitHubPullRequestLink {
-  issueLinkId   String @map("issue_link_id") @db.Uuid
-  pullRequestId BigInt @map("pull_request_id")
-  updatedAt     DateTime @map("updated_at") @db.Timestamptz(3)
+  issueLinkId   String          @map("issue_link_id") @db.Uuid
+  pullRequestId BigInt          @map("pull_request_id")
+  updatedAt     DateTime        @map("updated_at") @db.Timestamptz(3)
   issueLink     GitHubIssueLink @relation(fields: [issueLinkId], references: [id], onDelete: Cascade)
 
   @@id([issueLinkId, pullRequestId])
@@ -309,17 +350,17 @@ model GitHubPullRequestLink {
 // Durable inbound webhook inbox and outbound status outbox. No credentials or
 // entire webhook bodies are stored: payloads contain only validated coordinates.
 model GitHubSyncJob {
-  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   kind          String
-  deliveryId    String? @unique @map("delivery_id")
+  deliveryId    String?   @unique @map("delivery_id")
   payload       Json
-  attempts      Int @default(0)
-  availableAt   DateTime @default(now()) @map("available_at") @db.Timestamptz(3)
+  attempts      Int       @default(0)
+  availableAt   DateTime  @default(now()) @map("available_at") @db.Timestamptz(3)
   lockedUntil   DateTime? @map("locked_until") @db.Timestamptz(3)
-  leaseToken    String? @map("lease_token") @db.Uuid
+  leaseToken    String?   @map("lease_token") @db.Uuid
   completedAt   DateTime? @map("completed_at") @db.Timestamptz(3)
-  lastErrorCode String? @map("last_error_code")
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastErrorCode String?   @map("last_error_code")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([completedAt, availableAt])
   @@map("github_sync_jobs")
@@ -348,10 +389,10 @@ model Comment {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  task    Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  author  User      @relation(fields: [authorId], references: [id])
-  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies Comment[] @relation("CommentReplies")
+  task        Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author      User         @relation(fields: [authorId], references: [id])
+  parent      Comment?     @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies     Comment[]    @relation("CommentReplies")
   attachments Attachment[]
 
   @@index([taskId, createdAt])
@@ -360,18 +401,18 @@ model Comment {
 }
 
 model TaskEvent {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teamId     String   @map("team_id") @db.Uuid
-  taskId     String   @map("task_id") @db.Uuid
-  actorId    String?  @map("actor_id") @db.Uuid
-  source     String   @default("mokara")
-  githubLogin String? @map("github_login")
-  fromStatus String?  @map("from_status")
-  toStatus   String   @map("to_status")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId      String   @map("team_id") @db.Uuid
+  taskId      String   @map("task_id") @db.Uuid
+  actorId     String?  @map("actor_id") @db.Uuid
+  source      String   @default("mokara")
+  githubLogin String?  @map("github_login")
+  fromStatus  String?  @map("from_status")
+  toStatus    String   @map("to_status")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  team  Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  task  Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  team  Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  task  Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
   actor User? @relation("TaskEventActor", fields: [actorId], references: [id], onDelete: Restrict)
 
   @@index([teamId, createdAt])
@@ -438,7 +479,7 @@ model Kpi {
 model TaskKpi {
   taskId String @map("task_id") @db.Uuid
   kpiId  String @map("kpi_id") @db.Uuid
-  weight Int    // percent 1–100; per-task total ≤ 100 enforced in the route
+  weight Int // percent 1–100; per-task total ≤ 100 enforced in the route
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   kpi  Kpi  @relation(fields: [kpiId], references: [id], onDelete: Cascade)
@@ -470,10 +511,10 @@ model Attachment {
   storageKey  String   @unique @map("storage_key")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  task     Task?      @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  comment  Comment?   @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  team     Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  uploader User       @relation(fields: [uploaderId], references: [id])
+  task     Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  comment  Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  team     Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  uploader User     @relation(fields: [uploaderId], references: [id])
 
   @@index([taskId])
   @@index([commentId])

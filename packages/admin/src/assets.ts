@@ -47,7 +47,20 @@ body {
 
 .topbar nav a:hover { color: var(--text); }
 
-.topbar nav { display: flex; align-items: center; gap: 1rem; }
+.topbar nav { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; }
+.topbar { flex-wrap: wrap; }
+.table-scroll { max-width: 100%; overflow-x: auto; }
+.table-wide table { min-width: 34rem; }
+.table-scroll:not(.table-wide) th:first-child,
+.table-scroll:not(.table-wide) td:first-child { white-space: normal; overflow-wrap: anywhere; }
+.card h2 { margin-top: 0; }
+.refresh-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+.pager { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin-top: 0.75rem; }
+.pager a { color: var(--accent); }
+.filter-form { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: end; margin: 1rem 0; }
+.filter-form label { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; font-size: 0.8rem; }
+.filter-form input, .filter-form select { max-width: 100%; padding: 0.45rem; background: var(--panel); border: 1px solid var(--line); color: var(--text); font: inherit; }
+.filter-form a { color: var(--accent); }
 
 .topbar nav form { margin: 0; }
 
@@ -97,6 +110,7 @@ td a:hover { text-decoration: underline; }
 .badge-ultra { color: #d9b8e8; border-color: #3d3346; }
 
 .badge-grant { color: #e3c98f; border-color: #4a4130; }
+.badge-warning { color: var(--danger); border-color: var(--danger); }
 
 .plan-cell { display: inline-flex; align-items: center; gap: 0.35rem; }
 
@@ -110,7 +124,8 @@ td a:hover { text-decoration: underline; }
 .facts dt { color: var(--muted); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; }
 .facts dd { margin: 0.1rem 0 0; }
 
-h2 { font-size: 0.95rem; margin: 1.4rem 0 0.6rem; }
+h2 { font-size: 0.95rem; margin: 1.4rem 0 0.6rem; overflow-wrap: anywhere; }
+.facts dd, .card h1 { overflow-wrap: anywhere; }
 
 .plan-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 
@@ -231,7 +246,15 @@ export const ADMIN_JS = `
       tbody.append(tr);
     }
     el.append(thead, tbody);
-    return el;
+    const wrapper = document.createElement("div");
+    wrapper.className = headers.length > 2 ? "table-scroll table-wide" : "table-scroll";
+    if (headers.length > 2) {
+      wrapper.tabIndex = 0;
+      wrapper.setAttribute("role", "region");
+      wrapper.setAttribute("aria-label", headers.join(" / "));
+    }
+    wrapper.append(el);
+    return wrapper;
   }
 
   function link(href, text) {
@@ -272,6 +295,232 @@ export const ADMIN_JS = `
     return res.json();
   }
 
+  function paragraph(text) {
+    const p = document.createElement("p");
+    p.className = "muted small";
+    p.textContent = text;
+    return p;
+  }
+
+  function heading(text) {
+    const h = document.createElement("h2");
+    h.textContent = text;
+    content.append(h);
+  }
+
+  function count(value) { return value === null || value === undefined ? "Unavailable" : String(value); }
+  function attentionCount(value) {
+    const span = document.createElement("span");
+    span.className = value === null || value > 0 ? "badge badge-warning" : "badge";
+    span.textContent = count(value);
+    return span;
+  }
+  function timestamp(value) { return value ? when(value) : "None recorded"; }
+  function bytes(value) {
+    if (!Number.isFinite(value)) return "Unavailable";
+    if (value < 1024) return value + " B";
+    if (value < 1024 * 1024) return (value / 1024).toFixed(1) + " KiB";
+    if (value < 1024 * 1024 * 1024) return (value / (1024 * 1024)).toFixed(1) + " MiB";
+    return (value / (1024 * 1024 * 1024)).toFixed(1) + " GiB";
+  }
+
+  function refreshButton(reload) {
+    const row = document.createElement("div");
+    row.className = "refresh-row";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "plan-btn";
+    button.textContent = "Refresh snapshot";
+    button.addEventListener("click", () => { void reload(); });
+    row.append(button, paragraph("Read-only monitoring. Counts are a snapshot, not a live feed."));
+    content.append(row);
+  }
+
+  async function loadOverview() {
+    content.textContent = "Checking service health…";
+    let data;
+    try { data = await getJSON("/api/overview"); }
+    catch { content.textContent = "Monitoring unavailable. Your previous data has not been replaced with zero counts."; return; }
+    content.textContent = "";
+    setNotice("Checked " + when(data.checked_at) + " · Backend package " + data.version + " · " + data.deploy_mode + " · uptime " + data.uptime_seconds + "s");
+    refreshButton(loadOverview);
+    heading("Service health");
+    const health = data.health;
+    content.append(table(["Service", "Status", "What was checked"], [
+      ["Database", health.database.status, health.database.latency_ms === null ? "Probe failed or timed out" : "SELECT 1 · " + health.database.latency_ms + "ms"],
+      ["Redis", health.redis.status, health.redis.latency_ms === null ? "Probe failed or timed out" : "PING · " + health.redis.latency_ms + "ms"],
+      ["Storage", health.storage.status, "Configuration only — object access not probed"],
+      ["Billing", health.billing.configured ? "Configured" : "Not configured", "Configuration only — Stripe not contacted"],
+      ["GitHub", health.github.configured ? health.github.webhook_configured ? "App and webhook configured" : "Webhook not configured" : "Not configured", "Configuration only — delivery/permissions not verified"],
+    ]));
+    heading("Needs attention");
+    content.append(paragraph("Categories can overlap. Zero counts are shown; unavailable counts need investigation."));
+    content.append(table(["Category", "Count"], data.attention.map(row => [row.href ? link(row.href, String(row.label)) : String(row.label), attentionCount(row.count)])));
+    const snapshot = data.snapshot;
+    heading("Usage");
+    if (snapshot) {
+      const usage = snapshot.usage;
+      const card = document.createElement("section");
+      card.className = "card";
+      const facts = document.createElement("dl");
+      facts.className = "facts";
+      facts.append(fact("Users", count(usage.users)), fact("Signups · 7 days", count(usage.signups_7d)), fact("Workspaces", count(usage.workspaces)), fact("Tasks", count(usage.tasks)), fact("Files", count(usage.attachments)), fact("Stored attachment + logo bytes", bytes(usage.storage_bytes)), fact("Operator grants", count(usage.operator_grants)));
+      card.append(facts);
+      content.append(card);
+      content.append(table(["Effective plan", "Users"], usage.plans.map(row => [String(row.plan), count(row.count)])));
+      content.append(paragraph("Effective plans include operator grants; these are not subscription or revenue counts."));
+      content.append(table(["Task status", "Tasks"], usage.task_statuses.map(row => [String(row.status), count(row.count)])));
+      heading("GitHub processing");
+      const github = snapshot.github;
+      content.append(table(["Metric", "Value"], [
+        ["Connected accounts", count(github.connections)], ["Active personal repository associations", count(github.active_repository_associations)],
+        ["Queued jobs", count(github.queued)], ["Oldest pending job", timestamp(github.oldest_pending_at)], ["Last successful linked-issue sync", timestamp(github.last_synced_at)],
+      ]));
+    } else content.append(paragraph("Database snapshot unavailable. Usage and queue counts are unknown, not zero."));
+    heading("API and billing delivery counters");
+    const metrics = data.metrics;
+    if (metrics) {
+      content.append(paragraph("Last 60 minute buckets; monitoring begins after deployment. Admin traffic and health probes are excluded. No request bodies, URLs or user identities are stored."));
+      content.append(table(["Metric", "Count"], [["API requests", count(metrics.requests)], ["API server errors", count(metrics.server_errors)], ["Billing webhook accepted", count(metrics.billing_received)], ["Billing webhook failures", count(metrics.billing_failed)]]));
+      content.append(table(["API error code", "Count"], metrics.errors.map(row => [String(row.code), count(row.count)])));
+      if (!metrics.errors.length) content.append(paragraph("No API errors recorded in this window."));
+    } else content.append(paragraph("Operational counters unavailable — no zero-error claim can be made."));
+  }
+
+  function filters(fields, path) {
+    const params = new URL(window.location.href).searchParams;
+    const form = document.createElement("form");
+    form.className = "filter-form";
+    form.method = "get";
+    form.action = path;
+    form.setAttribute("role", "search");
+    for (const field of fields) {
+      const label = document.createElement("label");
+      label.append(field.label);
+      const input = document.createElement(field.options ? "select" : "input");
+      input.name = field.name;
+      if (field.options) for (const value of field.options) {
+        const option = document.createElement("option"); option.value = value; option.textContent = value || "All"; option.selected = value === (params.get(field.name) || ""); input.append(option);
+      } else { input.type = field.type || "text"; input.maxLength = 100; input.value = params.get(field.name) || ""; }
+      label.append(input); form.append(label);
+    }
+    const submit = document.createElement("button"); submit.type = "submit"; submit.className = "plan-btn"; submit.textContent = "Filter";
+    form.append(submit, link(path, "Clear filters")); content.append(form);
+  }
+
+  function quota(used, limit, storage) {
+    return (storage ? bytes(used) : count(used)) + " / " + (limit === null ? "Unlimited" : storage ? bytes(limit) : count(limit)) + (limit !== null && used > limit ? " · OVER LIMIT" : "");
+  }
+
+  function pagination(data, path, pageKey = "page") {
+    const row = document.createElement("nav");
+    row.className = "pager";
+    row.setAttribute("aria-label", "Pagination");
+    const params = new URL(window.location.href).searchParams;
+    const destination = page => { const query = new URLSearchParams(params); query.set(pageKey, String(page)); return path + "?" + query; };
+    if (data.page > 1) row.append(link(destination(data.page - 1), "Previous"));
+    row.append(paragraph("Page " + data.page + " · " + data.total + " records · " + data.page_size + " per page"));
+    if (data.page * data.page_size < data.total) row.append(link(destination(data.page + 1), "Next"));
+    content.append(row);
+  }
+
+  async function loadAttention() {
+    content.textContent = "Loading queued problems…";
+    const page = new URL(window.location.href).searchParams.get("page") || "1";
+    let data;
+    try { data = await getJSON("/api/attention?page=" + encodeURIComponent(page)); }
+    catch { content.textContent = "Queue details unavailable."; return; }
+    content.textContent = "";
+    setNotice("GitHub jobs awaiting retry or pending longer than five minutes");
+    refreshButton(loadAttention);
+    content.append(paragraph("Oldest first. Read-only: delivery IDs let you correlate GitHub deliveries/backend logs. Payloads and task content are never shown. Access pauses and billing flags are summarized in Overview."));
+    content.append(table(["Job / delivery", "Kind", "Attempts", "Created", "Retry eligible", "Lease until", "Error"], data.jobs.map(job => [String(job.id) + (job.delivery_id ? " / " + job.delivery_id : ""), String(job.kind), count(job.attempts), when(job.created_at), when(job.retry_at), timestamp(job.locked_until), job.error_code === null ? "Pending" : String(job.error_code)])));
+    if (!data.jobs.length) content.append(paragraph(data.total ? "No jobs on this page. Use Previous to return." : "No retrying or overdue GitHub jobs."));
+    pagination(data, "/attention");
+  }
+
+  async function loadAudit() {
+    content.textContent = "Loading audit trail…";
+    let data;
+    try { data = await getJSON("/api/audit?" + new URL(window.location.href).searchParams); }
+    catch { content.textContent = "Audit records unavailable."; return; }
+    content.textContent = "";
+    setNotice("Durable operator plan-change history");
+    refreshButton(loadAudit);
+    filters([{ name: "actor", label: "Operator" }, { name: "user", label: "User name or ID" }, { name: "action", label: "Action", options: ["", "plan_override_changed"] }, { name: "from", label: "From (UTC)", type: "date" }, { name: "to", label: "Through (UTC)", type: "date" }], "/audit");
+    content.append(paragraph("Only changes made after this feature was deployed are recorded. The console uses one operator account; this identifies that account, not individual people sharing it. Revoking a grant never cancels a Stripe subscription."));
+    content.append(table(["When", "Operator", "Action", "User", "Previous grant", "New grant"], data.events.map(event => [when(event.created_at), String(event.actor), String(event.action), event.target_user_id ? link("/users/" + encodeURIComponent(event.target_user_id), String(event.target_username)) : String(event.target_username) + " (deleted)", event.from_plan === null ? "None" : String(event.from_plan), event.to_plan === null ? "None" : String(event.to_plan)])));
+    if (!data.events.length) content.append(paragraph(data.total ? "No events on this page. Use Previous to return." : "No operator plan changes recorded yet."));
+    pagination(data, "/audit");
+  }
+
+  async function loadWorkspaces() {
+    content.textContent = "Loading workspace support…";
+    let data;
+    try { data = await getJSON("/api/workspaces?" + new URL(window.location.href).searchParams); }
+    catch { content.textContent = "Workspace support unavailable."; return; }
+    content.textContent = "";
+    setNotice("Workspace support · checked " + when(data.checked_at));
+    refreshButton(loadWorkspaces);
+    filters([{ name: "q", label: "Workspace, slug or owner" }], "/workspaces");
+    content.append(paragraph("Limits follow the owner's effective plan and deployment mode. Task counts have no plan quota. Storage includes attachments and logos, not orphaned bucket objects."));
+    content.append(table(["Workspace", "Owner", "Plan", "Members / limit", "Tasks", "Files", "Storage / limit"], data.workspaces.map(workspace => [link("/workspaces/" + workspace.id, workspace.name + " (" + workspace.kind + ")"), link("/users/" + workspace.owner.id, workspace.owner.username), String(workspace.plan), quota(workspace.members, workspace.limits.members, false), count(workspace.tasks), count(workspace.files), quota(workspace.storage_bytes, workspace.limits.storage_bytes, true)])));
+    if (!data.workspaces.length) content.append(paragraph("No workspaces match this page/filter."));
+    pagination(data, "/workspaces");
+  }
+
+  async function loadWorkspace(id) {
+    content.textContent = "Loading workspace support…";
+    let data;
+    try { data = await getJSON("/api/workspaces/" + encodeURIComponent(id)); }
+    catch { content.textContent = "Workspace details unavailable."; return; }
+    content.textContent = "";
+    setNotice("Workspace support · checked " + when(data.checked_at));
+    content.append(link("/workspaces", "← All workspaces"));
+    refreshButton(() => loadWorkspace(id));
+    const workspace = data.workspace;
+    heading(workspace.name);
+    const card = document.createElement("section"); card.className = "card";
+    const facts = document.createElement("dl"); facts.className = "facts";
+    facts.append(fact("Slug / kind", workspace.slug + " / " + workspace.kind), fact("Owner", workspace.owner.username), fact("Effective / Stripe plan", workspace.plan + " / " + workspace.stripe_plan), fact("Operator grant", workspace.plan_override || "None"), fact("Members / limit", quota(workspace.members.length, workspace.limits.members, false)), fact("Owner team slots", quota(workspace.owner_team_count, workspace.limits.teams, false)), fact("Storage / limit", quota(workspace.storage_bytes, workspace.limits.storage_bytes, true)), fact("Maximum file size", workspace.limits.max_file_bytes === null ? "Unlimited" : bytes(workspace.limits.max_file_bytes)), fact("Tasks (uncapped)", count(workspace.tasks)), fact("Files", count(workspace.files)), fact("Owner GitHub connection", workspace.github.owner_connection ? workspace.github.owner_connection.status : "Not connected"), fact("Owner GitHub verified", workspace.github.owner_connection ? when(workspace.github.owner_connection.verified_at) : "Unknown"));
+    card.append(facts); content.append(card);
+    heading("Members");
+    content.append(table(["User", "Role", "Joined"], workspace.members.map(member => [link("/users/" + member.id, member.username), String(member.role), when(member.joined_at)])));
+    heading("Task totals — no private task content");
+    content.append(table(["Status", "Count"], workspace.task_statuses.map(row => [row.status, count(row.count)])));
+    heading("Workspace GitHub links");
+    content.append(paragraph("Owner connection is personal; workspace issue links can be published by other members. No credentials or repository names are shown."));
+    content.append(table(["Publication", "Sync", "Count"], workspace.github.issue_links.map(row => [row.publication_status, row.sync_status, count(row.count)])));
+    if (!workspace.github.issue_links.length) content.append(paragraph("No GitHub issue links recorded."));
+  }
+
+  async function loadBilling() {
+    content.textContent = "Loading billing observations…";
+    const params = new URL(window.location.href).searchParams;
+    const query = new URLSearchParams();
+    for (const key of ["page", "q", "status"]) if (params.get(key)) query.set(key, params.get(key));
+    const historyQuery = new URLSearchParams(); historyQuery.set("page", params.get("history_page") || "1"); if (params.get("q")) historyQuery.set("q", params.get("q"));
+    let data;
+    try { data = await getJSON("/api/billing?" + query); }
+    catch { content.textContent = "Billing observations unavailable."; return; }
+    content.textContent = "";
+    setNotice((data.configured ? "Billing configured" : "Billing not configured") + " · stored observations · checked " + when(data.checked_at));
+    refreshButton(loadBilling);
+    filters([{ name: "q", label: "User" }, { name: "status", label: "Subscription / attention", options: ["", "unknown", "none", "active", "trialing", "past_due", "unpaid", "canceled", "paused", "incomplete", "incomplete_expired", "error", "canceling", "payment_failed", "grant"] }], "/billing");
+    content.append(paragraph("Stripe observations are refreshed by existing webhooks/user billing sync, never by opening admin. Unknown means not verified since monitoring began. Active/trialing is not proof of payment. Operator grants are separate from subscriptions; last invoice event is a notification, not complete payment history."));
+    content.append(table(["User", "Effective / Stripe plan", "Grant", "Subscription", "Cancellation", "Period / grace ends", "Last invoice event", "Verified", "Attempt / error"], data.users.map(user => [link("/users/" + user.id, user.username), user.effective_plan + " / " + user.stripe_plan, user.operator_grant || "None", user.subscription_status + (user.has_customer ? "" : " · no customer"), user.cancel_at ? when(user.cancel_at) : user.cancel_at_period_end === null ? "Unknown" : user.cancel_at_period_end ? "At period end" : "Not scheduled", timestamp(user.period_end) + " / " + timestamp(user.grace_until), user.last_invoice_event ? user.last_invoice_event + " · " + timestamp(user.invoice_observed_at) : "Unknown", timestamp(user.verified_at), timestamp(user.attempted_at) + (user.error_code ? " / " + user.error_code : "")])));
+    if (!data.users.length) content.append(paragraph("No accounts match this page/filter."));
+    pagination(data, "/billing");
+    heading("Reconciliation history");
+    content.append(paragraph("Post-deployment attempts only. History follows the user search, not the subscription-status filter; unassigned/deleted users appear when search is empty."));
+    let history;
+    try { history = await getJSON("/api/billing/history?" + historyQuery); }
+    catch { content.append(paragraph("Reconciliation history unavailable.")); return; }
+    content.append(table(["When", "User", "Source", "Outcome", "Error"], history.events.map(event => [when(event.created_at), event.user ? link("/users/" + event.user.id, event.user.username) : "Unassigned / deleted", event.source, event.outcome, event.error_code || "—"])));
+    if (!history.events.length) content.append(paragraph("No reconciliation attempts on this page/filter."));
+    pagination(history, "/billing", "history_page");
+  }
+
   async function loadUsers() {
     content.textContent = "Loading users…";
     let data;
@@ -297,8 +546,9 @@ export const ADMIN_JS = `
       planCell(u),
       String(u.workspaces),
       when(u.created_at),
+      Array.isArray(u.attention_flags) && u.attention_flags.length ? u.attention_flags.join(", ") : "None",
     ]);
-    content.append(table(["Username", "Display name", "Plan", "Workspaces", "Created"], rows));
+    content.append(table(["Username", "Display name", "Plan", "Workspaces", "Created", "Attention flags"], rows));
   }
 
   async function setPlan(id, plan) {
@@ -369,7 +619,12 @@ export const ADMIN_JS = `
       fact("Workspaces created", String(data.total_workspaces)),
       fact("Stripe customer", user.has_stripe_customer ? "yes" : "no"),
       fact("Period ends", user.period_end === null ? "—" : when(user.period_end)),
-      fact("Grace until", user.grace_until === null ? "—" : when(user.grace_until))
+      fact("Grace until", user.grace_until === null ? "—" : when(user.grace_until)),
+      fact("GitHub connection", user.github ? String(user.github.status) : "Not connected"),
+      fact("GitHub access verified", user.github ? when(user.github.verified_at) : "—"),
+      fact("Active repositories", user.github ? count(user.github.active_repositories) : "0"),
+      fact("GitHub reauthorization", user.github ? user.github.reauthorization_required ? "Required" : "Current" : "—"),
+      fact("GitHub links needing attention", count(user.github_issue_links_needing_attention))
     );
     card.append(facts);
     content.append(card);
@@ -428,7 +683,7 @@ export const ADMIN_JS = `
       table(
         ["Name", "Slug", "Kind", "Members", "Created"],
         workspaces.map((t) => [
-          String(t.name),
+          link("/workspaces/" + encodeURIComponent(t.id), String(t.name)),
           String(t.slug),
           String(t.kind),
           String(t.members),
@@ -440,7 +695,13 @@ export const ADMIN_JS = `
 
   const view = app.dataset.view;
   const userId = app.dataset.userId;
-  if (view === "users") void loadUsers();
+  if (view === "overview") void loadOverview();
+  else if (view === "attention") void loadAttention();
+  else if (view === "audit") void loadAudit();
+  else if (view === "workspaces") void loadWorkspaces();
+  else if (view === "workspace" && app.dataset.workspaceId) void loadWorkspace(app.dataset.workspaceId);
+  else if (view === "billing") void loadBilling();
+  else if (view === "users") void loadUsers();
   else if (view === "user" && userId) void loadUser(userId);
   else setNotice("Unknown view.");
 })();

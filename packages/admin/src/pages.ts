@@ -59,7 +59,12 @@ ${error === undefined ? "" : `<p class="error" role="alert">${esc(error)}</p>`}
  * from the proxied API — the server renders nothing user-derived, so there is no
  * second place for the same data to be escaped wrong.
  */
-function shell(opts: { title: string; view: string; dataUserId?: string }): string {
+function shell(opts: {
+  title: string;
+  view: string;
+  dataUserId?: string;
+  dataWorkspaceId?: string;
+}): string {
   const userIdAttr = opts.dataUserId === undefined ? "" : ` data-user-id="${esc(opts.dataUserId)}"`;
   return `<!doctype html>
 <html lang="en">
@@ -71,17 +76,44 @@ ${HEAD}
 <header class="topbar">
 <span class="mark">Mokara admin</span>
 <nav>
+<a href="/overview">Overview</a>
+<a href="/attention">Needs attention</a>
 <a href="/users">Users</a>
+<a href="/workspaces">Workspaces</a>
+<a href="/billing">Billing</a>
+<a href="/audit">Audit</a>
 <form method="post" action="/logout"><button type="submit" class="signout">Sign out</button></form>
 </nav>
 </header>
-<main id="app" data-view="${esc(opts.view)}"${userIdAttr}>
+<main id="app" data-view="${esc(opts.view)}"${userIdAttr}${opts.dataWorkspaceId === undefined ? "" : ` data-workspace-id="${esc(opts.dataWorkspaceId)}"`}>
 <p id="notice" class="notice" role="status"></p>
 <section id="content"><p class="muted">Loading…</p></section>
 </main>
 <script src="/assets/admin.js" defer></script>
 </body>
 </html>`;
+}
+
+export function overviewPage(): string {
+  return shell({ title: "Mokara admin — overview", view: "overview" });
+}
+
+export function attentionPage(): string {
+  return shell({ title: "Mokara admin — needs attention", view: "attention" });
+}
+
+export function auditPage(): string {
+  return shell({ title: "Mokara admin — audit", view: "audit" });
+}
+
+export function workspacesPage(): string {
+  return shell({ title: "Mokara admin — workspaces", view: "workspaces" });
+}
+export function workspacePage(id: string): string {
+  return shell({ title: "Mokara admin — workspace", view: "workspace", dataWorkspaceId: id });
+}
+export function billingPage(): string {
+  return shell({ title: "Mokara admin — billing", view: "billing" });
 }
 
 export function usersPage(): string {

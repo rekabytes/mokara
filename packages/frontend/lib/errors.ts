@@ -190,6 +190,27 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
   },
 
   // --- GitHub App integration ---
+  github_webhook_not_configured: {
+    kind: "server",
+    action: "inline",
+    message: "GitHub incoming sync is not configured on this instance.",
+  },
+  invalid_github_signature: {
+    kind: "permission",
+    action: "inline",
+    message: "The GitHub webhook signature is invalid.",
+  },
+  invalid_github_delivery: {
+    kind: "input",
+    action: "inline",
+    message: "The GitHub webhook delivery ID is invalid.",
+  },
+  payload_too_large: {
+    kind: "input",
+    action: "inline",
+    message: "The request exceeds the allowed size.",
+  },
+  invalid_json: { kind: "input", action: "inline", message: "The request body is not valid JSON." },
   github_not_configured: {
     kind: "conflict",
     action: "inline",
@@ -219,6 +240,36 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
     kind: "conflict",
     action: "inline",
     message: "Reconnect GitHub to verify your repository access.",
+  },
+  github_repository_limit: {
+    kind: "conflict",
+    action: "inline",
+    message: "You can activate at most three GitHub repositories.",
+  },
+  github_repository_inactive: {
+    kind: "conflict",
+    action: "inline",
+    message: "Activate this repository in GitHub settings to resume sync.",
+  },
+  github_workspace_access_revoked: {
+    kind: "permission",
+    action: "inline",
+    message: "The connected user no longer belongs to this workspace. GitHub sync is paused.",
+  },
+  github_issue_not_linked: {
+    kind: "conflict",
+    action: "inline",
+    message: "This task has no linked GitHub issue.",
+  },
+  github_issue_mismatch: {
+    kind: "conflict",
+    action: "inline",
+    message: "The linked GitHub issue could not be verified.",
+  },
+  github_sync_failed: {
+    kind: "server",
+    action: "retry",
+    message: "GitHub status sync failed. Your task is saved; sync will retry automatically.",
   },
   github_repository_forbidden: {
     kind: "permission",

@@ -105,7 +105,14 @@ export default function TasksPage() {
     void api
       .getGitHubIntegration()
       .then((result) => {
-        if (alive) setGitHubRepositories(result.connection?.repositories ?? []);
+        if (alive)
+          setGitHubRepositories(
+            !result.configured || result.connection?.reauthorization_required
+              ? []
+              : (result.connection?.repositories.filter(
+                  (repository) => repository.enabled && repository.available
+                ) ?? [])
+          );
       })
       .catch(() => {
         if (alive) setGitHubRepositories([]);
@@ -248,6 +255,16 @@ export default function TasksPage() {
   }
 
   async function retryGitHubIssue(task: Task) {
+    if (task.github_issue?.status === "linked") {
+      const updated = await run(() => api.retryGitHubSync(task.id), {
+        fallback: "Couldn't retry GitHub status sync.",
+      });
+      if (updated)
+        setTasks((previous) =>
+          previous.map((current) => (current.id === task.id ? updated : current))
+        );
+      return;
+    }
     const repositoryId = task.github_issue?.repository_id;
     if (!repositoryId) return;
     const result = await run(() => api.publishGitHubIssue(task.id, repositoryId), {

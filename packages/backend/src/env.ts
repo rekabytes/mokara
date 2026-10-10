@@ -66,6 +66,7 @@ const EnvSchema = z
     GITHUB_APP_PRIVATE_KEY_BASE64: z.string().default(""),
     GITHUB_CALLBACK_URL: z.string().default(""),
     GITHUB_PUBLIC_APP_URL: z.string().default(""),
+    GITHUB_WEBHOOK_SECRET: z.string().default(""),
     // Operator console (packages/admin). Four values that turn the console on
     // as a unit — `adminConfigured` below is the single switch and every admin
     // route answers 404 without it, the way an unmounted feature should.
@@ -170,6 +171,9 @@ export const githubConfigIssues: string[] = (() => {
 
 export const githubConfigured =
   githubConfigIssues.length === 0 && githubRequired.every((item) => item.value !== "");
+
+// Existing OAuth/publishing remains available without a webhook secret.
+export const githubWebhookConfigured = githubConfigured && env.GITHUB_WEBHOOK_SECRET.length >= 32;
 
 /**
  * The operator console is OPTIONAL, so its config is a flag and never a boot

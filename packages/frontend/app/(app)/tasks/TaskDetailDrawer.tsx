@@ -26,6 +26,8 @@ import {
   type User,
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { ERROR_RULES } from "@/lib/errors";
+import Link from "next/link";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import { useAtom } from "jotai";
@@ -238,6 +240,44 @@ export function TaskDetailDrawer({
                   Retry
                 </button>
               )}
+          </div>
+        )}
+
+        {task.github_issue?.status === "linked" && (
+          <div className="mt-1.5 px-1 text-[0.72rem] text-[var(--color-ink-muted)]">
+            <p className="m-0" role="status">
+              {task.github_issue.sync_status === "pending"
+                ? "Syncing GitHub status…"
+                : task.github_issue.sync_status === "failed" ||
+                    task.github_issue.sync_status === "paused"
+                  ? (ERROR_RULES[task.github_issue.sync_error_code ?? ""]?.message ??
+                    "GitHub status sync needs attention.")
+                  : "With webhooks enabled, closing the issue or a linked PR completes this task. Reopening either moves it to In progress."}
+            </p>
+            {(task.github_issue.sync_status === "failed" ||
+              task.github_issue.sync_status === "paused") && (
+              <div className="mt-1 flex items-center gap-3">
+                {task.github_issue.sync_status === "failed" && (
+                  <button
+                    type="button"
+                    onClick={onRetryGitHub}
+                    className="font-semibold text-[var(--color-accent)] hover:underline"
+                  >
+                    Retry sync
+                  </button>
+                )}
+                <Link
+                  href="/settings"
+                  className="font-semibold text-[var(--color-accent)] hover:underline"
+                >
+                  GitHub settings
+                </Link>
+              </div>
+            )}
+            <p className="mb-0 mt-1">
+              Start work with branch <code>issue-{task.github_issue.issue_number}-name</code> or a
+              PR linked with <code>Closes #{task.github_issue.issue_number}</code>.
+            </p>
           </div>
         )}
 

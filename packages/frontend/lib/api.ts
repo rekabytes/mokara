@@ -285,6 +285,13 @@ export const api = {
   installGitHub: () => req<{ url: string }>("/me/integrations/github/install", { method: "POST" }),
   refreshGitHub: () => req<{ url: string }>("/me/integrations/github/refresh", { method: "POST" }),
   disconnectGitHub: () => req<void>("/me/integrations/github", { method: "DELETE" }),
+  setGitHubRepositories: (repositoryIds: string[]) =>
+    req<GitHubIntegration>("/me/integrations/github/repositories", {
+      method: "PUT",
+      body: JSON.stringify({ repository_ids: repositoryIds }),
+    }),
+  retryGitHubSync: (taskId: string) =>
+    req<Task>(`/tasks/${taskId}/github-sync`, { method: "POST" }),
   publishGitHubIssue: (taskId: string, repositoryId: string) =>
     req<{ github_issue: GitHubIssue }>(`/tasks/${taskId}/github-issue`, {
       method: "POST",

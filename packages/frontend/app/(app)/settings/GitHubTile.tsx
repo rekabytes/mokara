@@ -26,13 +26,23 @@ function GitHubIcon() {
 export function GitHubTile({ run }: { run: Run }) {
   const [integration, setIntegration] = useState<GitHubIntegration | null>(null);
   const [busy, setBusy] = useState(false);
+  const [managing, setManaging] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
   const [callbackMessage, setCallbackMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const data = await run(() => api.getGitHubIntegration(), {
       fallback: "Couldn't load the GitHub connection.",
     });
-    if (data) setIntegration(data);
+    if (data) {
+      setIntegration(data);
+      const active =
+        data.connection?.repositories
+          .filter((repository) => repository.enabled && repository.available)
+          .map((repository) => repository.id) ?? [];
+      setSelected(active);
+      if (data.connection && active.length === 0) setManaging(true);
+    }
   }, [run]);
 
   useEffect(() => {
@@ -47,7 +57,7 @@ export function GitHubTile({ run }: { run: Run }) {
     const result = url.searchParams.get("github");
     if (!result) return;
     const messages: Record<string, string> = {
-      connected: "GitHub connected.",
+      connected: "GitHub connected. Choose up to three active repositories below.",
       denied: "GitHub access was denied.",
       state_expired: "That GitHub connection attempt expired. Start again.",
       installation_unverified: "That GitHub installation could not be verified.",
@@ -88,12 +98,25 @@ export function GitHubTile({ run }: { run: Run }) {
     if (result !== null) await load();
   };
 
+  const saveRepositories = async () => {
+    setBusy(true);
+    const data = await run(() => api.setGitHubRepositories(selected), {
+      fallback: "Couldn't save active repositories.",
+    });
+    setBusy(false);
+    if (data) {
+      setIntegration(data);
+      setManaging(false);
+      setCallbackMessage("Active repositories saved.");
+    }
+  };
+
   return (
     <motion.section variants={tileIn} className={`${TILE} col-span-12`}>
       <TileHeader
         icon={<GitHubIcon />}
         title="GitHub"
-        caption="Publish selected tasks to repositories connected by you"
+        caption="Choose active repositories and sync linked task statuses"
         right={
           integration?.connection ? (
             <span className="rounded-[var(--radius-pill)] bg-[var(--color-success-soft)] px-2.5 py-1 text-[0.76rem] font-semibold text-[var(--color-success)]">
@@ -134,6 +157,25 @@ export function GitHubTile({ run }: { run: Run }) {
         </div>
       ) : (
         <>
+          <p className="mb-0 mt-4 text-[0.85rem] text-[var(--color-ink-muted)]">
+            {managing
+              ? selected.length
+              : integration.connection.repositories.filter(
+                  (repository) => repository.enabled && repository.available
+                ).length}
+            {` / ${integration.repository_limit} ${managing ? "selected" : "active"} repositories. GitHub access and Mokara activation are separate.`}
+          </p>
+          {integration.connection.reauthorization_required && (
+            <p role="status" className="mb-0 mt-2 text-[0.82rem] text-[var(--color-ink-muted)]">
+              Reconnect to verify access and resume sync.
+            </p>
+          )}
+          {!integration.sync_configured && (
+            <p role="status" className="mb-0 mt-2 text-[0.82rem] text-[var(--color-ink-muted)]">
+              Incoming status sync needs the GitHub webhook configured by this instance&apos;s
+              operator.
+            </p>
+          )}
           <ul className="m-0 mt-4 flex max-h-[190px] list-none flex-col overflow-y-auto p-0">
             {integration.connection.repositories.length === 0 ? (
               <li className="py-2 text-[0.85rem] text-[var(--color-ink-faint)]">
@@ -145,26 +187,89 @@ export function GitHubTile({ run }: { run: Run }) {
               integration.connection.repositories.map((repository) => (
                 <li
                   key={repository.id}
-                  className="flex items-center justify-between gap-3 border-t border-[var(--color-border-soft)] py-2 first:border-t-0"
+                  className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-border-soft)] py-2 first:border-t-0"
                 >
-                  <span className="min-w-0 truncate text-[0.88rem] font-semibold">
-                    {repository.full_name}
-                  </span>
-                  <span className="shrink-0 text-[0.74rem] text-[var(--color-ink-faint)]">
-                    {repository.private ? "Private" : "Public"} · {repository.installation_account}
+                  <label className="flex min-w-0 items-center gap-2 text-[0.88rem] font-semibold">
+                    {managing && (
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(repository.id)}
+                        disabled={
+                          busy ||
+                          integration.connection?.reauthorization_required ||
+                          !repository.available ||
+                          (!selected.includes(repository.id) &&
+                            selected.length >= integration.repository_limit)
+                        }
+                        onChange={(event) =>
+                          setSelected((previous) =>
+                            event.target.checked
+                              ? [...previous, repository.id]
+                              : previous.filter((id) => id !== repository.id)
+                          )
+                        }
+                        className="accent-[var(--color-accent)]"
+                      />
+                    )}
+                    <span className="truncate">{repository.full_name}</span>
+                  </label>
+                  <span className="min-w-0 max-w-full truncate text-[0.74rem] text-[var(--color-ink-faint)] sm:shrink-0">
+                    {repository.private ? "Private" : "Public"} · {repository.installation_account}{" "}
+                    ·{" "}
+                    {repository.available
+                      ? repository.enabled
+                        ? "Active"
+                        : "Inactive"
+                      : "Unavailable"}
                   </span>
                 </li>
               ))
             )}
           </ul>
           <div className="mt-3 flex flex-wrap gap-2">
+            {managing ? (
+              <>
+                <button
+                  type="button"
+                  disabled={busy || integration.connection.reauthorization_required}
+                  onClick={saveRepositories}
+                  className="btn-base btn-primary btn-small"
+                >
+                  {busy ? "Saving…" : "Save repositories"}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setManaging(false)}
+                  className="btn-base btn-ghost btn-small"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setSelected(
+                    integration.connection?.repositories
+                      .filter((repository) => repository.enabled && repository.available)
+                      .map((repository) => repository.id) ?? []
+                  );
+                  setManaging(true);
+                }}
+                className="btn-base btn-primary btn-small"
+              >
+                Manage repositories
+              </button>
+            )}
             <button
               type="button"
               disabled={busy}
               onClick={() => navigate("install")}
-              className="btn-base btn-primary btn-small"
+              className="btn-base btn-ghost btn-small"
             >
-              Add repositories
+              GitHub repository access
             </button>
             <button
               type="button"

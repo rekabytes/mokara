@@ -31,7 +31,22 @@ export type GitHubRepositoryInfo = {
   fullName: string;
   private: boolean;
 };
-export type GitHubIssueInfo = { id: bigint; number: number; htmlUrl: string; body: string };
+export type GitHubIssueInfo = {
+  id: bigint;
+  number: number;
+  htmlUrl: string;
+  body: string;
+  state: "open" | "closed";
+  updatedAt: Date;
+};
+export type GitHubPullRequestInfo = {
+  id: bigint;
+  number: number;
+  state: "open" | "closed";
+  updatedAt: Date;
+  branch: string;
+  issueNumbers: number[];
+};
 
 type JsonObject = Record<string, unknown>;
 
@@ -167,24 +182,36 @@ export async function getGitHubUser(token: string): Promise<GitHubUser> {
 }
 
 export async function listUserInstallations(token: string): Promise<GitHubInstallationInfo[]> {
-  const payload = object(await githubFetch(`${API}/user/installations?per_page=100`, { token }));
-  const rows = payload?.installations;
-  if (!Array.isArray(rows)) {
-    throw new GitHubError(502, "github_unavailable", "GitHub returned invalid installations");
-  }
-  return rows.map((value) => {
-    const row = object(value);
-    const account = object(row?.account);
-    const id = integer(row?.id);
-    const accountId = integer(account?.id);
-    const accountLogin = string(account?.login);
-    const rawType = string(account?.type);
-    const accountType = rawType === "Organization" ? "Organization" : "User";
-    if (id === null || accountId === null || !accountLogin) {
-      throw new GitHubError(502, "github_unavailable", "GitHub returned an invalid installation");
+  const all: GitHubInstallationInfo[] = [];
+  for (let page = 1; ; page++) {
+    const payload = object(
+      await githubFetch(`${API}/user/installations?per_page=100&page=${page}`, { token })
+    );
+    const rows = payload?.installations;
+    if (!Array.isArray(rows)) {
+      throw new GitHubError(502, "github_unavailable", "GitHub returned invalid installations");
     }
-    return { id: BigInt(id), accountId: BigInt(accountId), accountLogin, accountType };
-  });
+    all.push(
+      ...rows.map((value): GitHubInstallationInfo => {
+        const row = object(value);
+        const account = object(row?.account);
+        const id = integer(row?.id);
+        const accountId = integer(account?.id);
+        const accountLogin = string(account?.login);
+        const rawType = string(account?.type);
+        const accountType = rawType === "Organization" ? "Organization" : "User";
+        if (id === null || accountId === null || !accountLogin) {
+          throw new GitHubError(
+            502,
+            "github_unavailable",
+            "GitHub returned an invalid installation"
+          );
+        }
+        return { id: BigInt(id), accountId: BigInt(accountId), accountLogin, accountType };
+      })
+    );
+    if (rows.length < 100) return all;
+  }
 }
 
 async function appJwt(): Promise<string> {
@@ -203,11 +230,20 @@ async function appJwt(): Promise<string> {
     .sign(key);
 }
 
-export async function installationToken(installationId: bigint): Promise<string> {
+export async function installationToken(
+  installationId: bigint,
+  repositoryId?: bigint
+): Promise<string> {
   const payload = object(
     await githubFetch(`${API}/app/installations/${installationId.toString()}/access_tokens`, {
       method: "POST",
       appJwt: await appJwt(),
+      ...(repositoryId
+        ? {
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ repository_ids: [Number(repositoryId)] }),
+          }
+        : {}),
     })
   );
   const token = string(payload?.token);
@@ -240,23 +276,34 @@ export async function listUserInstallationRepositories(
   token: string,
   installationId: bigint
 ): Promise<GitHubRepositoryInfo[]> {
-  const payload = object(
-    await githubFetch(
-      `${API}/user/installations/${installationId.toString()}/repositories?per_page=100`,
-      { token }
-    )
-  );
-  return repositoriesFrom(payload);
+  const all: GitHubRepositoryInfo[] = [];
+  for (let page = 1; ; page++) {
+    const payload = object(
+      await githubFetch(
+        `${API}/user/installations/${installationId.toString()}/repositories?per_page=100&page=${page}`,
+        { token }
+      )
+    );
+    const rows = repositoriesFrom(payload);
+    all.push(...rows);
+    if (rows.length < 100) return all;
+  }
 }
 
 export async function listInstallationRepositories(
   installationId: bigint
 ): Promise<GitHubRepositoryInfo[]> {
   const token = await installationToken(installationId);
-  const payload = object(
-    await githubFetch(`${API}/installation/repositories?per_page=100`, { token })
-  );
-  return repositoriesFrom(payload);
+  const all: GitHubRepositoryInfo[] = [];
+  for (let page = 1; ; page++) {
+    const rows = repositoriesFrom(
+      object(
+        await githubFetch(`${API}/installation/repositories?per_page=100&page=${page}`, { token })
+      )
+    );
+    all.push(...rows);
+    if (rows.length < 100) return all;
+  }
 }
 
 function issue(value: unknown): GitHubIssueInfo | null {
@@ -265,10 +312,19 @@ function issue(value: unknown): GitHubIssueInfo | null {
   const number = integer(row?.number);
   const htmlUrl = string(row?.html_url);
   const body = string(row?.body) ?? "";
-  if (id === null || number === null || !htmlUrl) return null;
+  const state = string(row?.state);
+  const updatedAt = new Date(string(row?.updated_at) ?? "");
+  if (
+    id === null ||
+    number === null ||
+    !htmlUrl ||
+    (state !== "open" && state !== "closed") ||
+    !Number.isFinite(updatedAt.getTime())
+  )
+    return null;
   const url = new URL(htmlUrl);
   if (url.protocol !== "https:" || url.hostname !== "github.com") return null;
-  return { id: BigInt(id), number, htmlUrl: url.toString(), body };
+  return { id: BigInt(id), number, htmlUrl: url.toString(), body, state, updatedAt };
 }
 
 export async function findIssueByMarker(
@@ -316,4 +372,133 @@ export async function createGitHubIssue(
     throw new GitHubError(502, "github_unavailable", "GitHub returned an invalid issue");
   }
   return created;
+}
+
+export type GitHubCoordinates = {
+  installationId: bigint;
+  repositoryId: bigint;
+  owner: string;
+  name: string;
+};
+
+function repositoryUrl(repository: GitHubCoordinates): string {
+  return `${API}/repos/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}`;
+}
+
+export async function getGitHubIssue(
+  repository: GitHubCoordinates,
+  number: number
+): Promise<GitHubIssueInfo> {
+  const token = await installationToken(repository.installationId, repository.repositoryId);
+  const found = issue(
+    await githubFetch(`${repositoryUrl(repository)}/issues/${number}`, { token })
+  );
+  if (!found) throw new GitHubError(502, "github_unavailable", "GitHub returned an invalid issue");
+  return found;
+}
+
+export async function setGitHubIssueState(
+  repository: GitHubCoordinates,
+  number: number,
+  state: "open" | "closed"
+): Promise<GitHubIssueInfo> {
+  const token = await installationToken(repository.installationId, repository.repositoryId);
+  const updated = issue(
+    await githubFetch(`${repositoryUrl(repository)}/issues/${number}`, {
+      method: "PATCH",
+      token,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ state, ...(state === "closed" ? { state_reason: "completed" } : {}) }),
+    })
+  );
+  if (!updated)
+    throw new GitHubError(502, "github_unavailable", "GitHub returned an invalid issue");
+  return updated;
+}
+
+export async function githubBranchExists(
+  repository: GitHubCoordinates,
+  ref: string
+): Promise<boolean> {
+  const token = await installationToken(repository.installationId, repository.repositoryId);
+  try {
+    await githubFetch(
+      `${repositoryUrl(repository)}/git/ref/heads/${ref.split("/").map(encodeURIComponent).join("/")}`,
+      { token }
+    );
+    return true;
+  } catch (error) {
+    if (error instanceof GitHubError && error.status === 404) return false;
+    throw error;
+  }
+}
+
+// GitHub's explicit PR/issue links, not an arbitrary number mentioned in text.
+// Repository-scoped tokens deliberately exclude cross-repository links.
+export async function getGitHubPullRequest(
+  repository: GitHubCoordinates,
+  number: number
+): Promise<GitHubPullRequestInfo> {
+  const token = await installationToken(repository.installationId, repository.repositoryId);
+  const row = object(await githubFetch(`${repositoryUrl(repository)}/pulls/${number}`, { token }));
+  const id = integer(row?.id);
+  const state = string(row?.state);
+  const updatedAt = new Date(string(row?.updated_at) ?? "");
+  const head = object(row?.head);
+  const branch = string(head?.ref);
+  if (
+    id === null ||
+    (state !== "open" && state !== "closed") ||
+    !branch ||
+    !Number.isFinite(updatedAt.getTime())
+  ) {
+    throw new GitHubError(502, "github_unavailable", "GitHub returned an invalid pull request");
+  }
+  const issueNumbers: number[] = [];
+  let cursor: string | null = null;
+  do {
+    const result = object(
+      await githubFetch(`${API}/graphql`, {
+        method: "POST",
+        token,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          query: `query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+          repository(owner: $owner, name: $name) { pullRequest(number: $number) {
+            closingIssuesReferences(first: 100, after: $cursor) {
+              nodes { number repository { databaseId } }
+              pageInfo { hasNextPage endCursor }
+            }
+          } }
+        }`,
+          variables: { owner: repository.owner, name: repository.name, number, cursor },
+        }),
+      })
+    );
+    const graphRepository = object(object(result?.data)?.repository);
+    const references = object(object(graphRepository?.pullRequest)?.closingIssuesReferences);
+    if (result?.errors || !Array.isArray(references?.nodes)) {
+      throw new GitHubError(502, "github_unavailable", "GitHub issue references could not be read");
+    }
+    for (const value of references.nodes) {
+      const reference = object(value);
+      const repositoryId = integer(object(reference?.repository)?.databaseId);
+      const issueNumber = integer(reference?.number);
+      if (
+        repositoryId !== null &&
+        BigInt(repositoryId) === repository.repositoryId &&
+        issueNumber !== null
+      )
+        issueNumbers.push(issueNumber);
+    }
+    const page = object(references.pageInfo);
+    cursor = page?.hasNextPage === true ? string(page.endCursor) : null;
+    if (page?.hasNextPage === true && !cursor)
+      throw new GitHubError(
+        502,
+        "github_unavailable",
+        "GitHub omitted the next issue-reference page"
+      );
+  } while (cursor);
+  return { id: BigInt(id), number, state, updatedAt, branch, issueNumbers };
 }

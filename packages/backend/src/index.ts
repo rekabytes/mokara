@@ -18,6 +18,8 @@ import { billingRoutes, billingWebhook } from "./routes/billing.ts";
 import { adminRoutes } from "./routes/admin.ts";
 import { analyticsRoutes } from "./routes/analytics.ts";
 import { githubRoutes } from "./routes/github.ts";
+import { githubWebhookRoutes } from "./routes/github-webhook.ts";
+import { startGitHubSyncWorker } from "./lib/github-sync.ts";
 import { validate } from "./lib/validate.ts";
 import { updateMeSchema, lastContainerSchema, tourStateSchema } from "./lib/validation.ts";
 import { env, adminConfigIssues, githubConfigIssues } from "./env.ts";
@@ -81,6 +83,7 @@ async function main() {
   // composes in registration order, so the handler answers before
   // authRequired could reject it as unsigned-in.
   api.route("/billing", billingWebhook);
+  api.route("/", githubWebhookRoutes);
   // The operator console mounts here for the same reason the webhook does: it
   // carries no user session. `/api/admin/login` is public (credentials + the
   // login-URL key), everything else under it authenticates with the console's
@@ -154,6 +157,7 @@ async function main() {
     server = next;
   };
   startServer(1);
+  const stopGitHubSync = startGitHubSyncWorker();
 
   // 4) Graceful shutdown — drop idle and live connections immediately so the
   //  listening socket frees before tsx watch's next child tries to bind.
@@ -164,6 +168,7 @@ async function main() {
     // Narrowed: the Http2 variant of ServerType lacks closeAllConnections.
     if (s && "closeIdleConnections" in s) s.closeIdleConnections();
     if (s && "closeAllConnections" in s) s.closeAllConnections();
+    await stopGitHubSync();
     await disconnectRedis();
     await disconnectDB();
     log.ok("Stopped");

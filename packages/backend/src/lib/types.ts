@@ -73,6 +73,9 @@ export type GitHubIssueResponse = {
   issue_url: string | null;
   created_by_user_id: string | null;
   last_error_code: string | null;
+  sync_status: string;
+  sync_error_code: string | null;
+  last_synced_at: string | null;
 };
 
 export type TaskResponse = {
@@ -375,6 +378,9 @@ export function toTask(
           issue_url: t.githubIssueLink.issueUrl,
           created_by_user_id: t.githubIssueLink.createdByUserId,
           last_error_code: t.githubIssueLink.lastErrorCode,
+          sync_status: t.githubIssueLink.syncStatus,
+          sync_error_code: t.githubIssueLink.syncErrorCode,
+          last_synced_at: t.githubIssueLink.lastSyncedAt?.toISOString() ?? null,
         }
       : null,
     created_at: t.createdAt.toISOString(),

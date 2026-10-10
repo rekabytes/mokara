@@ -1,6 +1,7 @@
 import { Hono, type Context } from "hono";
 import { prisma } from "../db.ts";
-import { env, githubConfigured } from "../env.ts";
+import type { Prisma } from "@mokara/db/prisma/generated/client";
+import { env, githubConfigured, githubWebhookConfigured } from "../env.ts";
 import {
   GitHubError,
   exchangeGitHubCode,
@@ -20,7 +21,14 @@ import { consumeGitHubState, createGitHubState } from "../lib/github-state.ts";
 import { log } from "../lib/logger.ts";
 import { getTeamRole } from "../lib/team-membership.ts";
 import { validate } from "../lib/validate.ts";
-import { githubIssueSchema } from "../lib/validation.ts";
+import { githubIssueSchema, githubRepositoriesSchema } from "../lib/validation.ts";
+import { GITHUB_REPOSITORY_LIMIT } from "../lib/plans.ts";
+import { TASK_INCLUDE, taskResponse } from "../lib/task-response.ts";
+import {
+  activateGitHubRepositories,
+  GITHUB_USER_VERIFICATION_TTL_MS,
+} from "../lib/github-repositories.ts";
+import { enqueueGitHubTaskSync, resumeGitHubSync } from "../lib/github-sync.ts";
 import type { Vars } from "../middleware/auth.ts";
 
 export const githubRoutes = new Hono<{ Variables: Vars }>();
@@ -28,7 +36,7 @@ export const githubRoutes = new Hono<{ Variables: Vars }>();
 // Without persisting a GitHub user token, periodic OAuth re-verification is the
 // only honest way to notice that a person lost access to an organization while
 // the App installation itself remains active.
-const USER_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+const USER_VERIFICATION_TTL_MS = GITHUB_USER_VERIFICATION_TTL_MS;
 
 function settingsRedirect(c: Context<{ Variables: Vars }>, result: string) {
   return c.redirect(`/settings?github=${encodeURIComponent(result)}`, 302);
@@ -56,12 +64,13 @@ async function verifiedGitHubIdentity(code: string) {
 }
 
 async function persistInstallation(
+  client: Prisma.TransactionClient,
   connectionId: string,
   info: GitHubInstallationInfo,
   repositories: GitHubRepositoryInfo[]
 ) {
   const now = new Date();
-  const installation = await prisma.gitHubInstallation.upsert({
+  const installation = await client.gitHubInstallation.upsert({
     where: { githubInstallationId: info.id },
     create: {
       githubInstallationId: info.id,
@@ -79,7 +88,7 @@ async function persistInstallation(
       lastVerifiedAt: now,
     },
   });
-  await prisma.gitHubAccountInstallation.upsert({
+  await client.gitHubAccountInstallation.upsert({
     where: {
       connectionId_installationId: { connectionId, installationId: installation.id },
     },
@@ -87,7 +96,7 @@ async function persistInstallation(
     update: { verifiedAt: now },
   });
   for (const repository of repositories) {
-    const row = await prisma.gitHubRepository.upsert({
+    const row = await client.gitHubRepository.upsert({
       where: { githubRepositoryId: repository.id },
       create: {
         installationId: installation.id,
@@ -109,7 +118,7 @@ async function persistInstallation(
         lastVerifiedAt: now,
       },
     });
-    await prisma.gitHubAccountRepository.upsert({
+    await client.gitHubAccountRepository.upsert({
       where: { connectionId_repositoryId: { connectionId, repositoryId: row.id } },
       create: { connectionId, repositoryId: row.id, verifiedAt: now },
       update: { verifiedAt: now },
@@ -132,22 +141,21 @@ async function integrationPayload(userId: string) {
     : false;
   return {
     configured: githubConfigured,
+    sync_configured: githubWebhookConfigured,
+    repository_limit: GITHUB_REPOSITORY_LIMIT,
     connection: connection
       ? {
           github_login: connection.githubLogin,
           status: connection.status,
           reauthorization_required: needsReauthorization,
-          repositories:
-            !githubConfigured || needsReauthorization
-              ? []
-              : connection.repositories
-                  .filter(({ repository }) => repository.active)
-                  .map(({ repository }) => ({
-                    id: repository.id,
-                    full_name: repository.fullName,
-                    private: repository.private,
-                    installation_account: repository.installation.accountLogin,
-                  })),
+          repositories: connection.repositories.map(({ repository, enabled }) => ({
+            id: repository.id,
+            full_name: repository.fullName,
+            private: repository.private,
+            installation_account: repository.installation.accountLogin,
+            enabled,
+            available: repository.active && repository.installation.status === "active",
+          })),
         }
       : null,
   };
@@ -156,6 +164,35 @@ async function integrationPayload(userId: string) {
 githubRoutes.get("/me/integrations/github", async (c) => {
   return c.json(await integrationPayload(c.get("userId")));
 });
+
+githubRoutes.put(
+  "/me/integrations/github/repositories",
+  validate("json", githubRepositoriesSchema),
+  async (c) => {
+    if (!githubConfigured)
+      return c.json(
+        { error: "github_not_configured", message: "GitHub integration is not configured" },
+        409
+      );
+    const error = await activateGitHubRepositories(
+      c.get("userId"),
+      c.req.valid("json").repository_ids
+    );
+    if (error)
+      return c.json(
+        {
+          error,
+          message:
+            error === "github_repository_limit"
+              ? `Activate at most ${GITHUB_REPOSITORY_LIMIT} repositories`
+              : "Repository selection could not be saved",
+        },
+        error === "github_repository_forbidden" ? 403 : 409
+      );
+    await resumeGitHubSync(c.get("userId"));
+    return c.json(await integrationPayload(c.get("userId")));
+  }
+);
 
 githubRoutes.post("/me/integrations/github/connect", async (c) => {
   if (!githubConfigured) {
@@ -211,40 +248,71 @@ githubRoutes.get("/integrations/github/callback", async (c) => {
       return settingsRedirect(c, "installation_unverified");
     }
 
-    const connection = await prisma.gitHubAccountConnection.upsert({
-      where: { userId: state.userId },
-      create: {
-        userId: state.userId,
-        githubUserId: githubUser.id,
-        githubLogin: githubUser.login,
-        status: "active",
-        verifiedAt: new Date(),
-      },
-      update: {
-        githubUserId: githubUser.id,
-        githubLogin: githubUser.login,
-        status: "active",
-        verifiedAt: new Date(),
-      },
-    });
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM users WHERE id = ${state.userId}::uuid FOR UPDATE`;
+        const previous = await tx.gitHubAccountConnection.findUnique({
+          where: { userId: state.userId },
+        });
+        const connection = await tx.gitHubAccountConnection.upsert({
+          where: { userId: state.userId },
+          create: {
+            userId: state.userId,
+            githubUserId: githubUser.id,
+            githubLogin: githubUser.login,
+            status: "active",
+            verifiedAt: new Date(),
+          },
+          update: {
+            githubUserId: githubUser.id,
+            githubLogin: githubUser.login,
+            status: "active",
+            verifiedAt: new Date(),
+          },
+        });
 
-    const verifiedIds = installations.map((installation) => installation.info.id);
-    await prisma.gitHubAccountInstallation.deleteMany({
-      where: {
-        connectionId: connection.id,
-        ...(verifiedIds.length
-          ? { installation: { githubInstallationId: { notIn: verifiedIds } } }
-          : {}),
+        const verifiedIds = installations.map((installation) => installation.info.id);
+        await tx.gitHubAccountInstallation.deleteMany({
+          where: {
+            connectionId: connection.id,
+            ...(verifiedIds.length
+              ? { installation: { githubInstallationId: { notIn: verifiedIds } } }
+              : {}),
+          },
+        });
+        // Preserve explicit activation across refresh, but remove lost access.
+        // Switching GitHub identities must never inherit the old user's choices.
+        const visibleIds = installations.flatMap((row) =>
+          row.repositories.map((repository) => repository.id)
+        );
+        await tx.gitHubAccountRepository.deleteMany({
+          where: {
+            connectionId: connection.id,
+            ...(previous && previous.githubUserId !== githubUser.id
+              ? {}
+              : { repository: { githubRepositoryId: { notIn: visibleIds } } }),
+          },
+        });
+        for (const installation of installations) {
+          await persistInstallation(
+            tx,
+            connection.id,
+            installation.info,
+            installation.repositories
+          );
+        }
+        await tx.gitHubIssueLink.updateMany({
+          where: {
+            connectionId: connection.id,
+            status: "linked",
+            repository: { connections: { none: { connectionId: connection.id, enabled: true } } },
+          },
+          data: { syncStatus: "paused", syncErrorCode: "github_repository_inactive" },
+        });
       },
-    });
-    // Repository visibility is the intersection of App installation access
-    // and this GitHub user's own access. Replace that personal projection on
-    // every OAuth verification so two users of one organization installation
-    // never inherit each other's private repositories.
-    await prisma.gitHubAccountRepository.deleteMany({ where: { connectionId: connection.id } });
-    for (const installation of installations) {
-      await persistInstallation(connection.id, installation.info, installation.repositories);
-    }
+      { timeout: 30_000 }
+    );
+    await resumeGitHubSync(state.userId);
     return settingsRedirect(c, "connected");
   } catch (error) {
     const code = error instanceof GitHubError ? error.code : "github_unavailable";
@@ -268,7 +336,15 @@ githubRoutes.post("/me/integrations/github/refresh", async (c) => {
 });
 
 githubRoutes.delete("/me/integrations/github", async (c) => {
-  await prisma.gitHubAccountConnection.deleteMany({ where: { userId: c.get("userId") } });
+  const userId = c.get("userId");
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
+    await tx.gitHubIssueLink.updateMany({
+      where: { connection: { userId } },
+      data: { syncStatus: "paused", syncErrorCode: "github_connection_required" },
+    });
+    await tx.gitHubAccountConnection.deleteMany({ where: { userId } });
+  });
   return c.body(null, 204);
 });
 
@@ -280,6 +356,9 @@ function issueResponse(link: {
   issueUrl: string | null;
   createdByUserId: string | null;
   lastErrorCode: string | null;
+  syncStatus: string;
+  syncErrorCode: string | null;
+  lastSyncedAt: Date | null;
 }) {
   return {
     status: link.status,
@@ -289,6 +368,9 @@ function issueResponse(link: {
     issue_url: link.issueUrl,
     created_by_user_id: link.createdByUserId,
     last_error_code: link.lastErrorCode,
+    sync_status: link.syncStatus,
+    sync_error_code: link.syncErrorCode,
+    last_synced_at: link.lastSyncedAt?.toISOString() ?? null,
   };
 }
 
@@ -325,18 +407,51 @@ function githubStatus(error: GitHubError): 403 | 409 | 429 | 503 {
 }
 
 async function persistLinkedIssue(linkId: string, issue: GitHubIssueInfo) {
-  return prisma.gitHubIssueLink.update({
-    where: { id: linkId },
-    data: {
-      status: "linked",
-      githubIssueId: issue.id,
-      issueNumber: issue.number,
-      issueUrl: issue.htmlUrl,
-      lastErrorCode: null,
-      linkedAt: new Date(),
-    },
+  return prisma.$transaction(async (tx) => {
+    const linked = await tx.gitHubIssueLink.update({
+      where: { id: linkId },
+      data: {
+        status: "linked",
+        githubIssueId: issue.id,
+        issueNumber: issue.number,
+        issueUrl: issue.htmlUrl,
+        lastErrorCode: null,
+        linkedAt: new Date(),
+        issueState: issue.state,
+        githubUpdatedAt: issue.updatedAt,
+      },
+    });
+    await enqueueGitHubTaskSync(tx, linked.taskId);
+    return tx.gitHubIssueLink.findUniqueOrThrow({ where: { id: linkId } });
   });
 }
+
+githubRoutes.post("/tasks/:id/github-sync", async (c) => {
+  if (!githubConfigured)
+    return c.json(
+      { error: "github_not_configured", message: "GitHub integration is not configured" },
+      409
+    );
+  const taskId = c.req.param("id");
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    include: { githubIssueLink: true },
+  });
+  if (!task) return c.json({ error: "not_found", message: "Task not found" }, 404);
+  if (!(await getTeamRole(c.get("userId"), task.teamId)))
+    return c.json({ error: "forbidden", message: "Not a member of this container" }, 403);
+  if (!task.githubIssueLink || task.githubIssueLink.status !== "linked")
+    return c.json({ error: "github_issue_not_linked", message: "Task has no linked issue" }, 409);
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM tasks WHERE id = ${taskId}::uuid FOR UPDATE`;
+    await enqueueGitHubTaskSync(tx, taskId, false);
+  });
+  return c.json(
+    taskResponse(
+      await prisma.task.findUniqueOrThrow({ where: { id: taskId }, include: TASK_INCLUDE })
+    )
+  );
+});
 
 githubRoutes.post("/tasks/:id/github-issue", validate("json", githubIssueSchema), async (c) => {
   if (!githubConfigured) {
@@ -364,8 +479,10 @@ githubRoutes.post("/tasks/:id/github-issue", validate("json", githubIssueSchema)
       id: c.req.valid("json").repository_id,
       active: true,
       installation: {
+        status: "active",
         connections: { some: { connection: { userId, status: "active" } } },
       },
+      connections: { some: { enabled: true, connection: { userId, status: "active" } } },
     },
     include: { installation: true },
   });

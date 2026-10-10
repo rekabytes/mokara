@@ -247,6 +247,7 @@ model GitHubAccountRepository {
   connectionId String   @map("connection_id") @db.Uuid
   repositoryId String   @map("repository_id") @db.Uuid
   verifiedAt   DateTime @map("verified_at") @db.Timestamptz(3)
+  enabled      Boolean  @default(false)
 
   connection GitHubAccountConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   repository GitHubRepository        @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
@@ -271,6 +272,15 @@ model GitHubIssueLink {
   lastErrorCode          String?   @map("last_error_code")
   lastAttemptAt          DateTime  @default(now()) @map("last_attempt_at") @db.Timestamptz(3)
   linkedAt               DateTime? @map("linked_at") @db.Timestamptz(3)
+  syncStatus             String    @default("idle") @map("sync_status")
+  syncErrorCode          String?   @map("sync_error_code")
+  issueState             String?   @map("issue_state")
+  lastSyncedAt           DateTime? @map("last_synced_at") @db.Timestamptz(3)
+  githubUpdatedAt        DateTime? @map("github_updated_at") @db.Timestamptz(3)
+  localStatusAt          DateTime? @map("local_status_at") @db.Timestamptz(3)
+  syncRevision           Int       @default(0) @map("sync_revision")
+  desiredState           String?   @map("desired_state")
+  pullRequests           GitHubPullRequestLink[]
   createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -281,7 +291,38 @@ model GitHubIssueLink {
 
   @@index([repositoryId])
   @@index([createdByUserId])
+  @@index([repositoryId, githubIssueId])
   @@map("github_issue_links")
+}
+
+model GitHubPullRequestLink {
+  issueLinkId   String @map("issue_link_id") @db.Uuid
+  pullRequestId BigInt @map("pull_request_id")
+  updatedAt     DateTime @map("updated_at") @db.Timestamptz(3)
+  issueLink     GitHubIssueLink @relation(fields: [issueLinkId], references: [id], onDelete: Cascade)
+
+  @@id([issueLinkId, pullRequestId])
+  @@index([pullRequestId])
+  @@map("github_pull_request_links")
+}
+
+// Durable inbound webhook inbox and outbound status outbox. No credentials or
+// entire webhook bodies are stored: payloads contain only validated coordinates.
+model GitHubSyncJob {
+  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  kind          String
+  deliveryId    String? @unique @map("delivery_id")
+  payload       Json
+  attempts      Int @default(0)
+  availableAt   DateTime @default(now()) @map("available_at") @db.Timestamptz(3)
+  lockedUntil   DateTime? @map("locked_until") @db.Timestamptz(3)
+  leaseToken    String? @map("lease_token") @db.Uuid
+  completedAt   DateTime? @map("completed_at") @db.Timestamptz(3)
+  lastErrorCode String? @map("last_error_code")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([completedAt, availableAt])
+  @@map("github_sync_jobs")
 }
 
 model SubtaskItem {
@@ -322,14 +363,16 @@ model TaskEvent {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   teamId     String   @map("team_id") @db.Uuid
   taskId     String   @map("task_id") @db.Uuid
-  actorId    String   @map("actor_id") @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  source     String   @default("mokara")
+  githubLogin String? @map("github_login")
   fromStatus String?  @map("from_status")
   toStatus   String   @map("to_status")
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   team  Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
   task  Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  actor User @relation("TaskEventActor", fields: [actorId], references: [id])
+  actor User? @relation("TaskEventActor", fields: [actorId], references: [id], onDelete: Restrict)
 
   @@index([teamId, createdAt])
   @@index([taskId])

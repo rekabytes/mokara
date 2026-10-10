@@ -106,6 +106,13 @@ const db = {
   user: {
     count: async ({ where } = {}) => {
       if (state.statsDown) throw new Error("private SQL error");
+      if (where?.AND) {
+        state.billingCountFilters ??= [];
+        state.billingCountFilters.push(where);
+        if (where.AND[1]?.billingStatus === "active") return 6;
+        if (where.AND[1]?.planOverride) return 2;
+        if (where.AND[1]?.billingErrorCode) return 3;
+      }
       if (where?.createdAt) return 2;
       if (where?.planOverride) return 1;
       if (where?.graceUntil) return 1;
@@ -647,9 +654,59 @@ test("billing reads never infer subscription state from an operator grant", asyn
   assert.equal(body.users[0].stripeCustomerId, undefined);
   const { nodes } = await render("billing", { ...body, events: [] });
   assert.ok(nodes.content.textContent.includes("Unknown means not verified"));
-  assert.ok(nodes.content.textContent.includes("Reconciliation history"));
+  assert.ok(nodes.content.textContent.includes("Sync history"));
   assert.equal((await app.request("/api/admin/billing?status=bogus", authorized())).status, 400);
 });
+test("billing summary counts the full filtered dataset, not the visible rows", async () => {
+  const body = await (await app.request("/api/admin/billing?q=test", authorized())).json();
+  assert.equal(body.users.length, 1);
+  assert.deepEqual(body.summary, {
+    accounts: 14,
+    active_subscriptions: 6,
+    grants: 2,
+    sync_issues: 3,
+  });
+  assert.equal(state.billingCountFilters.length, 3);
+  for (const where of state.billingCountFilters)
+    assert.equal(where.AND[0].OR[0].username.contains, "test");
+});
+
+test("billing layout has five columns, real stats and accessible expandable details", async () => {
+  state.user.billingErrorCode = "stripe_unavailable";
+  const body = await (await app.request("/api/admin/billing", authorized())).json();
+  const { nodes } = await render("billing", { ...body, events: [] });
+  assert.equal(nodes.notice.textContent, "");
+  const walk = (node) => [
+    node,
+    ...node.children.flatMap((child) => (typeof child === "string" ? [] : walk(child))),
+  ];
+  const all = walk(nodes.content);
+  const stats = all.find((node) => node.className === "billing-stats");
+  assert.equal(stats.children.length, 4);
+  const billingTable = all.find((node) => node.className === "table-scroll billing-table");
+  const table = billingTable.children[0];
+  assert.equal(table.children[0].children[0].children.length, 5);
+  const detailRow = all.find((node) => node.className === "billing-detail-row");
+  const toggle = all.find((node) => node.attributes["aria-controls"] === detailRow.id);
+  assert.equal(detailRow.hidden, true);
+  toggle.listeners.click();
+  assert.equal(detailRow.hidden, false);
+  assert.equal(toggle.attributes["aria-expanded"], "true");
+  assert.ok(detailRow.textContent.includes("stripe_unavailable"));
+  assert.equal(detailRow.textContent.includes("None recorded"), false);
+  toggle.listeners.click();
+  assert.equal(detailRow.hidden, true);
+});
+
+test("mixed-version billing summaries remain unavailable, never inferred zeroes", async () => {
+  const body = await (await app.request("/api/admin/billing", authorized())).json();
+  delete body.summary;
+  const { nodes } = await render("billing", { ...body, events: [] });
+  const stats = nodes.content.children.find((node) => node.className === "billing-stats");
+  assert.ok(stats.textContent.includes("14"));
+  assert.equal(stats.children.filter((node) => node.textContent.includes("Unavailable")).length, 3);
+});
+
 test("billing filters select actual observations, errors and grants independently", () => {
   assert.deepEqual(billingFilter("", "unknown").AND[1], { billingStatus: null });
   assert.deepEqual(billingFilter("", "error").AND[1], { billingErrorCode: { not: null } });

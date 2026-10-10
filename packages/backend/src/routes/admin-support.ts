@@ -234,37 +234,49 @@ adminSupportRoutes.get(
   async (c) => {
     const { page, q, status } = c.req.valid("query");
     const where = billingFilter(q, status);
-    const [total, users] = await prisma.$transaction([
-      prisma.user.count({ where }),
-      prisma.user.findMany({
-        where,
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        skip: (page - 1) * ADMIN_PAGE_SIZE,
-        take: ADMIN_PAGE_SIZE,
-        select: {
-          id: true,
-          username: true,
-          plan: true,
-          planOverride: true,
-          stripeCustomerId: true,
-          periodEnd: true,
-          graceUntil: true,
-          billingStatus: true,
-          billingCancelAtPeriodEnd: true,
-          billingCancelAt: true,
-          billingVerifiedAt: true,
-          billingAttemptedAt: true,
-          billingErrorCode: true,
-          billingInvoiceStatus: true,
-          billingInvoiceObservedAt: true,
-        },
-      }),
-    ]);
+    const [total, users, activeSubscriptions, grants, syncIssues] = await prisma.$transaction(
+      [
+        prisma.user.count({ where }),
+        prisma.user.findMany({
+          where,
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          skip: (page - 1) * ADMIN_PAGE_SIZE,
+          take: ADMIN_PAGE_SIZE,
+          select: {
+            id: true,
+            username: true,
+            plan: true,
+            planOverride: true,
+            stripeCustomerId: true,
+            periodEnd: true,
+            graceUntil: true,
+            billingStatus: true,
+            billingCancelAtPeriodEnd: true,
+            billingCancelAt: true,
+            billingVerifiedAt: true,
+            billingAttemptedAt: true,
+            billingErrorCode: true,
+            billingInvoiceStatus: true,
+            billingInvoiceObservedAt: true,
+          },
+        }),
+        prisma.user.count({ where: { AND: [where, { billingStatus: "active" }] } }),
+        prisma.user.count({ where: { AND: [where, { planOverride: { not: null } }] } }),
+        prisma.user.count({ where: { AND: [where, { billingErrorCode: { not: null } }] } }),
+      ],
+      { isolationLevel: "RepeatableRead" }
+    );
     return c.json({
       page,
       page_size: ADMIN_PAGE_SIZE,
       total,
       configured: billingConfigured,
+      summary: {
+        accounts: total,
+        active_subscriptions: activeSubscriptions,
+        grants,
+        sync_issues: syncIssues,
+      },
       checked_at: new Date().toISOString(),
       users: users.map((user) => ({
         id: user.id,

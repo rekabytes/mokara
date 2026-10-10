@@ -64,6 +64,30 @@ body {
 .data-note summary { cursor: pointer; width: fit-content; }
 .data-note[open] summary { color: var(--text); }
 .data-note p { max-width: 65rem; margin-bottom: 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+#app[data-view="billing"] .notice:empty { display: none; }
+.billing-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin: 0 0 1.5rem; }
+.billing-stats > div { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 0.8rem; padding: 1.1rem 1.2rem; }
+.billing-stats dt { color: var(--muted); font-size: 0.8rem; }
+.billing-stats dd { margin: 0.35rem 0 0; color: var(--text); font-size: clamp(1.1rem, 2.5vw, 1.8rem); font-weight: 600; letter-spacing: -0.04em; overflow-wrap: anywhere; }
+.billing-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+.billing-toolbar .filter-form { margin: 0; }
+.billing-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; min-width: 0; }
+.view-updated { color: var(--muted); font-size: 0.75rem; }
+.billing-tools .data-note { margin: 0; }
+.billing-tools .data-note[open] { flex-basis: 100%; }
+.billing-tools .data-note[open] p { max-width: 32rem; }
+.billing-table table { min-width: 38rem; }
+.billing-table th:nth-child(1) { width: 25%; }
+.billing-table th:nth-child(2) { width: 20%; }
+.billing-table td { vertical-align: middle; padding-top: 1rem; padding-bottom: 1rem; }
+.row-details { border: 0; background: transparent; color: var(--accent); padding: 0.2rem; font: inherit; font-size: 0.8rem; cursor: pointer; }
+.row-details.has-issue::before { content: ""; display: inline-block; width: 0.4rem; height: 0.4rem; margin-right: 0.45rem; background: var(--danger); border-radius: 50%; }
+.billing-detail-row { background: #f6f8fc; }
+.billing-detail-row[hidden] { display: none; }
+.billing-detail-row .billing-detail-facts { margin: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.billing-history { margin-top: 1.25rem; }
+@media (max-width: 760px) { .billing-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; } .billing-stats > div { padding: 1rem; } .billing-detail-row .billing-detail-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 #content > .table-scroll { background: var(--panel); border-radius: 0.8rem; border: 1px solid var(--line); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 @media (max-width: 1100px) { .panel-layout { grid-template-columns: minmax(0, 1fr); } }
@@ -471,7 +495,7 @@ export const ADMIN_JS = `
     groupSections();
   }
 
-  function filters(fields, path) {
+  function filters(fields, path, target = content) {
     const params = new URL(window.location.href).searchParams;
     const form = document.createElement("form");
     form.className = "filter-form";
@@ -480,23 +504,25 @@ export const ADMIN_JS = `
     form.setAttribute("role", "search");
     for (const field of fields) {
       const label = document.createElement("label");
-      label.append(field.label);
+      if (field.compact) { const text = document.createElement("span"); text.className = "sr-only"; text.textContent = field.label; label.append(text); }
+      else label.append(field.label);
       const input = document.createElement(field.options ? "select" : "input");
       input.name = field.name;
+      if (field.compact) input.setAttribute("aria-label", field.label);
       if (field.options) for (const value of field.options) {
         const option = document.createElement("option"); option.value = value; option.textContent = value || "All"; option.selected = value === (params.get(field.name) || ""); input.append(option);
-      } else { input.type = field.type || "text"; input.maxLength = 100; input.value = params.get(field.name) || ""; }
+      } else { input.type = field.type || "text"; input.maxLength = 100; input.value = params.get(field.name) || ""; if (field.placeholder) input.placeholder = field.placeholder; }
       label.append(input); form.append(label);
     }
     const submit = document.createElement("button"); submit.type = "submit"; submit.className = "plan-btn"; submit.textContent = "Filter";
-    form.append(submit, link(path, "Clear filters")); content.append(form);
+    form.append(submit, link(path, "Clear filters")); target.append(form);
   }
 
   function quota(used, limit, storage) {
     return (storage ? bytes(used) : count(used)) + " / " + (limit === null ? "Unlimited" : storage ? bytes(limit) : count(limit)) + (limit !== null && used > limit ? " · OVER LIMIT" : "");
   }
 
-  function pagination(data, path, pageKey = "page") {
+  function pagination(data, path, pageKey = "page", target = content) {
     const row = document.createElement("nav");
     row.className = "pager";
     row.setAttribute("aria-label", "Pagination");
@@ -505,7 +531,7 @@ export const ADMIN_JS = `
     if (data.page > 1) row.append(link(destination(data.page - 1), "Previous"));
     row.append(paragraph(data.total === 0 ? "0 records" : "Page " + data.page + " · " + data.total + " records"));
     if (data.page * data.page_size < data.total) row.append(link(destination(data.page + 1), "Next"));
-    content.append(row);
+    target.append(row);
   }
 
   async function loadAttention() {
@@ -585,33 +611,73 @@ export const ADMIN_JS = `
     groupSections();
   }
 
+  function billingAccountsTable(users) {
+    const wrapper = document.createElement("div"); wrapper.className = "table-scroll billing-table";
+    wrapper.tabIndex = 0; wrapper.setAttribute("role", "region"); wrapper.setAttribute("aria-label", "Billing accounts");
+    const el = document.createElement("table");
+    const thead = document.createElement("thead"); const head = document.createElement("tr");
+    for (const name of ["Account", "Plan", "Subscription", "Last verified", "Details"]) {
+      const th = document.createElement("th"); th.scope = "col"; th.textContent = name; head.append(th);
+    }
+    thead.append(head); const body = document.createElement("tbody");
+    for (const user of users) {
+      const row = document.createElement("tr");
+      const plan = document.createElement("span"); plan.className = "plan-cell"; plan.append(badge(user.effective_plan)); if (user.operator_grant) plan.append(grantBadge());
+      const status = document.createElement("span");
+      status.className = "badge" + (user.subscription_status === "active" ? " badge-healthy" : ["past_due", "unpaid"].includes(user.subscription_status) ? " badge-warning" : "");
+      status.textContent = user.subscription_status === "unknown" ? user.has_customer ? "Not verified" : "Not connected" : user.subscription_status === "none" ? "No subscription" : user.subscription_status.replaceAll("_", " ");
+      const detailRow = document.createElement("tr"); detailRow.className = "billing-detail-row"; detailRow.id = "billing-detail-" + user.id; detailRow.hidden = true;
+      const cell = document.createElement("td"); cell.colSpan = 5;
+      const facts = document.createElement("dl"); facts.className = "facts billing-detail-facts";
+      const date = value => value ? when(value) : "—";
+      facts.append(fact("Stripe plan", user.stripe_plan), fact("Operator grant", user.operator_grant || "—"), fact("Stripe customer", user.has_customer ? "Connected" : "Not connected"), fact("Cancellation", user.cancel_at ? date(user.cancel_at) : user.cancel_at_period_end === null ? "Not verified" : user.cancel_at_period_end ? "At period end" : "Not scheduled"), fact("Period ends", date(user.period_end)), fact("Grace ends", date(user.grace_until)), fact("Last invoice event", user.last_invoice_event ? user.last_invoice_event.replaceAll("_", " ") : "Not observed"), fact("Invoice event time", date(user.invoice_observed_at)), fact("Last sync attempt", date(user.attempted_at)), fact("Sync error", user.error_code || "—"));
+      cell.append(facts); detailRow.append(cell);
+      const toggle = document.createElement("button"); toggle.type = "button"; toggle.className = "row-details"; toggle.textContent = "Details";
+      toggle.setAttribute("aria-label", "Details for " + user.username); toggle.setAttribute("aria-expanded", "false"); toggle.setAttribute("aria-controls", detailRow.id);
+      if (user.error_code) { toggle.className += " has-issue"; toggle.title = "Sync issue — " + user.error_code; }
+      toggle.addEventListener("click", () => { detailRow.hidden = !detailRow.hidden; toggle.setAttribute("aria-expanded", String(!detailRow.hidden)); toggle.textContent = detailRow.hidden ? "Details" : "Close"; });
+      for (const value of [link("/users/" + user.id, user.username), plan, status, user.verified_at ? when(user.verified_at) : "Not verified", toggle]) {
+        const td = document.createElement("td"); if (typeof value === "string") td.textContent = value; else td.append(value); row.append(td);
+      }
+      body.append(row, detailRow);
+    }
+    el.append(thead, body); wrapper.append(el); return wrapper;
+  }
+
   async function loadBilling() {
-    content.textContent = "Loading billing observations…";
+    content.textContent = "Loading billing…";
     const params = new URL(window.location.href).searchParams;
     const query = new URLSearchParams();
     for (const key of ["page", "q", "status"]) if (params.get(key)) query.set(key, params.get(key));
     const historyQuery = new URLSearchParams(); historyQuery.set("page", params.get("history_page") || "1"); if (params.get("q")) historyQuery.set("q", params.get("q"));
     let data;
     try { data = await getJSON("/api/billing?" + query); }
-    catch { content.textContent = "Billing observations unavailable."; return; }
-    content.textContent = "";
-    setNotice((data.configured ? "Billing configured" : "Billing not configured") + " · stored observations · checked " + when(data.checked_at));
-    refreshButton(loadBilling);
-    filters([{ name: "q", label: "User" }, { name: "status", label: "Subscription / attention", options: ["", "unknown", "none", "active", "trialing", "past_due", "unpaid", "canceled", "paused", "incomplete", "incomplete_expired", "error", "canceling", "payment_failed", "grant"] }], "/billing");
-    heading("Subscription overview");
-    content.append(dataNote("Stripe observations are refreshed by existing webhooks/user billing sync, never by opening admin. Unknown means not verified since monitoring began. Active/trialing is not proof of payment. Operator grants are separate from subscriptions; last invoice event is a notification, not complete payment history."));
-    content.append(table(["User", "Effective / Stripe plan", "Grant", "Subscription", "Cancellation", "Period / grace ends", "Last invoice event", "Verified", "Attempt / error"], data.users.map(user => [link("/users/" + user.id, user.username), user.effective_plan + " / " + user.stripe_plan, user.operator_grant || "None", user.subscription_status + (user.has_customer ? "" : " · no customer"), user.cancel_at ? when(user.cancel_at) : user.cancel_at_period_end === null ? "Unknown" : user.cancel_at_period_end ? "At period end" : "Not scheduled", timestamp(user.period_end) + " / " + timestamp(user.grace_until), user.last_invoice_event ? user.last_invoice_event + " · " + timestamp(user.invoice_observed_at) : "Unknown", timestamp(user.verified_at), timestamp(user.attempted_at) + (user.error_code ? " / " + user.error_code : "")])));
-    if (!data.users.length) content.append(paragraph("No accounts match this page/filter."));
-    pagination(data, "/billing");
-    heading("Reconciliation history");
-    content.append(dataNote("Post-deployment attempts only. History follows the user search, not the subscription-status filter; unassigned/deleted users appear when search is empty."));
+    catch { content.textContent = "Billing unavailable."; return; }
+    content.textContent = ""; setNotice("");
+    const summary = data.summary || { accounts: data.total, active_subscriptions: null, grants: null, sync_issues: null };
+    const stats = document.createElement("dl"); stats.className = "billing-stats"; stats.setAttribute("aria-label", "Matching account totals");
+    for (const [label, value] of [["Accounts", summary.accounts], ["Active subscriptions", summary.active_subscriptions], ["Grants", summary.grants], ["Sync issues", summary.sync_issues]]) stats.append(fact(label, count(value)));
+    content.append(stats);
+    const panel = document.createElement("section"); panel.className = "panel billing-panel"; panel.setAttribute("aria-label", "Subscriptions");
+    const toolbar = document.createElement("div"); toolbar.className = "billing-toolbar";
+    filters([{ name: "q", label: "User", placeholder: "Search accounts", compact: true }, { name: "status", label: "Status", compact: true, options: ["", "unknown", "none", "active", "trialing", "past_due", "unpaid", "canceled", "paused", "incomplete", "incomplete_expired", "error", "canceling", "payment_failed", "grant"] }], "/billing", toolbar);
+    const tools = document.createElement("div"); tools.className = "billing-tools";
+    const updated = document.createElement("time"); updated.className = "view-updated"; updated.dateTime = data.checked_at;
+    updated.textContent = "View updated " + new Date(data.checked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); updated.title = when(data.checked_at) + " — page snapshot, not Stripe verification";
+    const refresh = document.createElement("button"); refresh.type = "button"; refresh.className = "plan-btn"; refresh.textContent = "Refresh"; refresh.addEventListener("click", () => { void loadBilling(); });
+    const info = dataNote("Billing " + (data.configured ? "enabled" : "disabled") + ". Counts cover all matching accounts, not just this page. Active subscriptions are last observed active statuses, not proof of payment. Sync issues count accounts with a last reconciliation error; unassigned failures remain in history. Unknown means not verified since monitoring began. Grants are not subscriptions. Stripe updates only through existing webhooks/user sync; view updated is the page snapshot time. Last invoice event is a notification, not complete payment history.", "Info");
+    tools.append(updated, refresh, info); toolbar.append(tools); panel.append(toolbar, billingAccountsTable(data.users));
+    if (!data.users.length) panel.append(paragraph(data.total ? "No accounts on this page." : "No matching accounts."));
+    pagination(data, "/billing", "page", panel); content.append(panel);
+    const historyPanel = document.createElement("section"); historyPanel.className = "panel billing-history";
+    const historyTitle = document.createElement("h2"); historyTitle.textContent = "Sync history"; historyPanel.append(historyTitle);
+    historyPanel.append(dataNote("Post-deployment attempts only. History follows the user search, not the subscription-status filter; unassigned/deleted users appear when search is empty.")); content.append(historyPanel);
     let history;
     try { history = await getJSON("/api/billing/history?" + historyQuery); }
-    catch { content.append(paragraph("Reconciliation history unavailable.")); groupSections(); return; }
-    content.append(table(["When", "User", "Source", "Outcome", "Error"], history.events.map(event => [when(event.created_at), event.user ? link("/users/" + event.user.id, event.user.username) : "Unassigned / deleted", event.source, event.outcome, event.error_code || "—"])));
-    if (!history.events.length) content.append(paragraph("No reconciliation attempts on this page/filter."));
-    pagination(history, "/billing", "history_page");
-    groupSections();
+    catch { historyPanel.append(paragraph("Sync history unavailable.")); return; }
+    historyPanel.append(table(["When", "Account", "Source", "Outcome", "Error"], history.events.map(event => [when(event.created_at), event.user ? link("/users/" + event.user.id, event.user.username) : "Unassigned / deleted", event.source, event.outcome, event.error_code || "—"])));
+    if (!history.events.length) historyPanel.append(paragraph(history.total ? "No attempts on this page." : "No sync attempts."));
+    pagination(history, "/billing", "history_page", historyPanel);
   }
 
   async function loadUsers() {

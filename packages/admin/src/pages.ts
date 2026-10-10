@@ -108,7 +108,7 @@ ${navLink("audit", "Audit trail", "M6 3h12v18H6z M9 7h6 M9 11h6 M9 15h4")}</div>
 <div class="sidebar-footer"><span class="operator-label">Operator console</span><form method="post" action="/logout"><button type="submit" class="signout">Sign out</button></form></div>
 </aside>
 <main id="app" tabindex="-1" aria-labelledby="page-title" data-view="${esc(opts.view)}"${userIdAttr}${opts.dataWorkspaceId === undefined ? "" : ` data-workspace-id="${esc(opts.dataWorkspaceId)}"`}>
-<header class="page-header"><div><h1 id="page-title">${esc(heading)}</h1><p class="page-description">${esc(description)}</p></div><span class="context-tag">Operator access</span></header>
+<header class="page-header"><div><h1 id="page-title">${esc(heading)}</h1>${opts.view === "billing" ? "" : `<p class="page-description">${esc(description)}</p>`}</div>${opts.view === "billing" ? "" : '<span class="context-tag">Operator access</span>'}</header>
 <p id="notice" class="notice" role="status"></p>
 <section id="content"><p class="muted">Loading…</p></section>
 </main>

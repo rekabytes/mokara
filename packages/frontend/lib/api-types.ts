@@ -64,6 +64,40 @@ export type Attachment = {
   created_at: string;
 };
 
+export type GitHubIssue = {
+  status: "creating" | "linked" | "failed";
+  repository_id: string;
+  repository_full_name: string;
+  issue_number: number | null;
+  issue_url: string | null;
+  created_by_user_id: string | null;
+  last_error_code: string | null;
+  sync_status: "idle" | "pending" | "synced" | "paused" | "failed";
+  sync_error_code: string | null;
+  last_synced_at: string | null;
+};
+
+export type GitHubRepository = {
+  id: string;
+  full_name: string;
+  private: boolean;
+  installation_account: string;
+  enabled: boolean;
+  available: boolean;
+};
+
+export type GitHubIntegration = {
+  configured: boolean;
+  sync_configured: boolean;
+  repository_limit: number;
+  connection: {
+    github_login: string;
+    status: string;
+    reauthorization_required: boolean;
+    repositories: GitHubRepository[];
+  } | null;
+};
+
 export type Task = {
   id: string;
   team_id: string;
@@ -81,6 +115,7 @@ export type Task = {
   assignee: UserRef | null;
   due_date: string | null;
   flagged: boolean;
+  github_issue: GitHubIssue | null;
   created_at: string;
   updated_at: string;
 };

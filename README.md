@@ -140,14 +140,15 @@ All routes are mounted under `/api`. Auth uses an HS256 JWT in the `mokara_token
 
 ## Release (container images)
 
-Releases are tag-driven; images are built **only** by CI, never on the deploy host.
+Production releases are tag-driven; staging images are published on pushes to
+`dev`. Images are built **only** by CI, never on the deploy host.
 Use the release script to update every workspace manifest and release example,
 then commit and tag that version:
 
 ```bash
 pnpm release:bump patch
-git commit -am "chore(release): 0.1.9"
-git tag v0.1.9 && git push origin v0.1.9
+git commit -am "chore(release): 0.2.0"
+git tag v0.2.0 && git push origin v0.2.0
 ```
 
 The tag must equal `version` in the root `package.json` and every workspace
@@ -160,9 +161,9 @@ frontend build · every migration applied to an empty Postgres · synchronized
 release version matches the tag), then publishes:
 
 ```
-ghcr.io/<owner>/mokara-frontend:0.1.9   (+ :0.1, :latest)
-ghcr.io/<owner>/mokara-backend:0.1.9    (+ :0.1, :latest)
-ghcr.io/<owner>/mokara-admin:0.1.9      (+ :0.1, :latest)
+ghcr.io/<owner>/mokara-frontend:0.2.0   (+ :0.2, :latest)
+ghcr.io/<owner>/mokara-backend:0.2.0    (+ :0.2, :latest)
+ghcr.io/<owner>/mokara-admin:0.2.0      (+ :0.2, :latest)
 ```
 
 Coolify runs all three as **Docker Image** services and pulls them. Full design and
@@ -185,6 +186,110 @@ schema it does not expect. **Rolling back an image does not roll back the
 database** — keep each release's migrations additive and deploy the code that uses
 them in the same release.
 
+## Staging (`dev` images + Coolify)
+
+No release tag or version bump is required for staging. A push to `dev` runs
+`.github/workflows/ci.yml`: typecheck, lint, format, the standalone frontend
+build, and migrations against an empty disposable Postgres database. Only after
+those checks pass does it publish all three images:
+
+```text
+ghcr.io/<owner>/mokara-frontend:dev
+ghcr.io/<owner>/mokara-backend:dev
+ghcr.io/<owner>/mokara-admin:dev
+```
+
+Each image also receives `:dev-<full-commit-sha>`, so a specific build can be
+selected for testing or rollback. Pull requests run checks but **never publish**.
+This pipeline never writes `latest` or the production version tags; the existing
+version-tag release workflow is unchanged.
+
+### Coolify setup
+
+Create a separate staging environment with these **Docker Image** services on
+the same internal Docker network:
+
+| Service  | Image tag | Domain                | Container port |
+| -------- | --------- | --------------------- | -------------- |
+| frontend | `dev`     | `dev.mokara.my`       | 4704           |
+| backend  | `dev`     | `dev-api.mokara.my`   | 4703           |
+| admin    | `dev`     | `dev-admin.mokara.my` | 4705           |
+
+The dev workflow passes `APP_PORT` to each Dockerfile. Dev images actually
+listen on and expose the ports above; production builds retain their defaults
+of backend 4700, frontend 4701, and admin 4702.
+
+In Coolify, set **Ports Exposes** to the service's dev port. If using host ports
+for a Cloudflare Tunnel, set matching **Ports Mappings**: backend `4703:4703`,
+frontend `4704:4704`, and admin `4705:4705`. Update only the dev tunnel origins to
+those ports, keeping the appropriate origin hostname for your tunnel setup.
+Remove or update any existing Coolify `PORT`/`ADMIN_PORT` overrides pointing at
+4700–4702; runtime environment variables override the image's defaults.
+
+Point those domains at the Coolify server and enable HTTPS. Supply registry
+credentials in Coolify if the GHCR packages are private. Publishing images does
+**not** redeploy Coolify: wait for all three image jobs to succeed, then manually
+redeploy all three staging services so they pull the new images. If any image
+job fails, do not deploy a mixed set; retry the failed publication first. For a
+fixed test build, use the same `dev-<full-commit-sha>` tag on all three services.
+Image publication is not atomic across services, and rolling back images does
+not roll back migrations.
+
+Backend runtime settings:
+
+```dotenv
+PORT=4703
+ENV=production
+```
+
+Frontend runtime settings:
+
+```dotenv
+PORT=4704
+BACKEND_URL=http://<dev-backend-internal-host>:4703
+NEXT_PUBLIC_SITE_URL=https://dev.mokara.my
+```
+
+Admin runtime settings:
+
+```dotenv
+BACKEND_URL=http://<dev-backend-internal-host>:4703
+ADMIN_PORT=4705
+ENV=production
+```
+
+Replace `<dev-backend-internal-host>` with the staging backend's actual internal
+Coolify hostname/network alias, **not** its public domain. The browser continues
+to call `/api` on `dev.mokara.my`; it does not call `dev-api.mokara.my` directly.
+Normal frontend/admin proxy use does not require cross-origin CORS settings.
+
+### Production versus staging environment variables
+
+The environment **mode** is the same, but the environment **values** are not:
+
+| Setting                 | Staging requirement                                                               |
+| ----------------------- | --------------------------------------------------------------------------------- |
+| `NODE_ENV`              | Keep `production` (already set in the images).                                    |
+| Backend/admin `ENV`     | Set `production` on both; HTTPS cookies must match the production-built client.   |
+| `PORT` / `ADMIN_PORT`   | Backend `PORT=4703`, frontend `PORT=4704`, admin `ADMIN_PORT=4705`.               |
+| `DEPLOY_MODE`           | Match the behaviour being tested; use `hosted` to test hosted plan limits.        |
+| `DATABASE_URL`          | Separate staging database and credentials; never the production database.         |
+| `REDIS_URL`             | Separate staging Redis instance.                                                  |
+| `AUTH_SECRET`           | Fresh staging-only secret, at least 32 characters.                                |
+| `ADMIN_*`               | Staging-only credentials and secrets; shared keys must match within staging.      |
+| `S3_*`                  | Separate staging bucket and access credentials.                                   |
+| `STRIPE_*`              | Test-mode API key, test price, and a separate test webhook secret—or leave unset. |
+| `NEXT_PUBLIC_SITE_URL`  | `https://dev.mokara.my`.                                                          |
+| `GITHUB_CALLBACK_URL`   | `https://dev.mokara.my/api/integrations/github/callback`, if enabled.             |
+| `GITHUB_PUBLIC_APP_URL` | `https://dev.mokara.my`, if enabled.                                              |
+
+For the admin console, set all four backend `ADMIN_*` values. Copy the staging
+backend's `ADMIN_TOKEN_SECRET` and `ADMIN_URL_KEY` into the staging admin
+service, **not** the production values. Use a separate GitHub App for staging if
+testing that integration; production callbacks and credentials should not be
+repurposed. Optional storage, billing, and GitHub integrations can remain
+unconfigured until needed. No production secrets belong in workflow files.
+
 ## Notes
 
 - **DB schema + migrations** are managed by **Prisma 7** in `packages/db`. Schema lives in `prisma/schema.prisma`; CLI config (datasource URL, migrations, seed) lives in `prisma.config.ts`. The generated client (`prisma generate`) outputs to `prisma/generated/` (gitignored). The Hono backend imports the client via deep path `@mokara/db/prisma/generated/client` — no separate codegen. Migrations use `prisma migrate` (`migrate dev` locally, `migrate deploy` to apply). Seed runs via `tsx prisma/seed.ts`.
@@ -198,5 +303,5 @@ them in the same release.
   - `docker build -f packages/frontend/Dockerfile -t mokara-frontend .`
     They are intentionally **not** wired into `docker-compose.yml`.
 - Per-package `.env` files are gitignored; only `.env.example` is committed.
-- **CI** (`.github/workflows/ci.yml`) runs on push/PR to `dev` only — typecheck, lint, format.
+- **CI** (`.github/workflows/ci.yml`) runs checks, the frontend build, and empty-database migrations on push/PR to `dev`. Successful pushes additionally publish all three `dev` images; PRs never publish.
 - **Project memory** lives in `.pi/AGENTS.md` (committed). Transient work-in-progress is in `.pi/state.md` (gitignored). The pi agent auto-loads both on session start.

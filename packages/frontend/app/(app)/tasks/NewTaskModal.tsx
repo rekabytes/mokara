@@ -18,6 +18,7 @@ import {
   type BindingDraft,
   type Kpi,
   type Project,
+  type GitHubRepository,
   type TaskPriority,
   type TaskStatus,
 } from "@/lib/api";
@@ -62,6 +63,11 @@ export function NewTaskModal({
   setSubtasks,
   files,
   setFiles,
+  githubRepositories,
+  publishToGitHub,
+  setPublishToGitHub,
+  githubRepositoryId,
+  setGitHubRepositoryId,
   creating,
   onSubmit,
   onClose,
@@ -93,6 +99,11 @@ export function NewTaskModal({
   setSubtasks: (steps: string[]) => void;
   files: File[];
   setFiles: (f: File[]) => void;
+  githubRepositories: GitHubRepository[];
+  publishToGitHub: boolean;
+  setPublishToGitHub: (value: boolean) => void;
+  githubRepositoryId: string | null;
+  setGitHubRepositoryId: (id: string | null) => void;
   creating: boolean;
   onSubmit: (e: FormEvent) => void;
   onClose: () => void;
@@ -291,6 +302,45 @@ export function NewTaskModal({
               </div>
             </Dropdown>
           </div>
+
+          {githubRepositories.length > 0 && (
+            <div className="mx-4 mb-3 rounded-[var(--radius-btn)] border border-[var(--color-border-soft)] bg-[var(--color-surface)] p-3">
+              <label className="flex cursor-pointer items-center gap-2 text-[0.84rem] font-semibold text-[var(--color-ink)]">
+                <input
+                  type="checkbox"
+                  checked={publishToGitHub}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setPublishToGitHub(checked);
+                    setGitHubRepositoryId(
+                      checked ? (githubRepositoryId ?? githubRepositories[0].id) : null
+                    );
+                  }}
+                  className="size-4 accent-[var(--color-accent)]"
+                />
+                Create a GitHub issue
+              </label>
+              {publishToGitHub && (
+                <label className="mt-2 flex flex-col gap-1">
+                  <span className="text-[0.72rem] text-[var(--color-ink-muted)]">
+                    Repository — title, description and task metadata will be sent to GitHub
+                  </span>
+                  <select
+                    value={githubRepositoryId ?? githubRepositories[0].id}
+                    onChange={(e) => setGitHubRepositoryId(e.target.value)}
+                    className="field py-1.5"
+                  >
+                    {githubRepositories.map((repository) => (
+                      <option key={repository.id} value={repository.id}>
+                        {repository.full_name}
+                        {repository.private ? " · private" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+          )}
 
           {/* Steps — creation-time checklist (PRD-11). Drafted here; uploaded
               right after the task exists. The wrapper is a walkthrough target

@@ -17,9 +17,12 @@ import { attachmentRoutes } from "./routes/attachments.ts";
 import { billingRoutes, billingWebhook } from "./routes/billing.ts";
 import { adminRoutes } from "./routes/admin.ts";
 import { analyticsRoutes } from "./routes/analytics.ts";
+import { githubRoutes } from "./routes/github.ts";
+import { githubWebhookRoutes } from "./routes/github-webhook.ts";
+import { startGitHubSyncWorker } from "./lib/github-sync.ts";
 import { validate } from "./lib/validate.ts";
 import { updateMeSchema, lastContainerSchema, tourStateSchema } from "./lib/validation.ts";
-import { env, adminConfigIssues } from "./env.ts";
+import { env, adminConfigIssues, githubConfigIssues } from "./env.ts";
 import { connectDB, disconnectDB } from "./db.ts";
 import { connectRedis, disconnectRedis } from "./redis.ts";
 import { log } from "./lib/logger.ts";
@@ -41,6 +44,9 @@ async function main() {
   // otherwise "the console 404s" reads like a bug rather than a config answer.
   if (adminConfigIssues.length > 0) {
     log.warn(`admin console disabled — ${adminConfigIssues.join("; ")}`);
+  }
+  if (githubConfigIssues.length > 0) {
+    log.warn(`GitHub integration disabled — ${githubConfigIssues.join("; ")}`);
   }
 
   // 1) Database — fail fast on connection issues.
@@ -77,6 +83,7 @@ async function main() {
   // composes in registration order, so the handler answers before
   // authRequired could reject it as unsigned-in.
   api.route("/billing", billingWebhook);
+  api.route("/", githubWebhookRoutes);
   // The operator console mounts here for the same reason the webhook does: it
   // carries no user session. `/api/admin/login` is public (credentials + the
   // login-URL key), everything else under it authenticates with the console's
@@ -118,9 +125,15 @@ async function main() {
   authed.route("/", analyticsRoutes);
   authed.route("/", projectRoutes);
   authed.route("/", kpiRoutes);
+  authed.route("/", githubRoutes);
 
   api.route("/", authed);
   app.route("/api", api);
+
+  // Keep unknown paths inside the same error envelope as every known API
+  // failure. Without this, Hono's default plain-text 404 bypasses the
+  // frontend's centralized error normalizer.
+  app.notFound((c) => c.json({ error: "not_found", message: "route not found" }, 404));
 
   // 3) Listen — retry briefly on EADDRINUSE so a restart race with the
   //  previous (still-draining) process doesn't kill the new one.
@@ -144,6 +157,7 @@ async function main() {
     server = next;
   };
   startServer(1);
+  const stopGitHubSync = startGitHubSyncWorker();
 
   // 4) Graceful shutdown — drop idle and live connections immediately so the
   //  listening socket frees before tsx watch's next child tries to bind.
@@ -154,6 +168,7 @@ async function main() {
     // Narrowed: the Http2 variant of ServerType lacks closeAllConnections.
     if (s && "closeIdleConnections" in s) s.closeIdleConnections();
     if (s && "closeAllConnections" in s) s.closeAllConnections();
+    await stopGitHubSync();
     await disconnectRedis();
     await disconnectDB();
     log.ok("Stopped");

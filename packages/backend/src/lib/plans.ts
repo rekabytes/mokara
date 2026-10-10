@@ -5,6 +5,9 @@
 //
 // Values are the PROPOSED ladder in PRD-11 §2/§5, signed off in Phase 0.
 
+/** Owner-approved fixed cap per connected Mokara user, across all installations. */
+export const GITHUB_REPOSITORY_LIMIT = 3;
+
 export const PLAN_IDS = ["free", "starter", "pro", "ultra"] as const;
 export type Plan = (typeof PLAN_IDS)[number];
 

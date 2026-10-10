@@ -96,6 +96,17 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
     serverSays: true,
     message: "That status isn't allowed.",
   },
+  unsupported_type: {
+    kind: "input",
+    action: "inline",
+    serverSays: true,
+    message: "That file type isn't supported.",
+  },
+  invalid_signature: {
+    kind: "input",
+    action: "inline",
+    message: "The request signature is invalid.",
+  },
   // PRD-06 KPI weights (per-task total must stay ≤ 100%)
   kpi_weight_exceeded: {
     kind: "input",
@@ -178,6 +189,124 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
     message: "No billing account yet — upgrade first.",
   },
 
+  // --- GitHub App integration ---
+  github_webhook_not_configured: {
+    kind: "server",
+    action: "inline",
+    message: "GitHub incoming sync is not configured on this instance.",
+  },
+  invalid_github_signature: {
+    kind: "permission",
+    action: "inline",
+    message: "The GitHub webhook signature is invalid.",
+  },
+  invalid_github_delivery: {
+    kind: "input",
+    action: "inline",
+    message: "The GitHub webhook delivery ID is invalid.",
+  },
+  payload_too_large: {
+    kind: "input",
+    action: "inline",
+    message: "The request exceeds the allowed size.",
+  },
+  invalid_json: { kind: "input", action: "inline", message: "The request body is not valid JSON." },
+  github_not_configured: {
+    kind: "conflict",
+    action: "inline",
+    message: "GitHub integration is not configured on this instance.",
+  },
+  github_state_expired: {
+    kind: "conflict",
+    action: "inline",
+    message: "That GitHub connection attempt expired. Start again.",
+  },
+  github_access_denied: {
+    kind: "permission",
+    action: "inline",
+    message: "GitHub access was denied or has been revoked.",
+  },
+  github_installation_unverified: {
+    kind: "permission",
+    action: "inline",
+    message: "That GitHub installation could not be verified for your account.",
+  },
+  github_connection_required: {
+    kind: "conflict",
+    action: "inline",
+    message: "Connect your GitHub account first.",
+  },
+  github_reauthorization_required: {
+    kind: "conflict",
+    action: "inline",
+    message: "Reconnect GitHub to verify your repository access.",
+  },
+  github_repository_limit: {
+    kind: "conflict",
+    action: "inline",
+    message: "You can activate at most three GitHub repositories.",
+  },
+  github_repository_inactive: {
+    kind: "conflict",
+    action: "inline",
+    message: "Activate this repository in GitHub settings to resume sync.",
+  },
+  github_workspace_access_revoked: {
+    kind: "permission",
+    action: "inline",
+    message: "The connected user no longer belongs to this workspace. GitHub sync is paused.",
+  },
+  github_issue_not_linked: {
+    kind: "conflict",
+    action: "inline",
+    message: "This task has no linked GitHub issue.",
+  },
+  github_issue_mismatch: {
+    kind: "conflict",
+    action: "inline",
+    message: "The linked GitHub issue could not be verified.",
+  },
+  github_sync_failed: {
+    kind: "server",
+    action: "retry",
+    message: "GitHub status sync failed. Your task is saved; sync will retry automatically.",
+  },
+  github_repository_forbidden: {
+    kind: "permission",
+    action: "inline",
+    message: "That repository is not connected to your GitHub account.",
+  },
+  github_repository_unavailable: {
+    kind: "conflict",
+    action: "inline",
+    message: "That repository is no longer available to Mokara.",
+  },
+  github_issue_already_linked: {
+    kind: "conflict",
+    action: "inline",
+    message: "This task already has a GitHub issue.",
+  },
+  github_publish_in_progress: {
+    kind: "conflict",
+    action: "inline",
+    message: "This GitHub issue is already being published.",
+  },
+  github_rate_limited: {
+    kind: "server",
+    action: "retry",
+    message: "GitHub's rate limit was reached. Try again later.",
+  },
+  github_unavailable: {
+    kind: "server",
+    action: "retry",
+    message: "GitHub could not be reached. Try again.",
+  },
+  github_publish_failed: {
+    kind: "server",
+    action: "retry",
+    message: "The GitHub issue could not be created. Try again.",
+  },
+
   already_member: { kind: "conflict", action: "inline", message: "That user is already a member." },
   already_invited: {
     kind: "conflict",
@@ -218,8 +347,23 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
     action: "retry",
     message: "Couldn't load your account. Try again.",
   },
+  api_misconfigured: {
+    kind: "server",
+    action: "retry",
+    message: "The API is not configured. Contact the instance administrator.",
+  },
+  invalid_response: {
+    kind: "server",
+    action: "retry",
+    message: "The server returned an invalid response. Try again.",
+  },
+  upload_failed: {
+    kind: "server",
+    action: "retry",
+    message: "The upload failed. Try again.",
+  },
 
-  // --- client-only (never sent by the server) ---
+  // --- client-only / transport errors ---
   network_error: {
     kind: "network",
     action: "retry",
@@ -233,7 +377,11 @@ const STATUS_FALLBACK: Record<number, string> = {
   403: "forbidden",
   404: "not_found",
   409: "invalid_input",
+  413: "file_too_large",
+  422: "invalid_input",
   500: "internal_error",
+  502: "network_error",
+  503: "service_unavailable",
 };
 
 const UNKNOWN: ErrorRule = {

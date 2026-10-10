@@ -11,7 +11,14 @@ import {
   PRIORITY_RANK,
 } from "./board-model";
 import { asBoardTask, isThisWeek, isToday } from "./task-format";
-import { api, type Task, type TaskStatus, type TaskPatch, type BindingDraft } from "@/lib/api";
+import {
+  api,
+  type Task,
+  type TaskStatus,
+  type TaskPatch,
+  type BindingDraft,
+  type GitHubRepository,
+} from "@/lib/api";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { useContainers } from "@/lib/containers";
 import { useContainerMeta } from "@/lib/meta";
@@ -77,6 +84,10 @@ export default function TasksPage() {
     setNewSubtasks,
     newFiles,
     setNewFiles,
+    publishToGitHub,
+    setPublishToGitHub,
+    githubRepositoryId,
+    setGitHubRepositoryId,
     creating,
     createTaskFromModal,
     openModal,
@@ -85,6 +96,31 @@ export default function TasksPage() {
   } = useNewTaskDraft({ teamId, run, setTasks });
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [githubRepositories, setGitHubRepositories] = useState<GitHubRepository[]>([]);
+
+  // Personal integration state is independent of the selected container. Read
+  // it once for the create modal; GitHub failures never block the board.
+  useEffect(() => {
+    let alive = true;
+    void api
+      .getGitHubIntegration()
+      .then((result) => {
+        if (alive)
+          setGitHubRepositories(
+            !result.configured || result.connection?.reauthorization_required
+              ? []
+              : (result.connection?.repositories.filter(
+                  (repository) => repository.enabled && repository.available
+                ) ?? [])
+          );
+      })
+      .catch(() => {
+        if (alive) setGitHubRepositories([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const loadTasks = useCallback(async () => {
     if (!teamId) return;
@@ -216,6 +252,27 @@ export default function TasksPage() {
     });
     if (!updated) return;
     setTasks((prev) => prev.map((x) => (x.id === id ? updated : x)));
+  }
+
+  async function retryGitHubIssue(task: Task) {
+    if (task.github_issue?.status === "linked") {
+      const updated = await run(() => api.retryGitHubSync(task.id), {
+        fallback: "Couldn't retry GitHub status sync.",
+      });
+      if (updated)
+        setTasks((previous) =>
+          previous.map((current) => (current.id === task.id ? updated : current))
+        );
+      return;
+    }
+    const repositoryId = task.github_issue?.repository_id;
+    if (!repositoryId) return;
+    const result = await run(() => api.publishGitHubIssue(task.id, repositoryId), {
+      fallback: "The GitHub issue could not be created.",
+    });
+    if (!result) return;
+    const fresh = await run(() => api.getTask(task.id), { fallback: "Failed to refresh the task" });
+    if (fresh) setTasks((prev) => prev.map((row) => (row.id === fresh.id ? fresh : row)));
   }
 
   function openTask(id: string) {
@@ -377,6 +434,7 @@ export default function TasksPage() {
                 onUpdate={(patch) => updateTaskField(selectedTask.id, patch)}
                 onSetKpis={(bindings) => setTaskKpis(selectedTask.id, bindings)}
                 onToggleFlag={() => toggleFlag(selectedTask)}
+                onRetryGitHub={() => retryGitHubIssue(selectedTask)}
                 onDelete={() => removeTask(selectedTask.id)}
               />
             </motion.div>
@@ -412,6 +470,11 @@ export default function TasksPage() {
             setSubtasks={setNewSubtasks}
             files={newFiles}
             setFiles={setNewFiles}
+            githubRepositories={githubRepositories}
+            publishToGitHub={publishToGitHub}
+            setPublishToGitHub={setPublishToGitHub}
+            githubRepositoryId={githubRepositoryId}
+            setGitHubRepositoryId={setGitHubRepositoryId}
             creating={creating}
             onSubmit={createTaskFromModal}
             onClose={resetAndCloseModal}

@@ -18,6 +18,7 @@ export const metadata: Metadata = {
   ...(origin ? { metadataBase: new URL(origin) } : null),
   title: "Mokara",
   description: "Team tasks, calmly.",
+  icons: { icon: { url: "/mokara-mark.svg", type: "image/svg+xml" } },
 };
 
 export const viewport: Viewport = {

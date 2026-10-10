@@ -55,6 +55,18 @@ const EnvSchema = z
     STRIPE_SECRET_KEY: z.string().default(""),
     STRIPE_WEBHOOK_SECRET: z.string().default(""),
     STRIPE_PRICE_STARTER: z.string().default(""),
+    // Optional GitHub App integration. All required values act as one switch;
+    // a partial set disables only GitHub and produces an actionable warning.
+    // The private key is base64 so deployment env parsers never have to retain
+    // PEM newlines. User and installation access tokens are never persisted.
+    GITHUB_APP_ID: z.string().default(""),
+    GITHUB_APP_SLUG: z.string().default(""),
+    GITHUB_APP_CLIENT_ID: z.string().default(""),
+    GITHUB_APP_CLIENT_SECRET: z.string().default(""),
+    GITHUB_APP_PRIVATE_KEY_BASE64: z.string().default(""),
+    GITHUB_CALLBACK_URL: z.string().default(""),
+    GITHUB_PUBLIC_APP_URL: z.string().default(""),
+    GITHUB_WEBHOOK_SECRET: z.string().default(""),
     // Operator console (packages/admin). Four values that turn the console on
     // as a unit — `adminConfigured` below is the single switch and every admin
     // route answers 404 without it, the way an unmounted feature should.
@@ -113,6 +125,55 @@ export const storageConfigured =
 export const billingConfigured =
   isHosted && env.STRIPE_SECRET_KEY !== "" && env.STRIPE_WEBHOOK_SECRET !== "";
 export const checkoutConfigured = billingConfigured && env.STRIPE_PRICE_STARTER !== "";
+
+const githubRequired = [
+  { name: "GITHUB_APP_ID", value: env.GITHUB_APP_ID },
+  { name: "GITHUB_APP_SLUG", value: env.GITHUB_APP_SLUG },
+  { name: "GITHUB_APP_CLIENT_ID", value: env.GITHUB_APP_CLIENT_ID },
+  { name: "GITHUB_APP_CLIENT_SECRET", value: env.GITHUB_APP_CLIENT_SECRET },
+  { name: "GITHUB_APP_PRIVATE_KEY_BASE64", value: env.GITHUB_APP_PRIVATE_KEY_BASE64 },
+  { name: "GITHUB_CALLBACK_URL", value: env.GITHUB_CALLBACK_URL },
+];
+
+/** Empty means enabled or intentionally off; otherwise each string is actionable. */
+export const githubConfigIssues: string[] = (() => {
+  const missing = githubRequired.filter((item) => item.value === "").map((item) => item.name);
+  if (missing.length === githubRequired.length) return [];
+  if (missing.length > 0)
+    return [`all GitHub App values are needed together — missing ${missing.join(", ")}`];
+  try {
+    const callback = new URL(env.GITHUB_CALLBACK_URL);
+    if (isProd && callback.protocol !== "https:")
+      return ["GITHUB_CALLBACK_URL must use HTTPS in production"];
+  } catch {
+    return ["GITHUB_CALLBACK_URL must be an absolute URL"];
+  }
+  if (env.GITHUB_PUBLIC_APP_URL !== "") {
+    try {
+      const publicUrl = new URL(env.GITHUB_PUBLIC_APP_URL);
+      if (isProd && publicUrl.protocol !== "https:") {
+        return ["GITHUB_PUBLIC_APP_URL must use HTTPS in production"];
+      }
+    } catch {
+      return ["GITHUB_PUBLIC_APP_URL must be an absolute URL"];
+    }
+  }
+  try {
+    const key = Buffer.from(env.GITHUB_APP_PRIVATE_KEY_BASE64, "base64").toString("utf8");
+    if (!key.includes("BEGIN") || !key.includes("PRIVATE KEY")) {
+      return ["GITHUB_APP_PRIVATE_KEY_BASE64 does not decode to a PEM private key"];
+    }
+  } catch {
+    return ["GITHUB_APP_PRIVATE_KEY_BASE64 is not valid base64"];
+  }
+  return [];
+})();
+
+export const githubConfigured =
+  githubConfigIssues.length === 0 && githubRequired.every((item) => item.value !== "");
+
+// Existing OAuth/publishing remains available without a webhook secret.
+export const githubWebhookConfigured = githubConfigured && env.GITHUB_WEBHOOK_SECRET.length >= 32;
 
 /**
  * The operator console is OPTIONAL, so its config is a flag and never a boot

@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { Prisma } from "@mokara/db/prisma/generated/client";
 import { prisma } from "../db.ts";
 import {
   createTaskSchema,
@@ -11,7 +10,8 @@ import {
 import { validate } from "../lib/validate.ts";
 import { getTeamRole } from "../lib/team-membership.ts";
 import { purgeAttachmentObjects } from "./attachments.ts";
-import { toTask, toTaskKpi } from "../lib/types.ts";
+import { TASK_INCLUDE, taskResponse as shape } from "../lib/task-response.ts";
+import { enqueueGitHubTaskSync } from "../lib/github-sync.ts";
 import { notify, regenerateDueSoonForTeam } from "../lib/notifications.ts";
 import { publishToTeam } from "../lib/events.ts";
 import { log } from "../lib/logger.ts";
@@ -32,20 +32,6 @@ function publishTeam(teamId: string, event: string, data: unknown): void {
 // — they're under the same authed surface and share the membership helper.
 export const taskRoutes = new Hono<{ Variables: Vars }>();
 
-// Every task response carries its KPI bindings — the client replaces whole
-// task objects after mutations, so a response without them would wipe the
-// chips.
-const TASK_INCLUDE = {
-  kpiBindings: { include: { kpi: { select: { name: true } } } },
-  creator: { select: { id: true, username: true, displayName: true } },
-  assignee: { select: { id: true, username: true, displayName: true } },
-  // PRD-11: the checklist rides along so a task response can replace the
-  // client's copy without wiping it (same reason as creator/assignee).
-  subtaskItems: true,
-} as const;
-
-type TaskWithBindings = Prisma.TaskGetPayload<{ include: typeof TASK_INCLUDE }>;
-
 // PRD-10: an assignee must be a member of the task's container — mirrors the
 // binding rule that nothing points across containers. Clearing is always
 // fine; the actor is never notified for their own assignment.
@@ -64,10 +50,6 @@ async function assigneeDenial(
         message: "assignee must be a member of this container",
         status: 400,
       };
-}
-
-function shape(t: TaskWithBindings) {
-  return toTask(t, t.kpiBindings.map(toTaskKpi));
 }
 
 type Binding = TaskKpiBinding;
@@ -309,10 +291,37 @@ taskRoutes.patch("/tasks/:id", validate("json", updateTaskSchema), async (c) => 
     data.assigneeId = patch.assignee_id ?? null;
   }
 
-  const task = await prisma.task.update({
-    where: { id: taskId },
-    data,
-    include: TASK_INCLUDE,
+  const { task, statusChanged } = await prisma.$transaction(async (tx) => {
+    // Shared with the GitHub worker: status history and the durable outbox
+    // cannot race a webhook or commit separately from the task.
+    await tx.$queryRaw`SELECT id FROM tasks WHERE id = ${taskId}::uuid FOR UPDATE`;
+    const current = await tx.task.findUniqueOrThrow({ where: { id: taskId } });
+    const statusChanged = patch.status !== undefined && patch.status !== current.status;
+    await tx.task.update({ where: { id: taskId }, data });
+    if (statusChanged && patch.status !== undefined) {
+      await tx.taskEvent.create({
+        data: {
+          teamId: current.teamId,
+          taskId,
+          actorId: userId,
+          fromStatus: current.status,
+          toStatus: patch.status,
+        },
+      });
+      await enqueueGitHubTaskSync(tx, taskId);
+    }
+    if (patch.due_date !== undefined) {
+      const newDue = patch.due_date ? new Date(patch.due_date) : null;
+      if (current.dueDate?.getTime() !== newDue?.getTime()) {
+        await tx.taskDueChange.create({
+          data: { taskId, fromDue: current.dueDate, toDue: newDue, actorId: userId },
+        });
+      }
+    }
+    return {
+      task: await tx.task.findUniqueOrThrow({ where: { id: taskId }, include: TASK_INCLUDE }),
+      statusChanged,
+    };
   });
 
   // PRD-05 + PRD-10: a NEW assignee (someone other than the actor) is
@@ -331,39 +340,12 @@ taskRoutes.patch("/tasks/:id", validate("json", updateTaskSchema), async (c) => 
     });
   }
 
-  // Record the transition in the activity log only when the status actually
-  // changes; this keeps the analytics series honest (one event per move).
-  if (patch.status !== undefined && patch.status !== existing.status) {
-    await prisma.taskEvent.create({
-      data: {
-        teamId: existing.teamId,
-        taskId,
-        actorId: userId,
-        fromStatus: existing.status,
-        toStatus: patch.status,
-      },
-    });
-  }
-
-  // Due-date history: log only real changes (set, cleared, or moved) so the
-  // progress analytics can show deadline revisions like "extra time added".
-  if (patch.due_date !== undefined) {
-    const newDue = patch.due_date ? new Date(patch.due_date) : null;
-    const oldTs = existing.dueDate?.getTime() ?? null;
-    const newTs = newDue?.getTime() ?? null;
-    if (oldTs !== newTs) {
-      await prisma.taskDueChange.create({
-        data: { taskId, fromDue: existing.dueDate, toDue: newDue, actorId: userId },
-      });
-    }
-  }
-
   // PRD-11 §1.5: only the fields that move a task in or out of the due-soon
   // set warrant a regeneration. Title / description / priority / project
   // never affect membership in the set, so they don't trigger a regen — the
   // user has not asked for the unread badge to refresh on a rename.
   const dueSoonTouched =
-    (patch.status !== undefined && patch.status !== existing.status) ||
+    statusChanged ||
     (patch.due_date !== undefined &&
       (patch.due_date ? new Date(patch.due_date).getTime() : null) !==
         (existing.dueDate ? existing.dueDate.getTime() : null)) ||

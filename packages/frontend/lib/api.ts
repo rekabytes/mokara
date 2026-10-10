@@ -26,6 +26,8 @@ import type {
   NotificationInfo,
   SessionInfo,
   BillingInfo,
+  GitHubIntegration,
+  GitHubIssue,
   Team,
   TeamWithRole,
   TeamDetail,
@@ -56,6 +58,9 @@ export type {
   SessionInfo,
   PlanCaps,
   BillingInfo,
+  GitHubIntegration,
+  GitHubRepository,
+  GitHubIssue,
   Team,
   TeamWithRole,
   TeamDetail,
@@ -75,7 +80,7 @@ export type {
 // re-exports keep `import { isApiError } from "@/lib/api"` working.
 export { isApiError } from "@/lib/errors";
 export type { ApiError } from "@/lib/errors";
-import { ERROR_RULES, isApiError, type ApiError } from "@/lib/errors";
+import { ERROR_RULES, type ApiError } from "@/lib/errors";
 
 // The browser console is failure-only (PRD: routine calls stay silent — the
 // success trail already lives in the backend's request log, which prints to
@@ -203,9 +208,13 @@ function uploadViaXhr(
       let message = "upload failed";
       try {
         const parsed: unknown = JSON.parse(xhr.responseText);
-        if (isApiError(parsed)) {
+        // Backend response bodies contain `{ error, message }`; the HTTP status
+        // lives on XHR and is added below. Using isApiError() here used to drop
+        // every specific upload error because that guard correctly requires a
+        // status on an already-complete client error.
+        if (isErrorBody(parsed)) {
           code = parsed.error;
-          message = parsed.message;
+          if (typeof parsed.message === "string") message = parsed.message;
         }
       } catch {
         // A non-JSON body (a proxy's 413 page, say) keeps the fallbacks.
@@ -269,6 +278,25 @@ export const api = {
   // it on mount so a checkout return lands the plan even where the webhook
   // cannot reach (local dev). Void → test `=== null`.
   syncBilling: () => req<void>("/me/billing/sync", { method: "POST" }),
+
+  // ---- GitHub App integration ----
+  getGitHubIntegration: () => req<GitHubIntegration>("/me/integrations/github"),
+  connectGitHub: () => req<{ url: string }>("/me/integrations/github/connect", { method: "POST" }),
+  installGitHub: () => req<{ url: string }>("/me/integrations/github/install", { method: "POST" }),
+  refreshGitHub: () => req<{ url: string }>("/me/integrations/github/refresh", { method: "POST" }),
+  disconnectGitHub: () => req<void>("/me/integrations/github", { method: "DELETE" }),
+  setGitHubRepositories: (repositoryIds: string[]) =>
+    req<GitHubIntegration>("/me/integrations/github/repositories", {
+      method: "PUT",
+      body: JSON.stringify({ repository_ids: repositoryIds }),
+    }),
+  retryGitHubSync: (taskId: string) =>
+    req<Task>(`/tasks/${taskId}/github-sync`, { method: "POST" }),
+  publishGitHubIssue: (taskId: string, repositoryId: string) =>
+    req<{ github_issue: GitHubIssue }>(`/tasks/${taskId}/github-issue`, {
+      method: "POST",
+      body: JSON.stringify({ repository_id: repositoryId }),
+    }),
 
   // ---- Teams ----
   createTeam: (data: { name: string; kind?: "workspace" | "team" }) =>

@@ -161,3 +161,24 @@ export const tiltSpring: Transition & { stiffness: number; damping: number; mass
   damping: 24,
   mass: 0.6,
 };
+
+/** On-demand line mesh: no idle loop, quicker pointer response, bounded GPU surface. */
+export const HOME_FIELD = {
+  initialDelta: 1000 / 60,
+  maxDelta: 64,
+  pointerResponse: 65,
+  settleThreshold: 0.002,
+  pixelRatio: 1,
+  maxPixels: 900_000,
+  lines: 19,
+  segments: 96,
+};
+
+/** Viewport-triggered keyframes keep homepage cards visible in server HTML. */
+export const homepageBenefitReveal: Variants = {
+  show: (index: number) => ({
+    opacity: [0, 1],
+    y: [14, 0],
+    transition: { ...snap(DUR.panel + DUR.fast), delay: index * DUR.fast },
+  }),
+};

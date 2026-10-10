@@ -1,13 +1,14 @@
 {
   "name": "@mokara/backend",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "predev": "pnpm --filter @mokara/db bootstrap",
     "dev": "tsx watch --exclude \"**/prisma/generated/**\" src/index.ts",
     "start": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:github": "node --import tsx --experimental-test-module-mocks --test test/github-sync.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1126.0",

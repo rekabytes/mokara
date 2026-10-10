@@ -6,11 +6,35 @@ on:
   pull_request:
     branches: [dev]
 
+permissions:
+  contents: read
+
+# Serialize each branch's complete pipeline: do not interrupt a publication
+# halfway through its three images or let concurrent runs race on the dev tag.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   checks:
-    name: typecheck / lint / format
+    name: checks / frontend build / migrations
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16.14-alpine3.24
+        env:
+          POSTGRES_USER: mokara
+          POSTGRES_PASSWORD: mokara
+          POSTGRES_DB: mokara
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U mokara -d mokara"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - uses: actions/checkout@v4
@@ -39,9 +63,79 @@ jobs:
       - name: Prettier check
         run: pnpm format
 
-      # The one step the pre-release audit proved belongs here. Typecheck runs
-      # `tsc --noEmit`, so a build script that cannot emit passes CI forever —
-      # which is how the backend's production build stayed broken for weeks. This
-      # builds the artifact the frontend image actually runs.
       - name: Build frontend (standalone)
         run: pnpm build:frontend
+
+      # The backend applies migrations on startup. Prove they apply to an empty
+      # disposable database before publishing images for the staging deployment.
+      - name: Migrations apply from empty
+        env:
+          DATABASE_URL: postgresql://mokara:mokara@localhost:5432/mokara
+        run: pnpm db:migrate:deploy
+
+  dev-images:
+    name: Publish dev ${{ matrix.service }}
+    needs: checks
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: frontend
+            dockerfile: packages/frontend/Dockerfile
+            port: 4704
+          - service: backend
+            dockerfile: packages/backend/Dockerfile
+            port: 4703
+          - service: admin
+            dockerfile: packages/admin/Dockerfile
+            port: 4705
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/mokara-${{ matrix.service }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=dev
+            type=sha,prefix=dev-,format=long
+          labels: |
+            org.opencontainers.image.title=Mokara ${{ matrix.service }} (staging)
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          build-args: |
+            APP_PORT=${{ matrix.port }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=dev-${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=dev-${{ matrix.service }}
+          provenance: false

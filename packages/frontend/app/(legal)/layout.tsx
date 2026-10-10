@@ -20,7 +20,7 @@ export default async function LegalLayout({ children }: { children: React.ReactN
   const hasSession = (await cookies()).has(AUTH_COOKIE);
 
   return (
-    <div className="flex min-h-dvh flex-col font-body">
+    <div className="public-site flex min-h-dvh flex-col font-body">
       <SiteHeader
         authHref={hasSession ? "/tasks" : "/login"}
         authLabel={hasSession ? "Open app" : "Log in"}

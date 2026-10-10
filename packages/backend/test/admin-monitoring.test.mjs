@@ -499,7 +499,14 @@ class Element {
     );
   }
   append(...children) {
-    this.children.push(...children);
+    for (const child of children) {
+      if (typeof child !== "string") {
+        if (child.parentNode)
+          child.parentNode.children = child.parentNode.children.filter((node) => node !== child);
+        child.parentNode = this;
+      }
+      this.children.push(child);
+    }
   }
   setAttribute(name, value) {
     this.attributes[name] = value;
@@ -550,6 +557,29 @@ test("overview renderer shows zeroes and explicitly labels configuration-only se
   assert.ok(nodes.content.textContent.includes("Needs attention"));
   assert.ok(nodes.content.textContent.includes("Effective plans include operator grants"));
 });
+test("redesigned shell groups navigation and marks the active section", () => {
+  const page = auditPage();
+  assert.ok(page.includes("Accounts &amp; support"));
+  assert.ok(page.includes("Governance"));
+  assert.ok(page.includes('href="/audit" class="nav-active" aria-current="page"'));
+  assert.ok(page.includes('aria-labelledby="page-title"'));
+});
+
+test("overview groups every dataset once into five panels", async () => {
+  const data = await (await app.request("/api/admin/overview", authorized())).json();
+  const { nodes } = await render("overview", data);
+  const layout = nodes.content.children.find((node) => node.className === "panel-layout");
+  assert.equal(layout.children.length, 5);
+  assert.equal(layout.children.filter((node) => node.className.includes("panel-wide")).length, 1);
+  assert.equal(nodes.content.children.filter((node) => node.tagName === "h2").length, 0);
+  const usage = layout.children.find((node) => node.children[0].textContent === "Usage");
+  const breakdown = usage.children.find((node) => node.className === "usage-breakdown");
+  assert.equal(
+    breakdown.children.filter((node) => node.className.includes("table-scroll")).length,
+    2
+  );
+});
+
 test("unavailable snapshot renders unknown counts instead of no-problem claims", async () => {
   state.dbDown = true;
   state.redisDown = true;

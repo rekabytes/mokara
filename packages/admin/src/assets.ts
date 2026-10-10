@@ -9,13 +9,14 @@
 export const ADMIN_CSS = `
 :root {
   color-scheme: dark;
-  --bg: #0b0d10;
-  --panel: #12161b;
-  --line: #232a32;
-  --text: #e8edf2;
-  --muted: #93a0ad;
-  --accent: #7cc4a4;
-  --danger: #e08a7a;
+  --bg: #0c0e14;
+  --panel: #13161f;
+  --line: #282c3a;
+  --text: #eef0f7;
+  --muted: #a0a8bb;
+  --accent: #adafff;
+  --danger: #f3a99c;
+  --raised: #1a1e2a;
 }
 
 * { box-sizing: border-box; }
@@ -27,28 +28,57 @@ body {
   font: 0.9rem/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.85rem 1.25rem;
-  border-bottom: 1px solid var(--line);
-  background: var(--panel);
+.sidebar { position: fixed; inset: 0 auto 0 0; width: 14.5rem; display: flex; flex-direction: column; padding: 1.6rem 1rem; background: #10121a; border-right: 1px solid var(--line); overflow-y: auto; }
+.brand { display: flex; align-items: center; gap: 0.75rem; margin: 0 0.5rem 2.5rem; color: var(--text); text-decoration: none; font-weight: 650; font-size: 1.05rem; letter-spacing: -0.03em; }
+.brand-symbol { display: grid; place-items: center; width: 2.3rem; height: 2.3rem; border: 1px solid #46456d; border-radius: 0.75rem; background: #25243d; color: #d4d1ff; }
+.brand-caption { display: block; color: var(--muted); font-size: 0.7rem; font-weight: 400; letter-spacing: 0.02em; margin-top: 0.1rem; }
+.nav-group { margin-bottom: 1.8rem; }
+.nav-label, .operator-label { color: var(--muted); font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.nav-label { margin: 0 0.75rem 0.65rem; }
+.sidebar nav a { display: flex; gap: 0.7rem; align-items: center; padding: 0.65rem 0.75rem; margin: 0.2rem 0; border: 1px solid transparent; border-radius: 0.6rem; color: var(--muted); text-decoration: none; font-size: 0.82rem; }
+.sidebar nav svg { flex: 0 0 1.1rem; width: 1.1rem; height: 1.1rem; }
+.sidebar nav a:hover { color: var(--text); background: #191c27; }
+.sidebar nav a.nav-active { color: #d6d4ff; border-color: #383650; background: #242238; }
+.sidebar-footer { margin-top: auto; border-top: 1px solid var(--line); padding: 1.1rem 0.6rem 0; display: grid; gap: 0.8rem; }
+.skip-link { position: fixed; top: -5rem; left: 1rem; z-index: 10; background: var(--accent); color: var(--bg); padding: 0.6rem 1rem; border-radius: 0.5rem; }
+.skip-link:focus { top: 1rem; }
+.page-header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
+.eyebrow { color: var(--muted); text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.12em; margin: 0 0 0.65rem; }
+.page-header h1 { font-size: clamp(1.8rem, 3vw, 2.4rem); line-height: 1.15; letter-spacing: -0.05em; font-weight: 600; margin: 0 0 0.6rem; }
+.page-description { color: var(--muted); font-size: 0.85rem; margin: 0; max-width: 40rem; }
+.context-tag { flex-shrink: 0; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0.35rem 0.7rem; font-size: 0.7rem; }
+.panel-layout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.2rem; align-items: start; }
+.section-stack { display: grid; gap: 1.2rem; }
+.panel { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 1rem; padding: 1.25rem; }
+.panel-wide { grid-column: 1 / -1; }
+.panel h2 { margin: 0 0 1rem; font-size: 0.95rem; font-weight: 550; letter-spacing: -0.01em; }
+.panel > .small:first-of-type { margin-top: 0; }
+.panel .card { background: transparent; border: 0; padding: 0; border-radius: 0; }
+.panel-layout .table-wide table { min-width: 0; }
+.panel-layout td { overflow-wrap: anywhere; }
+.panel[aria-label="Service health"] td:first-child,
+.panel[aria-label="Service health"] th:first-child { white-space: nowrap; overflow-wrap: normal; }
+.usage-breakdown { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.2rem; margin-top: 1.2rem; }
+.usage-breakdown .small { grid-column: 1 / -1; margin: 0; }
+#content > .table-scroll { background: var(--panel); border-radius: 0.8rem; border: 1px solid var(--line); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 1100px) { .panel-layout { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) {
+  .sidebar { position: static; width: auto; padding: 1rem; border-right: 0; border-bottom: 1px solid var(--line); }
+  .brand { margin: 0 0 1.1rem; }
+  .sidebar nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; }
+  .nav-group { margin: 0; min-width: 0; }
+  .nav-group:last-child { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.5rem; }
+  .nav-label { margin: 0 0.45rem 0.4rem; font-size: 0.6rem; }
+  .sidebar nav a { padding: 0.4rem; font-size: 0.77rem; gap: 0.4rem; }
+  .sidebar nav a span { overflow-wrap: anywhere; }
+  .sidebar-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 0.6rem; padding: 0.7rem 0 0; }
+  .page-header { margin-bottom: 1rem; }
+  .context-tag { display: none; }
+  .usage-breakdown { grid-template-columns: minmax(0, 1fr); }
+  .panel-layout .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem 1rem; }
+  .panel { padding: 1rem; border-radius: 0.8rem; }
 }
-
-.mark { font-weight: 600; letter-spacing: 0.01em; }
-
-.topbar nav a {
-  color: var(--muted);
-  text-decoration: none;
-  font-size: 0.85rem;
-}
-
-.topbar nav a:hover { color: var(--text); }
-
-.topbar nav { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; }
-.topbar { flex-wrap: wrap; }
 .table-scroll { max-width: 100%; overflow-x: auto; }
 .table-wide table { min-width: 34rem; }
 .table-scroll:not(.table-wide) th:first-child,
@@ -59,10 +89,10 @@ body {
 .pager a { color: var(--accent); }
 .filter-form { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: end; margin: 1rem 0; }
 .filter-form label { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; font-size: 0.8rem; }
-.filter-form input, .filter-form select { max-width: 100%; padding: 0.45rem; background: var(--panel); border: 1px solid var(--line); color: var(--text); font: inherit; }
+.filter-form input, .filter-form select { max-width: 100%; padding: 0.45rem; background: var(--panel); border: 1px solid var(--line); border-radius: 0.5rem; color: var(--text); font: inherit; }
 .filter-form a { color: var(--accent); }
 
-.topbar nav form { margin: 0; }
+.sidebar form { margin: 0; }
 
 .signout {
   padding: 0.25rem 0.7rem;
@@ -77,17 +107,20 @@ body {
 
 .signout:hover { color: var(--text); border-color: var(--muted); }
 
-main#app { max-width: 68rem; margin: 0 auto; padding: 1.25rem; }
+main#app { margin-left: 14.5rem; padding: 2.5rem clamp(1.25rem, 3vw, 3rem); min-width: 0; }
+@media (max-width: 760px) { main#app { margin: 0; padding: 1.4rem 1rem; } }
 
-.notice { min-height: 1.4rem; margin: 0 0 0.9rem; color: var(--muted); font-size: 0.82rem; }
+.notice { min-height: 1.4rem; margin: 0 0 1rem; color: var(--muted); font-size: 0.75rem; }
 
 .muted { color: var(--muted); }
 .small { font-size: 0.78rem; }
 .error { color: var(--danger); margin: 0 0 0.75rem; }
 
-table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); }
+table { width: 100%; border-collapse: collapse; background: transparent; }
 
-th, td { padding: 0.55rem 0.7rem; text-align: left; border-bottom: 1px solid var(--line); }
+th, td { padding: 0.75rem 0.7rem; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { background: #191d28; }
+tbody tr:hover { background: #191d27; }
 
 th { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
 
@@ -110,17 +143,21 @@ td a:hover { text-decoration: underline; }
 .badge-ultra { color: #d9b8e8; border-color: #3d3346; }
 
 .badge-grant { color: #e3c98f; border-color: #4a4130; }
-.badge-warning { color: var(--danger); border-color: var(--danger); }
+.badge-warning { color: var(--danger); border-color: #664238; background: #2b1d1d; }
+.badge-healthy { color: #a5dfc0; border-color: #355749; background: #172b24; }
 
 .plan-cell { display: inline-flex; align-items: center; gap: 0.35rem; }
 
-.card { background: var(--panel); border: 1px solid var(--line); padding: 1rem 1.1rem; margin-bottom: 1rem; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 1rem; padding: 1.25rem; margin-bottom: 1.2rem; }
 
 .card h1 { margin: 0 0 0.2rem; font-size: 1.25rem; }
 
 .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.5rem 1.25rem; margin: 0.75rem 0 0; padding: 0; }
 
-.facts div { min-width: 0; }
+.facts div { min-width: 0; padding: 0.6rem 0; }
+.panel-layout .facts dd { font-size: 1.55rem; font-weight: 550; letter-spacing: -0.04em; }
+.panel-layout .facts { margin: 0; gap: 0.75rem 1.5rem; }
+@media (min-width: 761px) { .panel-layout .facts { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .facts dt { color: var(--muted); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; }
 .facts dd { margin: 0.1rem 0 0; }
 
@@ -131,10 +168,10 @@ h2 { font-size: 0.95rem; margin: 1.4rem 0 0.6rem; overflow-wrap: anywhere; }
 
 .plan-btn {
   padding: 0.4rem 0.9rem;
-  background: transparent;
+  background: var(--raised);
   color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 0.4rem;
+  border: 1px solid #353a4b;
+  border-radius: 0.6rem;
   font: inherit;
   font-size: 0.84rem;
   cursor: pointer;
@@ -149,7 +186,9 @@ h2 { font-size: 0.95rem; margin: 1.4rem 0 0.6rem; overflow-wrap: anywhere; }
 
 .login-body { display: grid; place-items: center; min-height: 100dvh; padding: 1.25rem; }
 
-.login-card { width: min(22rem, 100%); background: var(--panel); border: 1px solid var(--line); padding: 1.5rem; }
+.login-card { width: min(25rem, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 1.2rem; padding: 2rem; }
+.login-card h1 { letter-spacing: -0.03em; }
+@media (prefers-reduced-motion: no-preference) { a, button { transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease; } }
 
 .login-card h1 { margin: 0; font-size: 1.2rem; }
 
@@ -172,7 +211,7 @@ h2 { font-size: 0.95rem; margin: 1.4rem 0 0.6rem; overflow-wrap: anywhere; }
   margin-top: 0.2rem;
   padding: 0.55rem 0.8rem;
   background: var(--accent);
-  color: #08110c;
+  color: #15132b;
   border: 0;
   border-radius: 0.35rem;
   font: inherit;
@@ -302,6 +341,30 @@ export const ADMIN_JS = `
     return p;
   }
 
+  function groupSections() {
+    const layout = document.createElement("div");
+    layout.className = app.dataset.view === "overview" ? "panel-layout" : "section-stack";
+    let panel;
+    for (const node of Array.from(content.children)) {
+      if (node.tagName && node.tagName.toLowerCase() === "h2") {
+        panel = document.createElement("section");
+        panel.className = "panel";
+        panel.setAttribute("aria-label", node.textContent);
+        if (app.dataset.view === "overview" && node.textContent === "Usage") panel.className += " panel-wide";
+        panel.append(node); layout.append(panel);
+      } else if (panel) panel.append(node);
+    }
+    if (layout.children.length) content.append(layout);
+    if (app.dataset.view === "overview") for (const section of Array.from(layout.children)) {
+      const children = Array.from(section.children);
+      if (children[0]?.textContent !== "Usage") continue;
+      const breakdown = document.createElement("div"); breakdown.className = "usage-breakdown";
+      for (const node of children) if (node.className?.includes("table-scroll")) breakdown.append(node);
+      for (const node of children) if (node.tagName?.toLowerCase() === "p") breakdown.append(node);
+      section.append(breakdown);
+    }
+  }
+
   function heading(text) {
     const h = document.createElement("h2");
     h.textContent = text;
@@ -309,6 +372,12 @@ export const ADMIN_JS = `
   }
 
   function count(value) { return value === null || value === undefined ? "Unavailable" : String(value); }
+  function serviceStatus(value) {
+    const span = document.createElement("span");
+    span.className = "badge" + (value === "healthy" ? " badge-healthy" : value === "unavailable" ? " badge-warning" : "");
+    span.textContent = value.replaceAll("_", " ");
+    return span;
+  }
   function attentionCount(value) {
     const span = document.createElement("span");
     span.className = value === null || value > 0 ? "badge badge-warning" : "badge";
@@ -347,9 +416,9 @@ export const ADMIN_JS = `
     heading("Service health");
     const health = data.health;
     content.append(table(["Service", "Status", "What was checked"], [
-      ["Database", health.database.status, health.database.latency_ms === null ? "Probe failed or timed out" : "SELECT 1 · " + health.database.latency_ms + "ms"],
-      ["Redis", health.redis.status, health.redis.latency_ms === null ? "Probe failed or timed out" : "PING · " + health.redis.latency_ms + "ms"],
-      ["Storage", health.storage.status, "Configuration only — object access not probed"],
+      ["Database", serviceStatus(health.database.status), health.database.latency_ms === null ? "Probe failed or timed out" : "SELECT 1 · " + health.database.latency_ms + "ms"],
+      ["Redis", serviceStatus(health.redis.status), health.redis.latency_ms === null ? "Probe failed or timed out" : "PING · " + health.redis.latency_ms + "ms"],
+      ["Storage", serviceStatus(health.storage.status), "Configuration only — object access not probed"],
       ["Billing", health.billing.configured ? "Configured" : "Not configured", "Configuration only — Stripe not contacted"],
       ["GitHub", health.github.configured ? health.github.webhook_configured ? "App and webhook configured" : "Webhook not configured" : "Not configured", "Configuration only — delivery/permissions not verified"],
     ]));
@@ -385,6 +454,7 @@ export const ADMIN_JS = `
       content.append(table(["API error code", "Count"], metrics.errors.map(row => [String(row.code), count(row.count)])));
       if (!metrics.errors.length) content.append(paragraph("No API errors recorded in this window."));
     } else content.append(paragraph("Operational counters unavailable — no zero-error claim can be made."));
+    groupSections();
   }
 
   function filters(fields, path) {
@@ -433,10 +503,12 @@ export const ADMIN_JS = `
     content.textContent = "";
     setNotice("GitHub jobs awaiting retry or pending longer than five minutes");
     refreshButton(loadAttention);
+    heading("GitHub processing queue");
     content.append(paragraph("Oldest first. Read-only: delivery IDs let you correlate GitHub deliveries/backend logs. Payloads and task content are never shown. Access pauses and billing flags are summarized in Overview."));
     content.append(table(["Job / delivery", "Kind", "Attempts", "Created", "Retry eligible", "Lease until", "Error"], data.jobs.map(job => [String(job.id) + (job.delivery_id ? " / " + job.delivery_id : ""), String(job.kind), count(job.attempts), when(job.created_at), when(job.retry_at), timestamp(job.locked_until), job.error_code === null ? "Pending" : String(job.error_code)])));
     if (!data.jobs.length) content.append(paragraph(data.total ? "No jobs on this page. Use Previous to return." : "No retrying or overdue GitHub jobs."));
     pagination(data, "/attention");
+    groupSections();
   }
 
   async function loadAudit() {
@@ -448,10 +520,12 @@ export const ADMIN_JS = `
     setNotice("Durable operator plan-change history");
     refreshButton(loadAudit);
     filters([{ name: "actor", label: "Operator" }, { name: "user", label: "User name or ID" }, { name: "action", label: "Action", options: ["", "plan_override_changed"] }, { name: "from", label: "From (UTC)", type: "date" }, { name: "to", label: "Through (UTC)", type: "date" }], "/audit");
+    heading("Change history");
     content.append(paragraph("Only changes made after this feature was deployed are recorded. The console uses one operator account; this identifies that account, not individual people sharing it. Revoking a grant never cancels a Stripe subscription."));
     content.append(table(["When", "Operator", "Action", "User", "Previous grant", "New grant"], data.events.map(event => [when(event.created_at), String(event.actor), String(event.action), event.target_user_id ? link("/users/" + encodeURIComponent(event.target_user_id), String(event.target_username)) : String(event.target_username) + " (deleted)", event.from_plan === null ? "None" : String(event.from_plan), event.to_plan === null ? "None" : String(event.to_plan)])));
     if (!data.events.length) content.append(paragraph(data.total ? "No events on this page. Use Previous to return." : "No operator plan changes recorded yet."));
     pagination(data, "/audit");
+    groupSections();
   }
 
   async function loadWorkspaces() {
@@ -463,10 +537,12 @@ export const ADMIN_JS = `
     setNotice("Workspace support · checked " + when(data.checked_at));
     refreshButton(loadWorkspaces);
     filters([{ name: "q", label: "Workspace, slug or owner" }], "/workspaces");
+    heading("Workspace directory");
     content.append(paragraph("Limits follow the owner's effective plan and deployment mode. Task counts have no plan quota. Storage includes attachments and logos, not orphaned bucket objects."));
     content.append(table(["Workspace", "Owner", "Plan", "Members / limit", "Tasks", "Files", "Storage / limit"], data.workspaces.map(workspace => [link("/workspaces/" + workspace.id, workspace.name + " (" + workspace.kind + ")"), link("/users/" + workspace.owner.id, workspace.owner.username), String(workspace.plan), quota(workspace.members, workspace.limits.members, false), count(workspace.tasks), count(workspace.files), quota(workspace.storage_bytes, workspace.limits.storage_bytes, true)])));
     if (!data.workspaces.length) content.append(paragraph("No workspaces match this page/filter."));
     pagination(data, "/workspaces");
+    groupSections();
   }
 
   async function loadWorkspace(id) {
@@ -492,6 +568,7 @@ export const ADMIN_JS = `
     content.append(paragraph("Owner connection is personal; workspace issue links can be published by other members. No credentials or repository names are shown."));
     content.append(table(["Publication", "Sync", "Count"], workspace.github.issue_links.map(row => [row.publication_status, row.sync_status, count(row.count)])));
     if (!workspace.github.issue_links.length) content.append(paragraph("No GitHub issue links recorded."));
+    groupSections();
   }
 
   async function loadBilling() {
@@ -507,6 +584,7 @@ export const ADMIN_JS = `
     setNotice((data.configured ? "Billing configured" : "Billing not configured") + " · stored observations · checked " + when(data.checked_at));
     refreshButton(loadBilling);
     filters([{ name: "q", label: "User" }, { name: "status", label: "Subscription / attention", options: ["", "unknown", "none", "active", "trialing", "past_due", "unpaid", "canceled", "paused", "incomplete", "incomplete_expired", "error", "canceling", "payment_failed", "grant"] }], "/billing");
+    heading("Subscription overview");
     content.append(paragraph("Stripe observations are refreshed by existing webhooks/user billing sync, never by opening admin. Unknown means not verified since monitoring began. Active/trialing is not proof of payment. Operator grants are separate from subscriptions; last invoice event is a notification, not complete payment history."));
     content.append(table(["User", "Effective / Stripe plan", "Grant", "Subscription", "Cancellation", "Period / grace ends", "Last invoice event", "Verified", "Attempt / error"], data.users.map(user => [link("/users/" + user.id, user.username), user.effective_plan + " / " + user.stripe_plan, user.operator_grant || "None", user.subscription_status + (user.has_customer ? "" : " · no customer"), user.cancel_at ? when(user.cancel_at) : user.cancel_at_period_end === null ? "Unknown" : user.cancel_at_period_end ? "At period end" : "Not scheduled", timestamp(user.period_end) + " / " + timestamp(user.grace_until), user.last_invoice_event ? user.last_invoice_event + " · " + timestamp(user.invoice_observed_at) : "Unknown", timestamp(user.verified_at), timestamp(user.attempted_at) + (user.error_code ? " / " + user.error_code : "")])));
     if (!data.users.length) content.append(paragraph("No accounts match this page/filter."));
@@ -515,10 +593,11 @@ export const ADMIN_JS = `
     content.append(paragraph("Post-deployment attempts only. History follows the user search, not the subscription-status filter; unassigned/deleted users appear when search is empty."));
     let history;
     try { history = await getJSON("/api/billing/history?" + historyQuery); }
-    catch { content.append(paragraph("Reconciliation history unavailable.")); return; }
+    catch { content.append(paragraph("Reconciliation history unavailable.")); groupSections(); return; }
     content.append(table(["When", "User", "Source", "Outcome", "Error"], history.events.map(event => [when(event.created_at), event.user ? link("/users/" + event.user.id, event.user.username) : "Unassigned / deleted", event.source, event.outcome, event.error_code || "—"])));
     if (!history.events.length) content.append(paragraph("No reconciliation attempts on this page/filter."));
     pagination(history, "/billing", "history_page");
+    groupSections();
   }
 
   async function loadUsers() {
@@ -533,11 +612,13 @@ export const ADMIN_JS = `
     const users = Array.isArray(data.users) ? data.users : [];
     content.textContent = "";
     setNotice(users.length + (users.length === 1 ? " user" : " users"));
+    heading("Account directory");
     if (users.length === 0) {
       const empty = document.createElement("p");
       empty.className = "muted";
       empty.textContent = "No users yet.";
       content.append(empty);
+      groupSections();
       return;
     }
     const rows = users.map((u) => [
@@ -549,6 +630,7 @@ export const ADMIN_JS = `
       Array.isArray(u.attention_flags) && u.attention_flags.length ? u.attention_flags.join(", ") : "None",
     ]);
     content.append(table(["Username", "Display name", "Plan", "Workspaces", "Created", "Attention flags"], rows));
+    groupSections();
   }
 
   async function setPlan(id, plan) {
@@ -677,6 +759,7 @@ export const ADMIN_JS = `
       empty.className = "muted";
       empty.textContent = "This user has not created a workspace.";
       content.append(empty);
+      groupSections();
       return;
     }
     content.append(
@@ -691,6 +774,7 @@ export const ADMIN_JS = `
         ])
       )
     );
+    groupSections();
   }
 
   const view = app.dataset.view;

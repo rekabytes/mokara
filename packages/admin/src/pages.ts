@@ -66,6 +66,36 @@ function shell(opts: {
   dataWorkspaceId?: string;
 }): string {
   const userIdAttr = opts.dataUserId === undefined ? "" : ` data-user-id="${esc(opts.dataUserId)}"`;
+  const section =
+    opts.view === "user" ? "users" : opts.view === "workspace" ? "workspaces" : opts.view;
+  const descriptions: Record<string, [string, string]> = {
+    overview: [
+      "Overview",
+      "A clear picture of your platform, with the issues that need you first.",
+    ],
+    attention: [
+      "Needs attention",
+      "Inspect delayed operations and retries without changing product data.",
+    ],
+    users: ["Users", "Account context, integration health and operator grants."],
+    user: ["Account details", "Understand this account and the workspaces it owns."],
+    workspaces: ["Workspaces", "Owners, members and capacity — without private task content."],
+    workspace: [
+      "Workspace details",
+      "Membership, plan limits and integration health in one place.",
+    ],
+    billing: [
+      "Billing",
+      "Provider observations, grants and reconciliation history, clearly separated.",
+    ],
+    audit: ["Audit trail", "Trace operator changes with searchable, durable records."],
+  };
+  const [heading, description] = descriptions[opts.view] ?? [
+    "Administration",
+    "Platform support and operations.",
+  ];
+  const navLink = (view: string, label: string, path: string) =>
+    `<a href="/${view}"${section === view ? ` class="nav-active"${opts.view === view ? ' aria-current="page"' : ""}` : ""}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="${path}" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${label}</span></a>`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -73,19 +103,24 @@ ${HEAD}
 <title>${esc(opts.title)}</title>
 </head>
 <body>
-<header class="topbar">
-<span class="mark">Mokara admin</span>
-<nav>
-<a href="/overview">Overview</a>
-<a href="/attention">Needs attention</a>
-<a href="/users">Users</a>
-<a href="/workspaces">Workspaces</a>
-<a href="/billing">Billing</a>
-<a href="/audit">Audit</a>
-<form method="post" action="/logout"><button type="submit" class="signout">Sign out</button></form>
+<a class="skip-link" href="#app">Skip to content</a>
+<aside class="sidebar">
+<a class="brand" href="/overview"><span class="brand-symbol">M</span><span>Mokara<span class="brand-caption">Administration</span></span></a>
+<nav aria-label="Administration">
+<div class="nav-group"><p class="nav-label">Operations</p>
+${navLink("overview", "Overview", "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z")}
+${navLink("attention", "Needs attention", "M12 3 2 21h20L12 3Z M12 9v5 M12 17v.1")}</div>
+<div class="nav-group"><p class="nav-label">Accounts &amp; support</p>
+${navLink("users", "Users", "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M20 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75")}
+${navLink("workspaces", "Workspaces", "M3 7h18v14H3z M8 7V3h8v4 M3 12h18 M10 12v3h4v-3")}
+${navLink("billing", "Billing", "M3 5h18v14H3z M3 10h18 M7 15h3")}</div>
+<div class="nav-group"><p class="nav-label">Governance</p>
+${navLink("audit", "Audit trail", "M6 3h12v18H6z M9 7h6 M9 11h6 M9 15h4")}</div>
 </nav>
-</header>
-<main id="app" data-view="${esc(opts.view)}"${userIdAttr}${opts.dataWorkspaceId === undefined ? "" : ` data-workspace-id="${esc(opts.dataWorkspaceId)}"`}>
+<div class="sidebar-footer"><span class="operator-label">Operator console</span><form method="post" action="/logout"><button type="submit" class="signout">Sign out</button></form></div>
+</aside>
+<main id="app" tabindex="-1" aria-labelledby="page-title" data-view="${esc(opts.view)}"${userIdAttr}${opts.dataWorkspaceId === undefined ? "" : ` data-workspace-id="${esc(opts.dataWorkspaceId)}"`}>
+<header class="page-header"><div><p class="eyebrow">Mokara / Administration</p><h1 id="page-title">${esc(heading)}</h1><p class="page-description">${esc(description)}</p></div><span class="context-tag">Operator access</span></header>
 <p id="notice" class="notice" role="status"></p>
 <section id="content"><p class="muted">Loading…</p></section>
 </main>

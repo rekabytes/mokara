@@ -69,26 +69,14 @@ function shell(opts: {
   const section =
     opts.view === "user" ? "users" : opts.view === "workspace" ? "workspaces" : opts.view;
   const descriptions: Record<string, [string, string]> = {
-    overview: [
-      "Overview",
-      "A clear picture of your platform, with the issues that need you first.",
-    ],
-    attention: [
-      "Needs attention",
-      "Inspect delayed operations and retries without changing product data.",
-    ],
-    users: ["Users", "Account context, integration health and operator grants."],
-    user: ["Account details", "Understand this account and the workspaces it owns."],
-    workspaces: ["Workspaces", "Owners, members and capacity — without private task content."],
-    workspace: [
-      "Workspace details",
-      "Membership, plan limits and integration health in one place.",
-    ],
-    billing: [
-      "Billing",
-      "Provider observations, grants and reconciliation history, clearly separated.",
-    ],
-    audit: ["Audit trail", "Trace operator changes with searchable, durable records."],
+    overview: ["Overview", "Platform health and activity."],
+    attention: ["Needs attention", "Retries and delayed GitHub jobs."],
+    users: ["Users", "Accounts and access."],
+    user: ["Account details", "Plan, integrations and workspaces."],
+    workspaces: ["Workspaces", "Membership and capacity."],
+    workspace: ["Workspace details", "Members, limits and integrations."],
+    billing: ["Billing", "Subscriptions, grants and sync history."],
+    audit: ["Audit trail", "Operator change history."],
   };
   const [heading, description] = descriptions[opts.view] ?? [
     "Administration",
@@ -120,7 +108,7 @@ ${navLink("audit", "Audit trail", "M6 3h12v18H6z M9 7h6 M9 11h6 M9 15h4")}</div>
 <div class="sidebar-footer"><span class="operator-label">Operator console</span><form method="post" action="/logout"><button type="submit" class="signout">Sign out</button></form></div>
 </aside>
 <main id="app" tabindex="-1" aria-labelledby="page-title" data-view="${esc(opts.view)}"${userIdAttr}${opts.dataWorkspaceId === undefined ? "" : ` data-workspace-id="${esc(opts.dataWorkspaceId)}"`}>
-<header class="page-header"><div><p class="eyebrow">Mokara / Administration</p><h1 id="page-title">${esc(heading)}</h1><p class="page-description">${esc(description)}</p></div><span class="context-tag">Operator access</span></header>
+<header class="page-header"><div><h1 id="page-title">${esc(heading)}</h1><p class="page-description">${esc(description)}</p></div><span class="context-tag">Operator access</span></header>
 <p id="notice" class="notice" role="status"></p>
 <section id="content"><p class="muted">Loading…</p></section>
 </main>

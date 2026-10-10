@@ -552,7 +552,7 @@ test("overview renderer shows zeroes and explicitly labels configuration-only se
   const data = await (await app.request("/api/admin/overview", authorized())).json();
   const { nodes, requests } = await render("overview", data);
   assert.deepEqual(requests, ["/api/overview"]);
-  assert.ok(nodes.content.textContent.includes("Configuration only"));
+  assert.ok(nodes.content.textContent.includes("Config only"));
   assert.ok(nodes.content.textContent.includes("Usage"));
   assert.ok(nodes.content.textContent.includes("Needs attention"));
   assert.ok(nodes.content.textContent.includes("Effective plans include operator grants"));
@@ -578,6 +578,15 @@ test("overview groups every dataset once into five panels", async () => {
     breakdown.children.filter((node) => node.className.includes("table-scroll")).length,
     2
   );
+});
+
+test("light theme uses compact controls with explanatory notes still available", async () => {
+  const data = await (await app.request("/api/admin/attention", authorized())).json();
+  const { nodes } = await render("attention", data);
+  assert.ok(nodes.content.textContent.includes("Queue details"));
+  assert.ok(nodes.content.textContent.includes("Jobs awaiting retry or pending over five minutes"));
+  assert.equal(nodes.content.textContent.includes("Counts are a snapshot, not a live feed"), false);
+  assert.equal(nodes.content.textContent.includes("Refresh snapshot"), false);
 });
 
 test("unavailable snapshot renders unknown counts instead of no-problem claims", async () => {

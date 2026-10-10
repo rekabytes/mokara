@@ -8,15 +8,15 @@
 
 export const ADMIN_CSS = `
 :root {
-  color-scheme: dark;
-  --bg: #0c0e14;
-  --panel: #13161f;
-  --line: #282c3a;
-  --text: #eef0f7;
-  --muted: #a0a8bb;
-  --accent: #adafff;
-  --danger: #f3a99c;
-  --raised: #1a1e2a;
+  color-scheme: light;
+  --bg: #f5f7fb;
+  --panel: #ffffff;
+  --line: #dce2ec;
+  --text: #17243b;
+  --muted: #53627a;
+  --accent: #2455df;
+  --danger: #a33328;
+  --raised: #eef3ff;
 }
 
 * { box-sizing: border-box; }
@@ -28,19 +28,19 @@ body {
   font: 0.9rem/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-.sidebar { position: fixed; inset: 0 auto 0 0; width: 14.5rem; display: flex; flex-direction: column; padding: 1.6rem 1rem; background: #10121a; border-right: 1px solid var(--line); overflow-y: auto; }
+.sidebar { position: fixed; inset: 0 auto 0 0; width: 14.5rem; display: flex; flex-direction: column; padding: 1.6rem 1rem; background: #ffffff; border-right: 1px solid var(--line); overflow-y: auto; }
 .brand { display: flex; align-items: center; gap: 0.75rem; margin: 0 0.5rem 2.5rem; color: var(--text); text-decoration: none; font-weight: 650; font-size: 1.05rem; letter-spacing: -0.03em; }
-.brand-symbol { display: grid; place-items: center; width: 2.3rem; height: 2.3rem; border: 1px solid #46456d; border-radius: 0.75rem; background: #25243d; color: #d4d1ff; }
+.brand-symbol { display: grid; place-items: center; width: 2.3rem; height: 2.3rem; border: 1px solid #c8d7ff; border-radius: 0.75rem; background: #eaf0ff; color: #2455df; }
 .brand-caption { display: block; color: var(--muted); font-size: 0.7rem; font-weight: 400; letter-spacing: 0.02em; margin-top: 0.1rem; }
 .nav-group { margin-bottom: 1.8rem; }
 .nav-label, .operator-label { color: var(--muted); font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; }
 .nav-label { margin: 0 0.75rem 0.65rem; }
 .sidebar nav a { display: flex; gap: 0.7rem; align-items: center; padding: 0.65rem 0.75rem; margin: 0.2rem 0; border: 1px solid transparent; border-radius: 0.6rem; color: var(--muted); text-decoration: none; font-size: 0.82rem; }
 .sidebar nav svg { flex: 0 0 1.1rem; width: 1.1rem; height: 1.1rem; }
-.sidebar nav a:hover { color: var(--text); background: #191c27; }
-.sidebar nav a.nav-active { color: #d6d4ff; border-color: #383650; background: #242238; }
+.sidebar nav a:hover { color: var(--text); background: #f2f5fa; }
+.sidebar nav a.nav-active { color: #1946c5; border-color: #cbd9ff; background: #edf2ff; }
 .sidebar-footer { margin-top: auto; border-top: 1px solid var(--line); padding: 1.1rem 0.6rem 0; display: grid; gap: 0.8rem; }
-.skip-link { position: fixed; top: -5rem; left: 1rem; z-index: 10; background: var(--accent); color: var(--bg); padding: 0.6rem 1rem; border-radius: 0.5rem; }
+.skip-link { position: fixed; top: -5rem; left: 1rem; z-index: 10; background: var(--accent); color: #ffffff; padding: 0.6rem 1rem; border-radius: 0.5rem; }
 .skip-link:focus { top: 1rem; }
 .page-header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
 .eyebrow { color: var(--muted); text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.12em; margin: 0 0 0.65rem; }
@@ -59,7 +59,11 @@ body {
 .panel[aria-label="Service health"] td:first-child,
 .panel[aria-label="Service health"] th:first-child { white-space: nowrap; overflow-wrap: normal; }
 .usage-breakdown { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.2rem; margin-top: 1.2rem; }
-.usage-breakdown .small { grid-column: 1 / -1; margin: 0; }
+.usage-breakdown .small, .usage-breakdown .data-note { grid-column: 1 / -1; margin: 0; }
+.data-note { margin: 0.75rem 0; color: var(--muted); font-size: 0.75rem; }
+.data-note summary { cursor: pointer; width: fit-content; }
+.data-note[open] summary { color: var(--text); }
+.data-note p { max-width: 65rem; margin-bottom: 0; }
 #content > .table-scroll { background: var(--panel); border-radius: 0.8rem; border: 1px solid var(--line); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 @media (max-width: 1100px) { .panel-layout { grid-template-columns: minmax(0, 1fr); } }
@@ -119,8 +123,8 @@ main#app { margin-left: 14.5rem; padding: 2.5rem clamp(1.25rem, 3vw, 3rem); min-
 table { width: 100%; border-collapse: collapse; background: transparent; }
 
 th, td { padding: 0.75rem 0.7rem; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { background: #191d28; }
-tbody tr:hover { background: #191d27; }
+th { background: #f3f6fb; }
+tbody tr:hover { background: #f8faff; }
 
 th { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
 
@@ -139,12 +143,12 @@ td a:hover { text-decoration: underline; }
 }
 
 .badge-starter { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
-.badge-pro { color: #9fc3e8; border-color: #2c3d4d; }
-.badge-ultra { color: #d9b8e8; border-color: #3d3346; }
+.badge-pro { color: #2455df; border-color: #cbd9ff; background: #edf2ff; }
+.badge-ultra { color: #6b3d9b; border-color: #ddd0f0; background: #f5effc; }
 
-.badge-grant { color: #e3c98f; border-color: #4a4130; }
-.badge-warning { color: var(--danger); border-color: #664238; background: #2b1d1d; }
-.badge-healthy { color: #a5dfc0; border-color: #355749; background: #172b24; }
+.badge-grant { color: #805413; border-color: #ead4a7; background: #fff8e9; }
+.badge-warning { color: var(--danger); border-color: #efccc7; background: #fff1ee; }
+.badge-healthy { color: #176444; border-color: #bce1ce; background: #edf9f2; }
 
 .plan-cell { display: inline-flex; align-items: center; gap: 0.35rem; }
 
@@ -170,7 +174,7 @@ h2 { font-size: 0.95rem; margin: 1.4rem 0 0.6rem; overflow-wrap: anywhere; }
   padding: 0.4rem 0.9rem;
   background: var(--raised);
   color: var(--text);
-  border: 1px solid #353a4b;
+  border: 1px solid #cbd9ef;
   border-radius: 0.6rem;
   font: inherit;
   font-size: 0.84rem;
@@ -211,7 +215,7 @@ h2 { font-size: 0.95rem; margin: 1.4rem 0 0.6rem; overflow-wrap: anywhere; }
   margin-top: 0.2rem;
   padding: 0.55rem 0.8rem;
   background: var(--accent);
-  color: #15132b;
+  color: #ffffff;
   border: 0;
   border-radius: 0.35rem;
   font: inherit;
@@ -334,6 +338,14 @@ export const ADMIN_JS = `
     return res.json();
   }
 
+  function dataNote(text, label = "About this data") {
+    const details = document.createElement("details");
+    details.className = "data-note";
+    const summary = document.createElement("summary"); summary.textContent = label;
+    details.append(summary, paragraph(text));
+    return details;
+  }
+
   function paragraph(text) {
     const p = document.createElement("p");
     p.className = "muted small";
@@ -360,7 +372,7 @@ export const ADMIN_JS = `
       if (children[0]?.textContent !== "Usage") continue;
       const breakdown = document.createElement("div"); breakdown.className = "usage-breakdown";
       for (const node of children) if (node.className?.includes("table-scroll")) breakdown.append(node);
-      for (const node of children) if (node.tagName?.toLowerCase() === "p") breakdown.append(node);
+      for (const node of children) if (node.tagName?.toLowerCase() === "p" || node.className === "data-note") breakdown.append(node);
       section.append(breakdown);
     }
   }
@@ -399,9 +411,10 @@ export const ADMIN_JS = `
     const button = document.createElement("button");
     button.type = "button";
     button.className = "plan-btn";
-    button.textContent = "Refresh snapshot";
+    button.textContent = "Refresh";
+    button.title = "Refresh read-only snapshot";
     button.addEventListener("click", () => { void reload(); });
-    row.append(button, paragraph("Read-only monitoring. Counts are a snapshot, not a live feed."));
+    row.append(button);
     content.append(row);
   }
 
@@ -409,7 +422,7 @@ export const ADMIN_JS = `
     content.textContent = "Checking service health…";
     let data;
     try { data = await getJSON("/api/overview"); }
-    catch { content.textContent = "Monitoring unavailable. Your previous data has not been replaced with zero counts."; return; }
+    catch { content.textContent = "Monitoring unavailable. No current snapshot."; return; }
     content.textContent = "";
     setNotice("Checked " + when(data.checked_at) + " · Backend package " + data.version + " · " + data.deploy_mode + " · uptime " + data.uptime_seconds + "s");
     refreshButton(loadOverview);
@@ -418,13 +431,14 @@ export const ADMIN_JS = `
     content.append(table(["Service", "Status", "What was checked"], [
       ["Database", serviceStatus(health.database.status), health.database.latency_ms === null ? "Probe failed or timed out" : "SELECT 1 · " + health.database.latency_ms + "ms"],
       ["Redis", serviceStatus(health.redis.status), health.redis.latency_ms === null ? "Probe failed or timed out" : "PING · " + health.redis.latency_ms + "ms"],
-      ["Storage", serviceStatus(health.storage.status), "Configuration only — object access not probed"],
-      ["Billing", health.billing.configured ? "Configured" : "Not configured", "Configuration only — Stripe not contacted"],
-      ["GitHub", health.github.configured ? health.github.webhook_configured ? "App and webhook configured" : "Webhook not configured" : "Not configured", "Configuration only — delivery/permissions not verified"],
+      ["Storage", serviceStatus(health.storage.status), "Config only"],
+      ["Billing", health.billing.configured ? "Configured" : "Not configured", "Config only"],
+      ["GitHub", health.github.configured ? health.github.webhook_configured ? "App and webhook configured" : "Webhook not configured" : "Not configured", "Config only"],
     ]));
     heading("Needs attention");
-    content.append(paragraph("Categories can overlap. Zero counts are shown; unavailable counts need investigation."));
-    content.append(table(["Category", "Count"], data.attention.map(row => [row.href ? link(row.href, String(row.label)) : String(row.label), attentionCount(row.count)])));
+    const attentionLabels = { api_errors: "API errors · 60 min", billing_webhooks: "Billing webhook failures · 60 min", github_retries: "GitHub retries", github_stale: "GitHub pending > 5 min", github_failed_links: "Failed GitHub links", github_paused: "Paused GitHub links", github_verification: "GitHub reauthorization", billing_grace: "Grace flags (incl. expired)" };
+    content.append(dataNote("Categories can overlap. Zero counts are shown; unavailable counts need investigation."));
+    content.append(table(["Category", "Count"], data.attention.map(row => [row.href ? link(row.href, String(attentionLabels[row.key] || row.label)) : String(attentionLabels[row.key] || row.label), attentionCount(row.count)])));
     const snapshot = data.snapshot;
     heading("Usage");
     if (snapshot) {
@@ -437,7 +451,7 @@ export const ADMIN_JS = `
       card.append(facts);
       content.append(card);
       content.append(table(["Effective plan", "Users"], usage.plans.map(row => [String(row.plan), count(row.count)])));
-      content.append(paragraph("Effective plans include operator grants; these are not subscription or revenue counts."));
+      content.append(dataNote("Effective plans include operator grants; these are not subscription or revenue counts."));
       content.append(table(["Task status", "Tasks"], usage.task_statuses.map(row => [String(row.status), count(row.count)])));
       heading("GitHub processing");
       const github = snapshot.github;
@@ -445,11 +459,11 @@ export const ADMIN_JS = `
         ["Connected accounts", count(github.connections)], ["Active personal repository associations", count(github.active_repository_associations)],
         ["Queued jobs", count(github.queued)], ["Oldest pending job", timestamp(github.oldest_pending_at)], ["Last successful linked-issue sync", timestamp(github.last_synced_at)],
       ]));
-    } else content.append(paragraph("Database snapshot unavailable. Usage and queue counts are unknown, not zero."));
-    heading("API and billing delivery counters");
+    } else content.append(paragraph("Usage unavailable — unknown, not zero."));
+    heading("API & billing · 60 min");
     const metrics = data.metrics;
     if (metrics) {
-      content.append(paragraph("Last 60 minute buckets; monitoring begins after deployment. Admin traffic and health probes are excluded. No request bodies, URLs or user identities are stored."));
+      content.append(dataNote("Last 60 minute buckets; monitoring begins after deployment. Admin traffic and health probes are excluded. No request bodies, URLs or user identities are stored."));
       content.append(table(["Metric", "Count"], [["API requests", count(metrics.requests)], ["API server errors", count(metrics.server_errors)], ["Billing webhook accepted", count(metrics.billing_received)], ["Billing webhook failures", count(metrics.billing_failed)]]));
       content.append(table(["API error code", "Count"], metrics.errors.map(row => [String(row.code), count(row.count)])));
       if (!metrics.errors.length) content.append(paragraph("No API errors recorded in this window."));
@@ -489,7 +503,7 @@ export const ADMIN_JS = `
     const params = new URL(window.location.href).searchParams;
     const destination = page => { const query = new URLSearchParams(params); query.set(pageKey, String(page)); return path + "?" + query; };
     if (data.page > 1) row.append(link(destination(data.page - 1), "Previous"));
-    row.append(paragraph("Page " + data.page + " · " + data.total + " records · " + data.page_size + " per page"));
+    row.append(paragraph(data.total === 0 ? "0 records" : "Page " + data.page + " · " + data.total + " records"));
     if (data.page * data.page_size < data.total) row.append(link(destination(data.page + 1), "Next"));
     content.append(row);
   }
@@ -501,12 +515,12 @@ export const ADMIN_JS = `
     try { data = await getJSON("/api/attention?page=" + encodeURIComponent(page)); }
     catch { content.textContent = "Queue details unavailable."; return; }
     content.textContent = "";
-    setNotice("GitHub jobs awaiting retry or pending longer than five minutes");
+    setNotice(data.total + (data.total === 1 ? " job" : " jobs") + " · oldest first");
     refreshButton(loadAttention);
-    heading("GitHub processing queue");
-    content.append(paragraph("Oldest first. Read-only: delivery IDs let you correlate GitHub deliveries/backend logs. Payloads and task content are never shown. Access pauses and billing flags are summarized in Overview."));
-    content.append(table(["Job / delivery", "Kind", "Attempts", "Created", "Retry eligible", "Lease until", "Error"], data.jobs.map(job => [String(job.id) + (job.delivery_id ? " / " + job.delivery_id : ""), String(job.kind), count(job.attempts), when(job.created_at), when(job.retry_at), timestamp(job.locked_until), job.error_code === null ? "Pending" : String(job.error_code)])));
-    if (!data.jobs.length) content.append(paragraph(data.total ? "No jobs on this page. Use Previous to return." : "No retrying or overdue GitHub jobs."));
+    heading("GitHub queue");
+    content.append(dataNote("Jobs awaiting retry or pending over five minutes, oldest first. Delivery IDs correlate with GitHub deliveries and backend logs. No payloads or task content are shown. Account and billing flags are in Overview.", "Queue details"));
+    content.append(table(["Job / delivery", "Type", "Attempts", "Created", "Retry at", "Lease ends", "Error"], data.jobs.map(job => [String(job.id) + (job.delivery_id ? " / " + job.delivery_id : ""), String(job.kind), count(job.attempts), when(job.created_at), when(job.retry_at), timestamp(job.locked_until), job.error_code === null ? "Pending" : String(job.error_code)])));
+    if (!data.jobs.length) content.append(paragraph(data.total ? "No jobs on this page. Use Previous to return." : "No jobs need attention."));
     pagination(data, "/attention");
     groupSections();
   }
@@ -517,11 +531,11 @@ export const ADMIN_JS = `
     try { data = await getJSON("/api/audit?" + new URL(window.location.href).searchParams); }
     catch { content.textContent = "Audit records unavailable."; return; }
     content.textContent = "";
-    setNotice("Durable operator plan-change history");
+    setNotice(data.total + " changes");
     refreshButton(loadAudit);
     filters([{ name: "actor", label: "Operator" }, { name: "user", label: "User name or ID" }, { name: "action", label: "Action", options: ["", "plan_override_changed"] }, { name: "from", label: "From (UTC)", type: "date" }, { name: "to", label: "Through (UTC)", type: "date" }], "/audit");
     heading("Change history");
-    content.append(paragraph("Only changes made after this feature was deployed are recorded. The console uses one operator account; this identifies that account, not individual people sharing it. Revoking a grant never cancels a Stripe subscription."));
+    content.append(dataNote("Only changes made after this feature was deployed are recorded. The console uses one operator account; this identifies that account, not individual people sharing it. Revoking a grant never cancels a Stripe subscription."));
     content.append(table(["When", "Operator", "Action", "User", "Previous grant", "New grant"], data.events.map(event => [when(event.created_at), String(event.actor), String(event.action), event.target_user_id ? link("/users/" + encodeURIComponent(event.target_user_id), String(event.target_username)) : String(event.target_username) + " (deleted)", event.from_plan === null ? "None" : String(event.from_plan), event.to_plan === null ? "None" : String(event.to_plan)])));
     if (!data.events.length) content.append(paragraph(data.total ? "No events on this page. Use Previous to return." : "No operator plan changes recorded yet."));
     pagination(data, "/audit");
@@ -534,11 +548,11 @@ export const ADMIN_JS = `
     try { data = await getJSON("/api/workspaces?" + new URL(window.location.href).searchParams); }
     catch { content.textContent = "Workspace support unavailable."; return; }
     content.textContent = "";
-    setNotice("Workspace support · checked " + when(data.checked_at));
+    setNotice("Updated " + when(data.checked_at));
     refreshButton(loadWorkspaces);
     filters([{ name: "q", label: "Workspace, slug or owner" }], "/workspaces");
     heading("Workspace directory");
-    content.append(paragraph("Limits follow the owner's effective plan and deployment mode. Task counts have no plan quota. Storage includes attachments and logos, not orphaned bucket objects."));
+    content.append(dataNote("Limits follow the owner's effective plan and deployment mode. Task counts have no plan quota. Storage includes attachments and logos, not orphaned bucket objects."));
     content.append(table(["Workspace", "Owner", "Plan", "Members / limit", "Tasks", "Files", "Storage / limit"], data.workspaces.map(workspace => [link("/workspaces/" + workspace.id, workspace.name + " (" + workspace.kind + ")"), link("/users/" + workspace.owner.id, workspace.owner.username), String(workspace.plan), quota(workspace.members, workspace.limits.members, false), count(workspace.tasks), count(workspace.files), quota(workspace.storage_bytes, workspace.limits.storage_bytes, true)])));
     if (!data.workspaces.length) content.append(paragraph("No workspaces match this page/filter."));
     pagination(data, "/workspaces");
@@ -551,7 +565,7 @@ export const ADMIN_JS = `
     try { data = await getJSON("/api/workspaces/" + encodeURIComponent(id)); }
     catch { content.textContent = "Workspace details unavailable."; return; }
     content.textContent = "";
-    setNotice("Workspace support · checked " + when(data.checked_at));
+    setNotice("Updated " + when(data.checked_at));
     content.append(link("/workspaces", "← All workspaces"));
     refreshButton(() => loadWorkspace(id));
     const workspace = data.workspace;
@@ -565,7 +579,7 @@ export const ADMIN_JS = `
     heading("Task totals — no private task content");
     content.append(table(["Status", "Count"], workspace.task_statuses.map(row => [row.status, count(row.count)])));
     heading("Workspace GitHub links");
-    content.append(paragraph("Owner connection is personal; workspace issue links can be published by other members. No credentials or repository names are shown."));
+    content.append(dataNote("Owner connection is personal; workspace issue links can be published by other members. No credentials or repository names are shown."));
     content.append(table(["Publication", "Sync", "Count"], workspace.github.issue_links.map(row => [row.publication_status, row.sync_status, count(row.count)])));
     if (!workspace.github.issue_links.length) content.append(paragraph("No GitHub issue links recorded."));
     groupSections();
@@ -585,12 +599,12 @@ export const ADMIN_JS = `
     refreshButton(loadBilling);
     filters([{ name: "q", label: "User" }, { name: "status", label: "Subscription / attention", options: ["", "unknown", "none", "active", "trialing", "past_due", "unpaid", "canceled", "paused", "incomplete", "incomplete_expired", "error", "canceling", "payment_failed", "grant"] }], "/billing");
     heading("Subscription overview");
-    content.append(paragraph("Stripe observations are refreshed by existing webhooks/user billing sync, never by opening admin. Unknown means not verified since monitoring began. Active/trialing is not proof of payment. Operator grants are separate from subscriptions; last invoice event is a notification, not complete payment history."));
+    content.append(dataNote("Stripe observations are refreshed by existing webhooks/user billing sync, never by opening admin. Unknown means not verified since monitoring began. Active/trialing is not proof of payment. Operator grants are separate from subscriptions; last invoice event is a notification, not complete payment history."));
     content.append(table(["User", "Effective / Stripe plan", "Grant", "Subscription", "Cancellation", "Period / grace ends", "Last invoice event", "Verified", "Attempt / error"], data.users.map(user => [link("/users/" + user.id, user.username), user.effective_plan + " / " + user.stripe_plan, user.operator_grant || "None", user.subscription_status + (user.has_customer ? "" : " · no customer"), user.cancel_at ? when(user.cancel_at) : user.cancel_at_period_end === null ? "Unknown" : user.cancel_at_period_end ? "At period end" : "Not scheduled", timestamp(user.period_end) + " / " + timestamp(user.grace_until), user.last_invoice_event ? user.last_invoice_event + " · " + timestamp(user.invoice_observed_at) : "Unknown", timestamp(user.verified_at), timestamp(user.attempted_at) + (user.error_code ? " / " + user.error_code : "")])));
     if (!data.users.length) content.append(paragraph("No accounts match this page/filter."));
     pagination(data, "/billing");
     heading("Reconciliation history");
-    content.append(paragraph("Post-deployment attempts only. History follows the user search, not the subscription-status filter; unassigned/deleted users appear when search is empty."));
+    content.append(dataNote("Post-deployment attempts only. History follows the user search, not the subscription-status filter; unassigned/deleted users appear when search is empty."));
     let history;
     try { history = await getJSON("/api/billing/history?" + historyQuery); }
     catch { content.append(paragraph("Reconciliation history unavailable.")); groupSections(); return; }
@@ -714,11 +728,8 @@ export const ADMIN_JS = `
     const planHeading = document.createElement("h2");
     planHeading.textContent = "Operator grant";
     content.append(planHeading);
-    const planNote = document.createElement("p");
-    planNote.className = "muted small";
-    planNote.textContent =
-      "Writes an operator grant (users.plan_override) and never touches Stripe's own plan column, so a billing sync can no longer wipe it. A real paid subscription retires the grant, because money outranks an operator. Choosing free revokes the grant and hands the account back to billing — it never cancels a subscription.";
-    content.append(planNote);
+    content.append(paragraph("Revoking a grant does not cancel a subscription."));
+    content.append(dataNote("Grants override the effective plan without changing Stripe's plan. A mapped paid subscription retires the grant. Choosing free revokes the grant and restores the billing plan.", "How grants work"));
     const planRow = document.createElement("div");
     planRow.className = "plan-row";
     const granted = user.plan_override !== null && user.plan_override !== undefined;

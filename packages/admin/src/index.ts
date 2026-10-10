@@ -8,6 +8,7 @@ import { safeEqual } from "./lib/safe-equal.ts";
 import { securityHeaders } from "./lib/security.ts";
 import { backend, messageFrom, tokenFrom } from "./lib/backend.ts";
 import { ADMIN_CSS, ADMIN_JS } from "./assets.ts";
+import { ADMIN_FONTS } from "./fonts.ts";
 import {
   loginPage,
   signedOutPage,
@@ -63,6 +64,10 @@ app.get("/assets/admin.css", (c) =>
 app.get("/assets/admin.js", (c) =>
   c.body(ADMIN_JS, 200, { "content-type": "text/javascript; charset=utf-8" })
 );
+
+for (const font of ADMIN_FONTS) {
+  app.get(font.path, (c) => c.body(font.data, 200, { "content-type": "font/woff2" }));
+}
 
 // ---- login ----------------------------------------------------------------
 

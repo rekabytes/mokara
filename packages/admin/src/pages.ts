@@ -1,5 +1,5 @@
 // The console's HTML. Hand-built strings on purpose: this app has no framework
-// and no build step, and three small pages do not justify one. Every dynamic
+// and no build step, so a framework adds no value here. Every dynamic
 // value goes through esc() — including the ones inside quoted attributes, where
 // React's escaping would not be there to save us.
 
@@ -35,8 +35,8 @@ ${HEAD}
 </head>
 <body class="login-body">
 <main class="login-card">
-<h1>Mokara admin</h1>
-<p class="muted">Operator console</p>
+<div class="login-brand"><span class="brand-symbol">M</span><span>Mokara <span class="muted">Admin</span></span></div>
+<h1>Sign in</h1>
 ${error === undefined ? "" : `<p class="error" role="alert">${esc(error)}</p>`}
 <form method="post" action="/login">
 <input type="hidden" name="url_key" value="${esc(key)}">
@@ -55,7 +55,7 @@ ${error === undefined ? "" : `<p class="error" role="alert">${esc(error)}</p>`}
 }
 
 /**
- * The shell both data pages share. All content is rendered by /assets/admin.js
+ * The shell all authenticated data pages share. All content is rendered by /assets/admin.js
  * from the proxied API — the server renders nothing user-derived, so there is no
  * second place for the same data to be escaped wrong.
  */
@@ -68,20 +68,17 @@ function shell(opts: {
   const userIdAttr = opts.dataUserId === undefined ? "" : ` data-user-id="${esc(opts.dataUserId)}"`;
   const section =
     opts.view === "user" ? "users" : opts.view === "workspace" ? "workspaces" : opts.view;
-  const descriptions: Record<string, [string, string]> = {
-    overview: ["Overview", "Platform health and activity."],
-    attention: ["Needs attention", "Retries and delayed GitHub jobs."],
-    users: ["Users", "Accounts and access."],
-    user: ["Account details", "Plan, integrations and workspaces."],
-    workspaces: ["Workspaces", "Membership and capacity."],
-    workspace: ["Workspace details", "Members, limits and integrations."],
-    billing: ["Billing", "Subscriptions, grants and sync history."],
-    audit: ["Audit trail", "Operator change history."],
+  const headings: Record<string, string> = {
+    overview: "Overview",
+    attention: "Needs attention",
+    users: "Users",
+    user: "Account details",
+    workspaces: "Workspaces",
+    workspace: "Workspace details",
+    billing: "Billing",
+    audit: "Audit trail",
   };
-  const [heading, description] = descriptions[opts.view] ?? [
-    "Administration",
-    "Platform support and operations.",
-  ];
+  const heading = headings[opts.view] ?? "Administration";
   const navLink = (view: string, label: string, path: string) =>
     `<a href="/${view}"${section === view ? ` class="nav-active"${opts.view === view ? ' aria-current="page"' : ""}` : ""}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="${path}" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${label}</span></a>`;
   return `<!doctype html>
@@ -108,7 +105,7 @@ ${navLink("audit", "Audit trail", "M6 3h12v18H6z M9 7h6 M9 11h6 M9 15h4")}</div>
 <div class="sidebar-footer"><span class="operator-label">Operator console</span><form method="post" action="/logout"><button type="submit" class="signout">Sign out</button></form></div>
 </aside>
 <main id="app" tabindex="-1" aria-labelledby="page-title" data-view="${esc(opts.view)}"${userIdAttr}${opts.dataWorkspaceId === undefined ? "" : ` data-workspace-id="${esc(opts.dataWorkspaceId)}"`}>
-<header class="page-header"><div><h1 id="page-title">${esc(heading)}</h1>${opts.view === "billing" ? "" : `<p class="page-description">${esc(description)}</p>`}</div>${opts.view === "billing" ? "" : '<span class="context-tag">Operator access</span>'}</header>
+<header class="page-header"><h1 id="page-title">${esc(heading)}</h1></header>
 <p id="notice" class="notice" role="status"></p>
 <section id="content"><p class="muted">Loading…</p></section>
 </main>
@@ -163,6 +160,7 @@ ${HEAD}
 </head>
 <body class="login-body">
 <main class="login-card">
+<div class="login-brand"><span class="brand-symbol">M</span><span>Mokara <span class="muted">Admin</span></span></div>
 <h1>Signed out</h1>
 <p class="muted">The console cookie is cleared. Reopen the admin login URL — the one carrying its <code>?key=</code> — to sign in again.</p>
 </main>

@@ -191,8 +191,17 @@ const { planDistribution, attentionJobFilter } = await import("../src/routes/adm
 const { requestLogger } = await import("../src/middleware/request-log.ts");
 const { Hono } = await import("hono");
 const { ADMIN_JS } = await import("../../admin/src/assets.ts");
-const { overviewPage, attentionPage, auditPage, loginPage } =
-  await import("../../admin/src/pages.ts");
+const {
+  overviewPage,
+  attentionPage,
+  auditPage,
+  loginPage,
+  usersPage,
+  userPage,
+  workspacesPage,
+  workspacePage,
+  billingPage,
+} = await import("../../admin/src/pages.ts");
 const app = new Hono()
   .route("/api/admin", adminRoutes)
   .onError(() =>
@@ -530,6 +539,7 @@ async function render(view, data, status = 200) {
   };
   nodes.app.dataset.view = view;
   if (view === "workspace") nodes.app.dataset.workspaceId = TEAM;
+  if (view === "user") nodes.app.dataset.userId = USER;
   const requests = [];
   runInNewContext(ADMIN_JS, {
     document: { getElementById: (id) => nodes[id], createElement: (tag) => new Element(tag) },
@@ -590,7 +600,7 @@ test("overview groups every dataset once into five panels", async () => {
 test("light theme uses compact controls with explanatory notes still available", async () => {
   const data = await (await app.request("/api/admin/attention", authorized())).json();
   const { nodes } = await render("attention", data);
-  assert.ok(nodes.content.textContent.includes("Queue details"));
+  assert.ok(nodes.content.textContent.includes("Info"));
   assert.ok(nodes.content.textContent.includes("Jobs awaiting retry or pending over five minutes"));
   assert.equal(nodes.content.textContent.includes("Counts are a snapshot, not a live feed"), false);
   assert.equal(nodes.content.textContent.includes("Refresh snapshot"), false);
@@ -640,7 +650,7 @@ test("workspace support aggregates metadata only with deployment-aware caps", as
   assert.equal(JSON.stringify(detail).includes("passwordHash"), false);
   assert.equal(JSON.stringify(detail).includes("description"), false);
   const { nodes } = await render("workspace", detail);
-  assert.ok(nodes.content.textContent.includes("Task totals — no private task content"));
+  assert.ok(nodes.content.textContent.includes("Task activity"));
   state.teamMissing = true;
   assert.equal((await app.request(`/api/admin/workspaces/${TEAM}`, authorized())).status, 404);
 });
@@ -681,7 +691,7 @@ test("billing layout has five columns, real stats and accessible expandable deta
     ...node.children.flatMap((child) => (typeof child === "string" ? [] : walk(child))),
   ];
   const all = walk(nodes.content);
-  const stats = all.find((node) => node.className === "billing-stats");
+  const stats = all.find((node) => node.className === "admin-stats");
   assert.equal(stats.children.length, 4);
   const billingTable = all.find((node) => node.className === "table-scroll billing-table");
   const table = billingTable.children[0];
@@ -698,13 +708,77 @@ test("billing layout has five columns, real stats and accessible expandable deta
   assert.equal(detailRow.hidden, true);
 });
 
-test("mixed-version billing summaries remain unavailable, never inferred zeroes", async () => {
+test("partial legacy billing data never invents zero totals", async () => {
   const body = await (await app.request("/api/admin/billing", authorized())).json();
   delete body.summary;
   const { nodes } = await render("billing", { ...body, events: [] });
-  const stats = nodes.content.children.find((node) => node.className === "billing-stats");
+  const stats = nodes.content.children.find((node) => node.className === "admin-stats");
   assert.ok(stats.textContent.includes("14"));
-  assert.equal(stats.children.filter((node) => node.textContent.includes("Unavailable")).length, 3);
+  assert.equal(stats.children.filter((node) => node.children[1].textContent === "—").length, 3);
+  assert.ok(nodes.notice.textContent.includes("current backend image"));
+});
+
+test("complete legacy billing data derives real zero-over-total stats", async () => {
+  const body = await (await app.request("/api/admin/billing", authorized())).json();
+  delete body.summary;
+  body.total = 7;
+  body.users = Array.from({ length: 7 }, (_, index) => ({
+    ...body.users[0],
+    id: String(index),
+    operator_grant: null,
+    error_code: null,
+    subscription_status: "unknown",
+  }));
+  const { nodes } = await render("billing", { ...body, events: [] });
+  const stats = nodes.content.children.find((node) => node.className === "admin-stats");
+  assert.equal(stats.children[0].children[1].textContent, "7");
+  for (const item of stats.children.slice(1)) assert.equal(item.children[1].textContent, "0 / 7");
+  assert.equal(stats.textContent.includes("Unavailable"), false);
+  body.users[0].subscription_status = "active";
+  body.users[0].operator_grant = "pro";
+  body.users[0].error_code = "stripe_unavailable";
+  body.users[1].subscription_status = "active";
+  const updated = await render("billing", { ...body, events: [] });
+  const actual = updated.nodes.content.children.find((node) => node.className === "admin-stats");
+  assert.deepEqual(
+    actual.children.slice(1).map((item) => item.children[1].textContent),
+    ["2 / 7", "1 / 7", "1 / 7"]
+  );
+});
+
+test("all admin views have compact headers, summary cards and refresh toolbars", async () => {
+  for (const [view, path] of [
+    ["overview", "overview"],
+    ["attention", "attention"],
+    ["audit", "audit"],
+    ["workspaces", "workspaces"],
+    ["workspace", "workspaces/" + TEAM],
+    ["billing", "billing"],
+    ["users", "users"],
+    ["user", "users/" + USER],
+  ]) {
+    const body = await (await app.request("/api/admin/" + path, authorized())).json();
+    const { nodes } = await render(view, { ...body, events: body.events || [] });
+    assert.ok(
+      nodes.content.children.some((node) => node.className === "admin-stats"),
+      view
+    );
+    assert.ok(nodes.content.textContent.includes("View updated"), view);
+    assert.ok(nodes.content.textContent.includes("Refresh"), view);
+  }
+  for (const page of [
+    overviewPage(),
+    attentionPage(),
+    usersPage(),
+    userPage(USER),
+    workspacesPage(),
+    workspacePage(TEAM),
+    billingPage(),
+    auditPage(),
+  ]) {
+    assert.equal(page.includes('class="page-description"'), false);
+    assert.equal(page.includes("Operator access"), false);
+  }
 });
 
 test("billing filters select actual observations, errors and grants independently", () => {

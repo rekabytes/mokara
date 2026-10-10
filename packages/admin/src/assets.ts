@@ -65,11 +65,32 @@ body {
 .data-note[open] summary { color: var(--text); }
 .data-note p { max-width: 65rem; margin-bottom: 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-#app[data-view="billing"] .notice:empty { display: none; }
-.billing-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin: 0 0 1.5rem; }
-.billing-stats > div { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 0.8rem; padding: 1.1rem 1.2rem; }
-.billing-stats dt { color: var(--muted); font-size: 0.8rem; }
-.billing-stats dd { margin: 0.35rem 0 0; color: var(--text); font-size: clamp(1.1rem, 2.5vw, 1.8rem); font-weight: 600; letter-spacing: -0.04em; overflow-wrap: anywhere; }
+.notice:empty { display: none; }
+.login-brand { display: flex; align-items: center; gap: 0.7rem; font-weight: 600; margin-bottom: 1.8rem; }
+.login-card .login-brand + h1 { font-size: 1.6rem; }
+.admin-toolbar { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 1rem; margin: 0 0 1.25rem; }
+.admin-toolbar.has-filters { padding: 1rem 1.2rem; background: var(--panel); border: 1px solid var(--line); border-radius: 0.8rem; }
+.admin-toolbar .filter-form { margin: 0; }
+.admin-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-left: auto; }
+.admin-tools .data-note { margin: 0; }
+.admin-tools .data-note[open] { flex-basis: 100%; }
+.admin-tools .data-note[open] p { max-width: 38rem; }
+.service-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.service-card { min-width: 0; border: 1px solid var(--line); border-radius: 0.6rem; padding: 0.8rem; }
+.service-card:last-child { grid-column: 1 / -1; }
+.service-card > div { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.service-card .small { margin: 0.4rem 0 0; }
+.compact-table table { min-width: 36rem; }
+.profile-facts-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
+.profile-facts-grid > section { min-width: 0; }
+.profile-facts-grid h3 { margin: 0; font-size: 0.85rem; font-weight: 600; }
+.profile-card .facts { grid-template-columns: minmax(0, 1fr); }
+.profile-facts-grid .facts dt { text-transform: none; letter-spacing: 0; }
+@media (max-width: 760px) { .profile-facts-grid { grid-template-columns: minmax(0, 1fr); } .admin-toolbar.has-filters { padding: 0.85rem; } }
+.admin-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin: 0 0 1.5rem; }
+.admin-stats > div { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 0.8rem; padding: 1.1rem 1.2rem; }
+.admin-stats dt { color: var(--muted); font-size: 0.8rem; }
+.admin-stats dd { margin: 0.35rem 0 0; color: var(--text); font-size: clamp(1.1rem, 2.5vw, 1.8rem); font-weight: 600; letter-spacing: -0.04em; overflow-wrap: anywhere; }
 .billing-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; }
 .billing-toolbar .filter-form { margin: 0; }
 .billing-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; min-width: 0; }
@@ -87,7 +108,7 @@ body {
 .billing-detail-row[hidden] { display: none; }
 .billing-detail-row .billing-detail-facts { margin: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .billing-history { margin-top: 1.25rem; }
-@media (max-width: 760px) { .billing-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; } .billing-stats > div { padding: 1rem; } .billing-detail-row .billing-detail-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .admin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; } .admin-stats > div { padding: 1rem; } .billing-detail-row .billing-detail-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 #content > .table-scroll { background: var(--panel); border-radius: 0.8rem; border: 1px solid var(--line); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 @media (max-width: 1100px) { .panel-layout { grid-template-columns: minmax(0, 1fr); } }
@@ -324,6 +345,26 @@ export const ADMIN_JS = `
     return wrapper;
   }
 
+  function expandableTable(headers, records) {
+    const wrapper = table([...headers, "Details"], []); wrapper.className += " compact-table";
+    const el = wrapper.children[0]; const body = el.children[1];
+    for (const [index, record] of records.entries()) {
+      const row = document.createElement("tr"); const detail = document.createElement("tr");
+      detail.className = "billing-detail-row"; detail.hidden = true; detail.id = "row-detail-" + app.dataset.view + "-" + index;
+      const detailCell = document.createElement("td"); detailCell.colSpan = headers.length + 1;
+      const facts = document.createElement("dl"); facts.className = "facts billing-detail-facts";
+      for (const [label, value] of record.details) facts.append(fact(label, value));
+      detailCell.append(facts); detail.append(detailCell);
+      const toggle = document.createElement("button"); toggle.type = "button"; toggle.className = "row-details" + (record.issue ? " has-issue" : ""); toggle.textContent = "Details";
+      toggle.setAttribute("aria-label", "Details for " + record.label); toggle.setAttribute("aria-controls", detail.id); toggle.setAttribute("aria-expanded", "false");
+      if (record.issue) toggle.title = "Needs attention";
+      toggle.addEventListener("click", () => { detail.hidden = !detail.hidden; toggle.setAttribute("aria-expanded", String(!detail.hidden)); toggle.textContent = detail.hidden ? "Details" : "Close"; });
+      for (const value of [...record.values, toggle]) { const td = document.createElement("td"); if (typeof value === "string") td.textContent = value; else td.append(value); row.append(td); }
+      body.append(row, detail);
+    }
+    return wrapper;
+  }
+
   function link(href, text) {
     const a = document.createElement("a");
     a.href = href;
@@ -386,6 +427,7 @@ export const ADMIN_JS = `
         panel = document.createElement("section");
         panel.className = "panel";
         panel.setAttribute("aria-label", node.textContent);
+        if (["attention", "users", "workspaces", "audit"].includes(app.dataset.view)) node.className = "sr-only";
         if (app.dataset.view === "overview" && node.textContent === "Usage") panel.className += " panel-wide";
         panel.append(node); layout.append(panel);
       } else if (panel) panel.append(node);
@@ -407,7 +449,7 @@ export const ADMIN_JS = `
     content.append(h);
   }
 
-  function count(value) { return value === null || value === undefined ? "Unavailable" : String(value); }
+  function count(value) { return value === null || value === undefined ? "—" : String(value); }
   function serviceStatus(value) {
     const span = document.createElement("span");
     span.className = "badge" + (value === "healthy" ? " badge-healthy" : value === "unavailable" ? " badge-warning" : "");
@@ -420,7 +462,7 @@ export const ADMIN_JS = `
     span.textContent = count(value);
     return span;
   }
-  function timestamp(value) { return value ? when(value) : "None recorded"; }
+  function timestamp(value) { return value ? when(value) : "—"; }
   function bytes(value) {
     if (!Number.isFinite(value)) return "Unavailable";
     if (value < 1024) return value + " B";
@@ -429,17 +471,27 @@ export const ADMIN_JS = `
     return (value / (1024 * 1024 * 1024)).toFixed(1) + " GiB";
   }
 
-  function refreshButton(reload) {
-    const row = document.createElement("div");
-    row.className = "refresh-row";
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "plan-btn";
-    button.textContent = "Refresh";
-    button.title = "Refresh read-only snapshot";
-    button.addEventListener("click", () => { void reload(); });
-    row.append(button);
-    content.append(row);
+  function statCards(items) {
+    const stats = document.createElement("dl"); stats.className = "admin-stats";
+    for (const [label, value] of items) {
+      const item = fact(label, value === null || value === undefined ? "—" : String(value));
+      if (value === null || value === undefined) item.title = "No verified count available";
+      stats.append(item);
+    }
+    content.append(stats); return stats;
+  }
+
+  function pageToolbar(reload, checkedAt, fields = [], path = "", info = "") {
+    const toolbar = document.createElement("div"); toolbar.className = "admin-toolbar" + (fields.length ? " has-filters" : "");
+    if (fields.length) filters(fields.map(field => ({ ...field, compact: field.type !== "date", placeholder: field.placeholder || field.label })), path, toolbar);
+    const tools = document.createElement("div"); tools.className = "admin-tools";
+    const updated = document.createElement("time"); updated.className = "view-updated";
+    const at = checkedAt || new Date().toISOString(); updated.dateTime = at;
+    updated.textContent = "View updated " + new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    updated.title = when(at) + " — page snapshot, not provider verification";
+    const refresh = document.createElement("button"); refresh.type = "button"; refresh.className = "plan-btn"; refresh.textContent = "Refresh"; refresh.addEventListener("click", () => { void reload(); });
+    tools.append(updated, refresh); if (info) tools.append(dataNote(info, "Info"));
+    toolbar.append(tools); content.append(toolbar); return toolbar;
   }
 
   async function loadOverview() {
@@ -448,17 +500,21 @@ export const ADMIN_JS = `
     try { data = await getJSON("/api/overview"); }
     catch { content.textContent = "Monitoring unavailable. No current snapshot."; return; }
     content.textContent = "";
-    setNotice("Checked " + when(data.checked_at) + " · Backend package " + data.version + " · " + data.deploy_mode + " · uptime " + data.uptime_seconds + "s");
-    refreshButton(loadOverview);
+    setNotice("");
+    const usageTotals = data.snapshot?.usage;
+    statCards([["Users", usageTotals?.users], ["Workspaces", usageTotals?.workspaces], ["Tasks", usageTotals?.tasks], ["Files", usageTotals?.attachments]]);
+    pageToolbar(loadOverview, data.checked_at, [], "", "Backend " + data.version + " · " + data.deploy_mode + " · uptime " + data.uptime_seconds + "s. Only database and Redis are probed; other services show configuration. Counts are stored observations, not revenue. Unavailable counts are unknown, not zero.");
     heading("Service health");
     const health = data.health;
-    content.append(table(["Service", "Status", "What was checked"], [
+    const services = document.createElement("div"); services.className = "service-grid";
+    for (const [name, status, detail] of [
       ["Database", serviceStatus(health.database.status), health.database.latency_ms === null ? "Probe failed or timed out" : "SELECT 1 · " + health.database.latency_ms + "ms"],
       ["Redis", serviceStatus(health.redis.status), health.redis.latency_ms === null ? "Probe failed or timed out" : "PING · " + health.redis.latency_ms + "ms"],
       ["Storage", serviceStatus(health.storage.status), "Config only"],
-      ["Billing", health.billing.configured ? "Configured" : "Not configured", "Config only"],
-      ["GitHub", health.github.configured ? health.github.webhook_configured ? "App and webhook configured" : "Webhook not configured" : "Not configured", "Config only"],
-    ]));
+      ["Billing", serviceStatus(health.billing.configured ? "configured" : "not_configured"), "Config only"],
+      ["GitHub", serviceStatus(health.github.configured ? health.github.webhook_configured ? "configured" : "webhook_missing" : "not_configured"), "Config only"],
+    ]) { const card = document.createElement("div"); card.className = "service-card"; const row = document.createElement("div"); row.append(name, status); card.append(row, paragraph(detail)); services.append(card); }
+    content.append(services);
     heading("Needs attention");
     const attentionLabels = { api_errors: "API errors · 60 min", billing_webhooks: "Billing webhook failures · 60 min", github_retries: "GitHub retries", github_stale: "GitHub pending > 5 min", github_failed_links: "Failed GitHub links", github_paused: "Paused GitHub links", github_verification: "GitHub reauthorization", billing_grace: "Grace flags (incl. expired)" };
     content.append(dataNote("Categories can overlap. Zero counts are shown; unavailable counts need investigation."));
@@ -471,17 +527,17 @@ export const ADMIN_JS = `
       card.className = "card";
       const facts = document.createElement("dl");
       facts.className = "facts";
-      facts.append(fact("Users", count(usage.users)), fact("Signups · 7 days", count(usage.signups_7d)), fact("Workspaces", count(usage.workspaces)), fact("Tasks", count(usage.tasks)), fact("Files", count(usage.attachments)), fact("Stored attachment + logo bytes", bytes(usage.storage_bytes)), fact("Operator grants", count(usage.operator_grants)));
+      facts.append(fact("Signups · 7 days", count(usage.signups_7d)), fact("Storage", bytes(usage.storage_bytes)), fact("Grants", count(usage.operator_grants)));
       card.append(facts);
       content.append(card);
       content.append(table(["Effective plan", "Users"], usage.plans.map(row => [String(row.plan), count(row.count)])));
       content.append(dataNote("Effective plans include operator grants; these are not subscription or revenue counts."));
       content.append(table(["Task status", "Tasks"], usage.task_statuses.map(row => [String(row.status), count(row.count)])));
-      heading("GitHub processing");
+      heading("GitHub");
       const github = snapshot.github;
       content.append(table(["Metric", "Value"], [
-        ["Connected accounts", count(github.connections)], ["Active personal repository associations", count(github.active_repository_associations)],
-        ["Queued jobs", count(github.queued)], ["Oldest pending job", timestamp(github.oldest_pending_at)], ["Last successful linked-issue sync", timestamp(github.last_synced_at)],
+        ["Connected accounts", count(github.connections)], ["Active repo links", count(github.active_repository_associations)],
+        ["Queued jobs", count(github.queued)], ["Oldest pending job", timestamp(github.oldest_pending_at)], ["Last issue sync", timestamp(github.last_synced_at)],
       ]));
     } else content.append(paragraph("Usage unavailable — unknown, not zero."));
     heading("API & billing · 60 min");
@@ -510,7 +566,7 @@ export const ADMIN_JS = `
       input.name = field.name;
       if (field.compact) input.setAttribute("aria-label", field.label);
       if (field.options) for (const value of field.options) {
-        const option = document.createElement("option"); option.value = value; option.textContent = value || "All"; option.selected = value === (params.get(field.name) || ""); input.append(option);
+        const option = document.createElement("option"); option.value = value; option.textContent = field.optionLabels?.[value] || (value ? value.replaceAll("_", " ") : field.emptyLabel || "All"); option.selected = value === (params.get(field.name) || ""); input.append(option);
       } else { input.type = field.type || "text"; input.maxLength = 100; input.value = params.get(field.name) || ""; if (field.placeholder) input.placeholder = field.placeholder; }
       label.append(input); form.append(label);
     }
@@ -541,11 +597,11 @@ export const ADMIN_JS = `
     try { data = await getJSON("/api/attention?page=" + encodeURIComponent(page)); }
     catch { content.textContent = "Queue details unavailable."; return; }
     content.textContent = "";
-    setNotice(data.total + (data.total === 1 ? " job" : " jobs") + " · oldest first");
-    refreshButton(loadAttention);
+    setNotice("");
+    statCards([["Queued problems", data.total], ["Jobs · page", data.jobs.length], ["Retries · page", data.jobs.filter(job => job.error_code !== null).length], ["Attempts · page", data.jobs.reduce((sum, job) => sum + job.attempts, 0)]]);
+    pageToolbar(loadAttention, data.checked_at, [], "", "Jobs awaiting retry or pending over five minutes, oldest first. Page counts cover visible jobs; queued problems covers all matches. Delivery IDs correlate with GitHub deliveries and backend logs. No payloads or task content are shown. Account and billing flags are in Overview.");
     heading("GitHub queue");
-    content.append(dataNote("Jobs awaiting retry or pending over five minutes, oldest first. Delivery IDs correlate with GitHub deliveries and backend logs. No payloads or task content are shown. Account and billing flags are in Overview.", "Queue details"));
-    content.append(table(["Job / delivery", "Type", "Attempts", "Created", "Retry at", "Lease ends", "Error"], data.jobs.map(job => [String(job.id) + (job.delivery_id ? " / " + job.delivery_id : ""), String(job.kind), count(job.attempts), when(job.created_at), when(job.retry_at), timestamp(job.locked_until), job.error_code === null ? "Pending" : String(job.error_code)])));
+    content.append(expandableTable(["Job", "Type", "Attempts", "Retry at"], data.jobs.map(job => ({ label: String(job.id), issue: job.error_code !== null, values: [String(job.id).slice(0, 8), String(job.kind), count(job.attempts), when(job.retry_at)], details: [["Job ID", String(job.id)], ["Delivery ID", job.delivery_id || "—"], ["Created", when(job.created_at)], ["Lease ends", timestamp(job.locked_until)], ["Error", job.error_code || "Pending"]] }))));
     if (!data.jobs.length) content.append(paragraph(data.total ? "No jobs on this page. Use Previous to return." : "No jobs need attention."));
     pagination(data, "/attention");
     groupSections();
@@ -557,12 +613,11 @@ export const ADMIN_JS = `
     try { data = await getJSON("/api/audit?" + new URL(window.location.href).searchParams); }
     catch { content.textContent = "Audit records unavailable."; return; }
     content.textContent = "";
-    setNotice(data.total + " changes");
-    refreshButton(loadAudit);
-    filters([{ name: "actor", label: "Operator" }, { name: "user", label: "User name or ID" }, { name: "action", label: "Action", options: ["", "plan_override_changed"] }, { name: "from", label: "From (UTC)", type: "date" }, { name: "to", label: "Through (UTC)", type: "date" }], "/audit");
+    setNotice("");
+    statCards([["Changes", data.total], ["Events · page", data.events.length], ["Operators · page", new Set(data.events.map(event => event.actor)).size], ["Deleted targets · page", data.events.filter(event => !event.target_user_id).length]]);
+    pageToolbar(loadAudit, data.checked_at, [{ name: "actor", label: "Operator" }, { name: "user", label: "User name or ID" }, { name: "action", label: "Action", options: ["", "plan_override_changed"] }, { name: "from", label: "From (UTC)", type: "date" }, { name: "to", label: "Through (UTC)", type: "date" }], "/audit", "Changes covers all matching events; other cards cover the current page. Deleted targets counts events, not unique people. Date filters are inclusive UTC days. Only changes made after monitoring was deployed are recorded. One operator account identifies the account, not individual people sharing it. Revoking a grant never cancels a Stripe subscription.");
     heading("Change history");
-    content.append(dataNote("Only changes made after this feature was deployed are recorded. The console uses one operator account; this identifies that account, not individual people sharing it. Revoking a grant never cancels a Stripe subscription."));
-    content.append(table(["When", "Operator", "Action", "User", "Previous grant", "New grant"], data.events.map(event => [when(event.created_at), String(event.actor), String(event.action), event.target_user_id ? link("/users/" + encodeURIComponent(event.target_user_id), String(event.target_username)) : String(event.target_username) + " (deleted)", event.from_plan === null ? "None" : String(event.from_plan), event.to_plan === null ? "None" : String(event.to_plan)])));
+    content.append(expandableTable(["When", "Operator", "Account", "Grant"], data.events.map(event => ({ label: String(event.target_username), values: [when(event.created_at), String(event.actor), event.target_user_id ? link("/users/" + encodeURIComponent(event.target_user_id), String(event.target_username)) : String(event.target_username) + " (deleted)", (event.from_plan || "—") + " → " + (event.to_plan || "—")], details: [["Action", String(event.action)], ["Previous grant", event.from_plan || "—"], ["New grant", event.to_plan || "—"]] }))));
     if (!data.events.length) content.append(paragraph(data.total ? "No events on this page. Use Previous to return." : "No operator plan changes recorded yet."));
     pagination(data, "/audit");
     groupSections();
@@ -574,12 +629,11 @@ export const ADMIN_JS = `
     try { data = await getJSON("/api/workspaces?" + new URL(window.location.href).searchParams); }
     catch { content.textContent = "Workspace support unavailable."; return; }
     content.textContent = "";
-    setNotice("Updated " + when(data.checked_at));
-    refreshButton(loadWorkspaces);
-    filters([{ name: "q", label: "Workspace, slug or owner" }], "/workspaces");
+    setNotice("");
+    statCards([["Workspaces", data.total], ["Members · page", data.workspaces.reduce((sum, workspace) => sum + workspace.members, 0)], ["Tasks · page", data.workspaces.reduce((sum, workspace) => sum + workspace.tasks, 0)], ["Files · page", data.workspaces.reduce((sum, workspace) => sum + workspace.files, 0)]]);
+    pageToolbar(loadWorkspaces, data.checked_at, [{ name: "q", label: "Workspace, slug or owner", placeholder: "Search workspaces" }], "/workspaces", "Workspaces covers all matches; usage cards total this page only. Membership counts are not unique people. Limits follow the owner's effective plan and deployment mode. Tasks have no plan quota. Storage includes recorded attachments and logos, not orphaned bucket objects.");
     heading("Workspace directory");
-    content.append(dataNote("Limits follow the owner's effective plan and deployment mode. Task counts have no plan quota. Storage includes attachments and logos, not orphaned bucket objects."));
-    content.append(table(["Workspace", "Owner", "Plan", "Members / limit", "Tasks", "Files", "Storage / limit"], data.workspaces.map(workspace => [link("/workspaces/" + workspace.id, workspace.name + " (" + workspace.kind + ")"), link("/users/" + workspace.owner.id, workspace.owner.username), String(workspace.plan), quota(workspace.members, workspace.limits.members, false), count(workspace.tasks), count(workspace.files), quota(workspace.storage_bytes, workspace.limits.storage_bytes, true)])));
+    content.append(expandableTable(["Workspace", "Owner", "Plan", "Members"], data.workspaces.map(workspace => ({ label: workspace.name, values: [link("/workspaces/" + workspace.id, workspace.name), link("/users/" + workspace.owner.id, workspace.owner.username), badge(workspace.plan), quota(workspace.members, workspace.limits.members, false)], details: [["Kind", workspace.kind], ["Tasks", count(workspace.tasks)], ["Files", count(workspace.files)], ["Storage", quota(workspace.storage_bytes, workspace.limits.storage_bytes, true)]] }))));
     if (!data.workspaces.length) content.append(paragraph("No workspaces match this page/filter."));
     pagination(data, "/workspaces");
     groupSections();
@@ -591,18 +645,24 @@ export const ADMIN_JS = `
     try { data = await getJSON("/api/workspaces/" + encodeURIComponent(id)); }
     catch { content.textContent = "Workspace details unavailable."; return; }
     content.textContent = "";
-    setNotice("Updated " + when(data.checked_at));
+    setNotice("");
     content.append(link("/workspaces", "← All workspaces"));
-    refreshButton(() => loadWorkspace(id));
     const workspace = data.workspace;
+    statCards([["Members", quota(workspace.members.length, workspace.limits.members, false)], ["Tasks", workspace.tasks], ["Files", workspace.files], ["Storage", quota(workspace.storage_bytes, workspace.limits.storage_bytes, true)]]);
+    pageToolbar(() => loadWorkspace(id), data.checked_at, [], "", "Limits follow the owner's effective plan and deployment mode. Tasks are uncapped; storage is recorded attachments/logos, not bucket inventory.");
     heading(workspace.name);
-    const card = document.createElement("section"); card.className = "card";
-    const facts = document.createElement("dl"); facts.className = "facts";
-    facts.append(fact("Slug / kind", workspace.slug + " / " + workspace.kind), fact("Owner", workspace.owner.username), fact("Effective / Stripe plan", workspace.plan + " / " + workspace.stripe_plan), fact("Operator grant", workspace.plan_override || "None"), fact("Members / limit", quota(workspace.members.length, workspace.limits.members, false)), fact("Owner team slots", quota(workspace.owner_team_count, workspace.limits.teams, false)), fact("Storage / limit", quota(workspace.storage_bytes, workspace.limits.storage_bytes, true)), fact("Maximum file size", workspace.limits.max_file_bytes === null ? "Unlimited" : bytes(workspace.limits.max_file_bytes)), fact("Tasks (uncapped)", count(workspace.tasks)), fact("Files", count(workspace.files)), fact("Owner GitHub connection", workspace.github.owner_connection ? workspace.github.owner_connection.status : "Not connected"), fact("Owner GitHub verified", workspace.github.owner_connection ? when(workspace.github.owner_connection.verified_at) : "Unknown"));
-    card.append(facts); content.append(card);
+    const card = document.createElement("section"); card.className = "card profile-card";
+    const grid = document.createElement("div"); grid.className = "profile-facts-grid";
+    const sections = [
+      ["Workspace", [["Slug / kind", workspace.slug + " / " + workspace.kind], ["Owner", workspace.owner.username], ["Effective / Stripe plan", workspace.plan + " / " + workspace.stripe_plan], ["Operator grant", workspace.plan_override || "—"]]],
+      ["Capacity", [["Owner team slots", quota(workspace.owner_team_count, workspace.limits.teams, false)], ["Maximum file size", workspace.limits.max_file_bytes === null ? "Unlimited" : bytes(workspace.limits.max_file_bytes)]]],
+      ["Owner GitHub", [["Connection", workspace.github.owner_connection ? workspace.github.owner_connection.status : "Not connected"], ["Last verified", workspace.github.owner_connection ? when(workspace.github.owner_connection.verified_at) : "Not verified"]]],
+    ];
+    for (const [label, fields] of sections) { const section = document.createElement("section"); const title = document.createElement("h3"); title.textContent = label; const facts = document.createElement("dl"); facts.className = "facts"; for (const [name, value] of fields) facts.append(fact(name, value)); section.append(title, facts); grid.append(section); }
+    card.append(grid); content.append(card);
     heading("Members");
     content.append(table(["User", "Role", "Joined"], workspace.members.map(member => [link("/users/" + member.id, member.username), String(member.role), when(member.joined_at)])));
-    heading("Task totals — no private task content");
+    heading("Task activity");
     content.append(table(["Status", "Count"], workspace.task_statuses.map(row => [row.status, count(row.count)])));
     heading("Workspace GitHub links");
     content.append(dataNote("Owner connection is personal; workspace issue links can be published by other members. No credentials or repository names are shown."));
@@ -654,13 +714,25 @@ export const ADMIN_JS = `
     try { data = await getJSON("/api/billing?" + query); }
     catch { content.textContent = "Billing unavailable."; return; }
     content.textContent = ""; setNotice("");
-    const summary = data.summary || { accounts: data.total, active_subscriptions: null, grants: null, sync_issues: null };
-    const stats = document.createElement("dl"); stats.className = "billing-stats"; stats.setAttribute("aria-label", "Matching account totals");
-    for (const [label, value] of [["Accounts", summary.accounts], ["Active subscriptions", summary.active_subscriptions], ["Grants", summary.grants], ["Sync issues", summary.sync_issues]]) stats.append(fact(label, count(value)));
-    content.append(stats);
+    let summary = data.summary;
+    if (!summary) {
+      let complete = data.users;
+      if (complete.length !== data.total && data.total <= data.page_size) {
+        const firstQuery = new URLSearchParams(query); firstQuery.set("page", "1");
+        try { complete = (await getJSON("/api/billing?" + firstQuery)).users; } catch { complete = []; }
+      }
+      summary = { accounts: data.total, active_subscriptions: null, grants: null, sync_issues: null };
+      if (complete.length === data.total && complete.every(user => typeof user.subscription_status === "string" && "operator_grant" in user && "error_code" in user)) {
+        summary.active_subscriptions = complete.filter(user => user.subscription_status === "active").length;
+        summary.grants = complete.filter(user => user.operator_grant != null).length;
+        summary.sync_issues = complete.filter(user => user.error_code != null).length;
+      } else if (noticeEl.textContent !== EXPIRED) setNotice("Billing totals need the current backend image. Redeploy backend and admin together.");
+    }
+    const ratio = value => value === null || value === undefined ? null : value + " / " + summary.accounts;
+    const stats = statCards([["Accounts", summary.accounts], ["Active subscriptions", ratio(summary.active_subscriptions)], ["Grants", ratio(summary.grants)], ["Sync issues", ratio(summary.sync_issues)]]); stats.setAttribute("aria-label", "Matching account totals");
     const panel = document.createElement("section"); panel.className = "panel billing-panel"; panel.setAttribute("aria-label", "Subscriptions");
     const toolbar = document.createElement("div"); toolbar.className = "billing-toolbar";
-    filters([{ name: "q", label: "User", placeholder: "Search accounts", compact: true }, { name: "status", label: "Status", compact: true, options: ["", "unknown", "none", "active", "trialing", "past_due", "unpaid", "canceled", "paused", "incomplete", "incomplete_expired", "error", "canceling", "payment_failed", "grant"] }], "/billing", toolbar);
+    filters([{ name: "q", label: "User", placeholder: "Search accounts", compact: true }, { name: "status", label: "Status", compact: true, emptyLabel: "All statuses", optionLabels: { unknown: "Not verified", error: "Sync issues", grant: "Grants" }, options: ["", "unknown", "none", "active", "trialing", "past_due", "unpaid", "canceled", "paused", "incomplete", "incomplete_expired", "error", "canceling", "payment_failed", "grant"] }], "/billing", toolbar);
     const tools = document.createElement("div"); tools.className = "billing-tools";
     const updated = document.createElement("time"); updated.className = "view-updated"; updated.dateTime = data.checked_at;
     updated.textContent = "View updated " + new Date(data.checked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); updated.title = when(data.checked_at) + " — page snapshot, not Stripe verification";
@@ -691,7 +763,9 @@ export const ADMIN_JS = `
     }
     const users = Array.isArray(data.users) ? data.users : [];
     content.textContent = "";
-    setNotice(users.length + (users.length === 1 ? " user" : " users"));
+    setNotice("");
+    statCards([["Accounts", users.length], ["Grants", users.filter(user => user.plan_override != null).length], ["Needs attention", users.filter(user => user.attention_flags?.length).length], ["Workspaces", users.reduce((sum, user) => sum + user.workspaces, 0)]]);
+    pageToolbar(loadUsers, data.checked_at, [], "", "Counts cover this complete account directory. Attention flags may overlap; plans include operator grants and are not revenue.");
     heading("Account directory");
     if (users.length === 0) {
       const empty = document.createElement("p");
@@ -701,15 +775,8 @@ export const ADMIN_JS = `
       groupSections();
       return;
     }
-    const rows = users.map((u) => [
-      link("/users/" + encodeURIComponent(u.id), String(u.username)),
-      u.display_name === null || u.display_name === undefined ? "—" : String(u.display_name),
-      planCell(u),
-      String(u.workspaces),
-      when(u.created_at),
-      Array.isArray(u.attention_flags) && u.attention_flags.length ? u.attention_flags.join(", ") : "None",
-    ]);
-    content.append(table(["Username", "Display name", "Plan", "Workspaces", "Created", "Attention flags"], rows));
+    const rows = users.map(u => ({ label: u.username, issue: Boolean(u.attention_flags?.length), values: [link("/users/" + encodeURIComponent(u.id), String(u.username)), planCell(u), String(u.workspaces), when(u.created_at)], details: [["Display name", u.display_name || "—"], ["Attention flags", u.attention_flags?.length ? u.attention_flags.join(", ") : "None"]] }));
+    content.append(expandableTable(["Account", "Plan", "Workspaces", "Created"], rows));
     groupSections();
   }
 
@@ -758,9 +825,11 @@ export const ADMIN_JS = `
     back.className = "back";
     content.append(back);
 
+    statCards([["Workspaces", data.total_workspaces], ["Active repositories", user.github ? user.github.active_repositories : 0], ["Links needing attention", user.github_issue_links_needing_attention], ["Operator grants", user.plan_override == null ? "0 / 1" : "1 / 1"]]);
+    pageToolbar(() => loadUser(id), data.checked_at, [], "", "Plan includes operator grants. GitHub repository counts describe activated repositories, not provider-wide access. Revoke never cancels a subscription.");
     const card = document.createElement("section");
-    card.className = "card";
-    const h1 = document.createElement("h1");
+    card.className = "card profile-card";
+    const h1 = document.createElement("h2");
     h1.append(String(user.username), " ", badge(String(user.plan)));
     if (user.plan_override !== null && user.plan_override !== undefined) h1.append(" ", grantBadge());
     card.append(h1);
@@ -782,13 +851,20 @@ export const ADMIN_JS = `
       fact("Stripe customer", user.has_stripe_customer ? "yes" : "no"),
       fact("Period ends", user.period_end === null ? "—" : when(user.period_end)),
       fact("Grace until", user.grace_until === null ? "—" : when(user.grace_until)),
-      fact("GitHub connection", user.github ? String(user.github.status) : "Not connected"),
-      fact("GitHub access verified", user.github ? when(user.github.verified_at) : "—"),
+      fact("Connection", user.github ? String(user.github.status) : "Not connected"),
+      fact("Last verified", user.github ? when(user.github.verified_at) : "—"),
       fact("Active repositories", user.github ? count(user.github.active_repositories) : "0"),
-      fact("GitHub reauthorization", user.github ? user.github.reauthorization_required ? "Required" : "Current" : "—"),
-      fact("GitHub links needing attention", count(user.github_issue_links_needing_attention))
+      fact("Reauthorization", user.github ? user.github.reauthorization_required ? "Required" : "Current" : "—"),
+      fact("Links needing attention", count(user.github_issue_links_needing_attention))
     );
-    card.append(facts);
+    const identityFacts = document.createElement("dl"); identityFacts.className = "facts";
+    const billingFacts = document.createElement("dl"); billingFacts.className = "facts";
+    const integrationFacts = document.createElement("dl"); integrationFacts.className = "facts";
+    const groups = [identityFacts, billingFacts, integrationFacts];
+    for (const [index, field] of Array.from(facts.children).entries()) groups[index < 7 ? (index < 3 ? 1 : 0) : index < 10 ? 1 : 2].append(field);
+    const grid = document.createElement("div"); grid.className = "profile-facts-grid";
+    for (const [index, label] of ["Account", "Billing", "GitHub"].entries()) { const section = document.createElement("section"); const title = document.createElement("h3"); title.textContent = label; section.append(title, groups[index]); grid.append(section); }
+    card.append(grid);
     content.append(card);
 
     const planHeading = document.createElement("h2");
@@ -811,7 +887,7 @@ export const ADMIN_JS = `
       // be a silent no-op — disable it and say where cancellations really happen.
       const revokeNoop = plan === "free" && !granted && stripePlan !== "free";
       if (plan === "free" && granted) {
-        button.textContent = "free (revoke grant)";
+        button.textContent = "Revoke";
         button.title = "Clears the operator grant; the account falls back to its Stripe plan";
       } else if (revokeNoop) {
         button.textContent = "free";
@@ -829,7 +905,7 @@ export const ADMIN_JS = `
     content.append(planRow);
 
     const wsHeading = document.createElement("h2");
-    wsHeading.textContent = "Workspaces created (" + workspaces.length + ")";
+    wsHeading.textContent = "Workspaces";
     content.append(wsHeading);
     if (workspaces.length === 0) {
       const empty = document.createElement("p");

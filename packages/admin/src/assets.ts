@@ -9,264 +9,242 @@
 export const ADMIN_CSS = `
 :root {
   color-scheme: light;
-  --bg: #f5f7fb;
+  --bg: #f5f6f8;
   --panel: #ffffff;
-  --line: #dce2ec;
-  --text: #17243b;
-  --muted: #53627a;
+  --text: #192638;
+  --muted: #56647a;
+  --line: #e1e6ed;
+  --control-line: #8491a5;
   --accent: #2455df;
-  --danger: #a33328;
-  --raised: #eef3ff;
+  --accent-hover: #1a43b6;
+  --raised: #edf2ff;
+  --danger: #b42318;
+  --danger-bg: #fff3f1;
+  --success: #166344;
+  --success-bg: #edf8f2;
+  --rail: #141e30;
+  --rail-muted: #b0bdd0;
+  --rail-line: #354158;
+  --radius: 10px;
+  --control-radius: 6px;
+  --sidebar-width: 248px;
 }
-
 * { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font: 0.9rem/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-}
-
-.sidebar { position: fixed; inset: 0 auto 0 0; width: 14.5rem; display: flex; flex-direction: column; padding: 1.6rem 1rem; background: #ffffff; border-right: 1px solid var(--line); overflow-y: auto; }
-.brand { display: flex; align-items: center; gap: 0.75rem; margin: 0 0.5rem 2.5rem; color: var(--text); text-decoration: none; font-weight: 650; font-size: 1.05rem; letter-spacing: -0.03em; }
-.brand-symbol { display: grid; place-items: center; width: 2.3rem; height: 2.3rem; border: 1px solid #c8d7ff; border-radius: 0.75rem; background: #eaf0ff; color: #2455df; }
-.brand-caption { display: block; color: var(--muted); font-size: 0.7rem; font-weight: 400; letter-spacing: 0.02em; margin-top: 0.1rem; }
-.nav-group { margin-bottom: 1.8rem; }
-.nav-label, .operator-label { color: var(--muted); font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; }
-.nav-label { margin: 0 0.75rem 0.65rem; }
-.sidebar nav a { display: flex; gap: 0.7rem; align-items: center; padding: 0.65rem 0.75rem; margin: 0.2rem 0; border: 1px solid transparent; border-radius: 0.6rem; color: var(--muted); text-decoration: none; font-size: 0.82rem; }
-.sidebar nav svg { flex: 0 0 1.1rem; width: 1.1rem; height: 1.1rem; }
-.sidebar nav a:hover { color: var(--text); background: #f2f5fa; }
-.sidebar nav a.nav-active { color: #1946c5; border-color: #cbd9ff; background: #edf2ff; }
-.sidebar-footer { margin-top: auto; border-top: 1px solid var(--line); padding: 1.1rem 0.6rem 0; display: grid; gap: 0.8rem; }
-.skip-link { position: fixed; top: -5rem; left: 1rem; z-index: 10; background: var(--accent); color: #ffffff; padding: 0.6rem 1rem; border-radius: 0.5rem; }
-.skip-link:focus { top: 1rem; }
-.page-header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
-.eyebrow { color: var(--muted); text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.12em; margin: 0 0 0.65rem; }
-.page-header h1 { font-size: clamp(1.8rem, 3vw, 2.4rem); line-height: 1.15; letter-spacing: -0.05em; font-weight: 600; margin: 0 0 0.6rem; }
-.page-description { color: var(--muted); font-size: 0.85rem; margin: 0; max-width: 40rem; }
-.context-tag { flex-shrink: 0; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0.35rem 0.7rem; font-size: 0.7rem; }
-.panel-layout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.2rem; align-items: start; }
-.section-stack { display: grid; gap: 1.2rem; }
-.panel { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 1rem; padding: 1.25rem; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+a { color: var(--accent); text-underline-offset: 3px; }
+button, input, select { font: inherit; }
+button, a, summary { -webkit-tap-highlight-color: transparent; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+[hidden] { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.skip-link { position: fixed; top: -80px; left: 16px; z-index: 50; padding: 10px 16px; border-radius: var(--control-radius); color: white; background: var(--accent); }
+.skip-link:focus { top: 16px; }
+.sidebar { position: fixed; inset: 0 auto 0 0; z-index: 20; display: flex; flex-direction: column; width: var(--sidebar-width); padding: 28px 16px 20px; color: white; background: var(--rail); overflow-y: auto; }
+.brand { display: flex; align-items: center; gap: 12px; margin: 0 10px 40px; color: white; text-decoration: none; font-size: 18px; font-weight: 650; letter-spacing: -0.035em; }
+.brand-symbol { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 9px; color: white; background: var(--accent); }
+.brand-symbol svg { width: 24px; height: 24px; }
+.brand-caption { display: block; margin-top: 2px; color: var(--rail-muted); font-size: 11px; font-weight: 400; letter-spacing: 0.015em; }
+.nav-group { margin-bottom: 26px; }
+.nav-label, .operator-label { color: var(--rail-muted); font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+.nav-label { margin: 0 12px 10px; }
+.sidebar nav a { display: flex; align-items: center; gap: 12px; min-height: 42px; margin-block: 4px; padding: 10px 12px; border-radius: var(--control-radius); color: var(--rail-muted); font-size: 13px; font-weight: 500; text-decoration: none; }
+.sidebar nav svg { width: 18px; height: 18px; flex-shrink: 0; }
+.sidebar nav a:hover { color: white; background: var(--rail-line); }
+.sidebar nav a.nav-active { color: white; background: var(--accent); }
+.sidebar :focus-visible { outline-color: #b8cdff; }
+.sidebar-footer { display: grid; gap: 14px; margin-top: auto; padding: 20px 10px 0; border-top: 1px solid var(--rail-line); }
+.sidebar-footer form { margin: 0; }
+.operator-context { display: grid; gap: 4px; }
+.operator-context > span:last-child { color: var(--rail-muted); font-size: 12px; }
+.btn, .plan-btn, .row-details, .signout { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 7px 12px; border: 1px solid var(--control-line); border-radius: var(--control-radius); background: var(--panel); color: var(--text); font: inherit; font-size: 12px; font-weight: 550; line-height: 1.5; text-decoration: none; white-space: nowrap; cursor: pointer; }
+.btn:hover, .plan-btn:hover:not(:disabled), .row-details:hover { color: var(--text); background: var(--bg); border-color: var(--muted); text-decoration: none; }
+.btn-primary { color: white; background: var(--accent); border-color: var(--accent); }
+.btn-primary:hover { color: white; background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn-sm, .row-details { min-height: 30px; padding: 4px 10px; font-size: 12px; }
+.btn-icon { font-size: 17px; line-height: 1; font-weight: 400; }
+.btn:disabled, .plan-btn:disabled { color: var(--muted); background: var(--bg); border-color: var(--line); cursor: not-allowed; }
+.signout { justify-content: flex-start; width: 100%; color: white; background: transparent; border-color: var(--rail-muted); }
+.signout:hover { color: white; background: var(--rail-line); border-color: white; }
+main#app { min-width: 0; min-height: 100dvh; margin-left: var(--sidebar-width); padding: 0 clamp(24px, 3vw, 48px) 48px; }
+.workspace-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 66px; margin-bottom: 28px; border-bottom: 1px solid var(--line); }
+.breadcrumb { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+.breadcrumb span:last-child { color: var(--text); font-weight: 550; }
+.access-tag { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; }
+.access-tag svg { width: 14px; height: 14px; }
+.page-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
+.page-header h1 { margin: 0; font-size: 28px; font-weight: 650; line-height: 1.25; letter-spacing: -0.045em; }
+.notice { margin: 0 0 20px; padding: 12px 16px; border: 1px solid #b9cafa; border-radius: var(--control-radius); color: #234291; background: var(--raised); font-size: 13px; overflow-wrap: anywhere; }
+.notice[data-tone="error"] { color: var(--danger); background: var(--danger-bg); border-color: #e8b4ae; }
+.notice:empty { display: none; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.error { color: var(--danger); padding: 12px; background: var(--danger-bg); border: 1px solid #e8b4ae; border-radius: var(--control-radius); }
+.admin-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0 0 24px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+.admin-stats > div { min-width: 0; padding: 20px 24px; border-right: 1px solid var(--line); }
+.admin-stats > div:last-child { border-right: 0; }
+.admin-stats dt { color: var(--muted); font-size: 12px; font-weight: 500; }
+.admin-stats dd { margin: 8px 0 0; font-size: clamp(21px, 2vw, 30px); font-weight: 600; line-height: 1.2; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.panel-layout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 24px; }
+.section-stack { display: grid; gap: 24px; }
+.panel, .card { min-width: 0; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+.card { margin-bottom: 24px; }
 .panel-wide { grid-column: 1 / -1; }
-.panel h2 { margin: 0 0 1rem; font-size: 0.95rem; font-weight: 550; letter-spacing: -0.01em; }
-.panel > .small:first-of-type { margin-top: 0; }
-.panel .card { background: transparent; border: 0; padding: 0; border-radius: 0; }
+h2, h3 { overflow-wrap: anywhere; }
+h2, .panel h2, .card h2 { margin: 0 0 18px; font-size: 15px; font-weight: 650; letter-spacing: -0.02em; }
+.panel h2:not(:first-child) { margin-top: 24px; }
+.panel .card { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.section-stack > .panel > h2 + :not(.admin-toolbar) { margin-top: 18px; }
+.section-stack > .panel > h2 { padding-bottom: 18px; margin-bottom: 0; border-bottom: 1px solid var(--line); }
+.admin-toolbar, .billing-toolbar { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin: 0 0 20px; }
+.admin-toolbar.has-filters { padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+.panel > .admin-toolbar.has-filters { margin: 0; padding: 18px 0; border: 0; border-radius: 0; }
+.panel > .admin-toolbar:not(.has-filters) { margin: 0; padding: 16px 0; }
+.admin-tools, .billing-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; margin-left: auto; }
+.view-updated { color: var(--muted); font-size: 11px; }
+.filter-form { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; margin: 0; min-width: 0; }
+.filter-form label { display: grid; gap: 6px; min-width: 0; max-width: 100%; color: var(--muted); font-size: 11px; font-weight: 550; }
+.filter-form input, .filter-form select, .login-card input { width: 100%; min-width: 0; min-height: 36px; padding: 7px 10px; border: 1px solid var(--control-line); border-radius: var(--control-radius); color: var(--text); background: var(--panel); font: inherit; font-size: 12px; }
+.filter-form input[type="text"] { width: 220px; max-width: 100%; }
+.filter-form select { max-width: 220px; cursor: pointer; }
+.filter-form input::placeholder { color: var(--muted); opacity: 1; }
+.filter-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.data-note { margin: 12px 0; color: var(--muted); font-size: 12px; }
+.data-note summary { display: inline-flex; align-items: center; gap: 8px; min-height: 30px; padding: 4px 8px; border: 1px solid transparent; border-radius: var(--control-radius); cursor: pointer; list-style: none; }
+.data-note summary::-webkit-details-marker { display: none; }
+.data-note summary::before { content: "i"; display: grid; place-items: center; width: 14px; height: 14px; border: 1px solid currentColor; border-radius: 50%; font-size: 10px; font-weight: 600; }
+.data-note summary:hover, .data-note[open] summary { color: var(--text); background: var(--bg); border-color: var(--line); }
+.data-note p { max-width: 68rem; margin: 10px 0 0; padding: 12px 14px; border-left: 2px solid var(--control-line); background: var(--bg); font-size: 12px; line-height: 1.8; }
+.admin-tools .data-note, .billing-tools .data-note { margin: 0; }
+.admin-tools .data-note[open], .billing-tools .data-note[open] { flex-basis: 100%; }
+.service-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.service-card { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: var(--control-radius); background: var(--panel); }
+.service-card:last-child { grid-column: 1 / -1; }
+.service-card > div { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 13px; font-weight: 550; }
+.service-card .small { margin: 8px 0 0; font-size: 11px; }
+.usage-breakdown { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-top: 20px; }
+.usage-breakdown .small, .usage-breakdown .data-note { grid-column: 1 / -1; margin: 0; }
+.table-scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: var(--control-radius); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table-wide table { min-width: 640px; }
+.compact-table table, .billing-table table { min-width: 720px; }
+th, td { padding: 14px 16px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+th { background: var(--bg); color: var(--muted); font-size: 10px; font-weight: 650; letter-spacing: 0.07em; text-transform: uppercase; white-space: nowrap; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: #f7f9fd; }
+td { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+td a { color: var(--text); font-weight: 550; text-decoration: none; }
+td a:hover { color: var(--accent); text-decoration: underline; }
+.compact-table td:first-child, .billing-table td:first-child { min-width: 130px; }
+.compact-table th:last-child, .billing-table th:last-child { width: 108px; }
 .panel-layout .table-wide table { min-width: 0; }
 .panel-layout td { overflow-wrap: anywhere; }
-.panel[aria-label="Service health"] td:first-child,
-.panel[aria-label="Service health"] th:first-child { white-space: nowrap; overflow-wrap: normal; }
-.usage-breakdown { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.2rem; margin-top: 1.2rem; }
-.usage-breakdown .small, .usage-breakdown .data-note { grid-column: 1 / -1; margin: 0; }
-.data-note { margin: 0.75rem 0; color: var(--muted); font-size: 0.75rem; }
-.data-note summary { cursor: pointer; width: fit-content; }
-.data-note[open] summary { color: var(--text); }
-.data-note p { max-width: 65rem; margin-bottom: 0; }
-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-.notice:empty { display: none; }
-.login-brand { display: flex; align-items: center; gap: 0.7rem; font-weight: 600; margin-bottom: 1.8rem; }
-.login-card .login-brand + h1 { font-size: 1.6rem; }
-.admin-toolbar { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 1rem; margin: 0 0 1.25rem; }
-.admin-toolbar.has-filters { padding: 1rem 1.2rem; background: var(--panel); border: 1px solid var(--line); border-radius: 0.8rem; }
-.admin-toolbar .filter-form { margin: 0; }
-.admin-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-left: auto; }
-.admin-tools .data-note { margin: 0; }
-.admin-tools .data-note[open] { flex-basis: 100%; }
-.admin-tools .data-note[open] p { max-width: 38rem; }
-.service-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
-.service-card { min-width: 0; border: 1px solid var(--line); border-radius: 0.6rem; padding: 0.8rem; }
-.service-card:last-child { grid-column: 1 / -1; }
-.service-card > div { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
-.service-card .small { margin: 0.4rem 0 0; }
-.compact-table table { min-width: 36rem; }
-.profile-facts-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
+.row-details::after { content: ""; width: 5px; height: 5px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: rotate(45deg); margin: -3px 1px 0 3px; }
+.row-details[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); background: var(--raised); }
+.row-details[aria-expanded="true"]::after { transform: rotate(225deg); margin-top: 2px; }
+.row-details.has-issue::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--danger); }
+.billing-detail-row, .billing-detail-row:hover { background: #f5f7fb; }
+.billing-detail-row > td { padding: 24px; border-bottom: 1px solid var(--line); }
+.facts.billing-detail-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; }
+.badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 7px; border: 1px solid var(--line); border-radius: 5px; background: #f5f6f8; color: var(--muted); font-size: 11px; font-weight: 500; line-height: 1.4; white-space: nowrap; }
+.badge-starter, .badge-pro { color: #234ab3; background: #edf2ff; border-color: #c5d4fa; }
+.badge-ultra { color: #6b3d9b; background: #f5effc; border-color: #ddd0f0; }
+.badge-grant { color: #805413; background: #fff8e9; border-color: #ead4a7; }
+.badge-warning { color: var(--danger); background: var(--danger-bg); border-color: #e8b4ae; }
+.badge-healthy { color: var(--success); background: var(--success-bg); border-color: #b8dac9; }
+.plan-cell { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.pager { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.pager p { margin: 0 auto 0 0; color: var(--muted); font-size: 12px; }
+.pager .btn { min-height: 32px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px 24px; margin: 0; padding: 0; }
+.facts > div { min-width: 0; }
+.facts dt { margin-bottom: 6px; color: var(--muted); font-size: 11px; font-weight: 500; }
+.facts dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.panel-layout .facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.panel-layout .facts dd { font-size: 24px; font-weight: 600; letter-spacing: -0.04em; }
+.profile-facts-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
 .profile-facts-grid > section { min-width: 0; }
-.profile-facts-grid h3 { margin: 0; font-size: 0.85rem; font-weight: 600; }
-.profile-card .facts { grid-template-columns: minmax(0, 1fr); }
-.profile-facts-grid .facts dt { text-transform: none; letter-spacing: 0; }
-@media (max-width: 760px) { .profile-facts-grid { grid-template-columns: minmax(0, 1fr); } .admin-toolbar.has-filters { padding: 0.85rem; } }
-.admin-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin: 0 0 1.5rem; }
-.admin-stats > div { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 0.8rem; padding: 1.1rem 1.2rem; }
-.admin-stats dt { color: var(--muted); font-size: 0.8rem; }
-.admin-stats dd { margin: 0.35rem 0 0; color: var(--text); font-size: clamp(1.1rem, 2.5vw, 1.8rem); font-weight: 600; letter-spacing: -0.04em; overflow-wrap: anywhere; }
-.billing-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; }
-.billing-toolbar .filter-form { margin: 0; }
-.billing-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; min-width: 0; }
-.view-updated { color: var(--muted); font-size: 0.75rem; }
-.billing-tools .data-note { margin: 0; }
-.billing-tools .data-note[open] { flex-basis: 100%; }
-.billing-tools .data-note[open] p { max-width: 32rem; }
-.billing-table table { min-width: 38rem; }
-.billing-table th:nth-child(1) { width: 25%; }
-.billing-table th:nth-child(2) { width: 20%; }
-.billing-table td { vertical-align: middle; padding-top: 1rem; padding-bottom: 1rem; }
-.row-details { border: 0; background: transparent; color: var(--accent); padding: 0.2rem; font: inherit; font-size: 0.8rem; cursor: pointer; }
-.row-details.has-issue::before { content: ""; display: inline-block; width: 0.4rem; height: 0.4rem; margin-right: 0.45rem; background: var(--danger); border-radius: 50%; }
-.billing-detail-row { background: #f6f8fc; }
-.billing-detail-row[hidden] { display: none; }
-.billing-detail-row .billing-detail-facts { margin: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.billing-history { margin-top: 1.25rem; }
-@media (max-width: 760px) { .admin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; } .admin-stats > div { padding: 1rem; } .billing-detail-row .billing-detail-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-#content > .table-scroll { background: var(--panel); border-radius: 0.8rem; border: 1px solid var(--line); }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-@media (max-width: 1100px) { .panel-layout { grid-template-columns: minmax(0, 1fr); } }
+.profile-facts-grid > section + section { padding-left: 24px; border-left: 1px solid var(--line); }
+.profile-facts-grid h3 { margin: 0 0 20px; font-size: 12px; font-weight: 650; }
+.profile-card .facts { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.profile-card > h2 { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-bottom: 20px; border-bottom: 1px solid var(--line); font-size: 18px; }
+.plan-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.back { display: inline-flex; align-items: center; margin-bottom: 20px; padding: 7px 10px; border: 1px solid var(--control-line); border-radius: var(--control-radius); background: var(--panel); color: var(--text); font-size: 12px; text-decoration: none; }
+.back:hover { color: var(--accent); border-color: var(--accent); }
+.billing-toolbar { padding-block: 18px; margin-bottom: 0; }
+.billing-panel > h2 { padding-bottom: 18px; margin-bottom: 0; border-bottom: 1px solid var(--line); }
+.billing-history { margin-top: 24px; }
+.load-state, .empty-state { display: grid; justify-items: center; gap: 12px; padding: 56px 24px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); color: var(--muted); font-size: 13px; text-align: center; }
+.panel .empty-state { border: 0; padding: 32px 16px; }
+.load-state > p, .empty-state > p { margin: 0; }
+.loading-indicator { width: 22px; height: 22px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; }
+.login-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 100dvh; background: var(--panel); }
+.login-intro { display: flex; flex-direction: column; justify-content: space-between; align-self: stretch; padding: clamp(32px, 6vw, 88px); background: var(--rail); color: white; }
+.login-intro .brand { margin: 0; }
+.login-intro h2 { max-width: 360px; margin: 0 0 20px; color: white; font-size: clamp(28px, 3vw, 44px); font-weight: 550; line-height: 1.15; letter-spacing: -0.04em; }
+.login-intro p { max-width: 340px; margin: 0; color: var(--rail-muted); font-size: 14px; line-height: 1.9; }
+.login-intro > p { font-size: 11px; }
+.login-card { width: min(390px, calc(100% - 48px)); margin: 48px auto; align-self: center; padding: 0; }
+.login-brand { display: none; }
+.login-card h1 { margin: 0 0 12px; font-size: 28px; font-weight: 650; line-height: 1.25; letter-spacing: -0.04em; }
+.login-card > p { color: var(--muted); font-size: 13px; line-height: 1.8; }
+.login-card > .error { color: var(--danger); }
+.login-card form { display: grid; gap: 20px; margin-top: 28px; }
+.login-card label { display: grid; gap: 8px; color: var(--text); font-size: 12px; font-weight: 550; }
+.login-card input { min-height: 42px; font-size: 14px; }
+.login-card button { min-height: 42px; width: 100%; margin-top: 4px; }
+.login-card .small { margin-top: 24px; font-size: 11px; }
+@keyframes admin-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: no-preference) {
+  .btn, .plan-btn, .row-details, .sidebar a, .signout, input, select { transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease; }
+  .loading-indicator { animation: admin-spin 800ms linear infinite; }
+}
+@media (min-width: 1600px) { main#app { padding-inline: 48px; } }
+@media (max-width: 1200px) { .panel-layout { grid-template-columns: minmax(0, 1fr); } .profile-facts-grid { gap: 20px; } .profile-facts-grid > section + section { padding-left: 20px; } .admin-stats > div { padding: 18px; } }
+@media (max-width: 950px) { .profile-facts-grid { grid-template-columns: minmax(0, 1fr); } .profile-facts-grid > section + section { padding: 20px 0 0; border-left: 0; border-top: 1px solid var(--line); } .facts.billing-detail-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) {
-  .sidebar { position: static; width: auto; padding: 1rem; border-right: 0; border-bottom: 1px solid var(--line); }
-  .brand { margin: 0 0 1.1rem; }
-  .sidebar nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; }
-  .nav-group { margin: 0; min-width: 0; }
-  .nav-group:last-child { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.5rem; }
-  .nav-label { margin: 0 0.45rem 0.4rem; font-size: 0.6rem; }
-  .sidebar nav a { padding: 0.4rem; font-size: 0.77rem; gap: 0.4rem; }
-  .sidebar nav a span { overflow-wrap: anywhere; }
-  .sidebar-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 0.6rem; padding: 0.7rem 0 0; }
-  .page-header { margin-bottom: 1rem; }
-  .context-tag { display: none; }
+  .sidebar { position: static; display: grid; grid-template-columns: minmax(0, 1fr) auto; width: 100%; padding: 16px; gap: 16px; overflow: visible; }
+  .brand { margin: 0; font-size: 16px; }
+  .brand-caption { font-size: 10px; }
+  .sidebar nav { grid-column: 1 / -1; order: 3; display: flex; gap: 6px; overflow-x: auto; min-width: 0; padding-bottom: 2px; }
+  .nav-group { display: contents; }
+  .nav-label, .operator-context { display: none; }
+  .sidebar nav a { flex-shrink: 0; min-height: 38px; margin: 0; padding: 8px 10px; font-size: 12px; }
+  .sidebar nav svg { width: 16px; height: 16px; }
+  .sidebar-footer { display: block; margin: 0; padding: 0; border: 0; align-self: center; }
+  .signout { width: auto; padding: 6px 10px; font-size: 11px; }
+  main#app { margin: 0; padding: 0 18px 32px; }
+  .workspace-bar { min-height: 50px; margin-bottom: 20px; }
+  .access-tag { display: none; }
+  .page-header { margin-bottom: 20px; }
+  .page-header h1 { font-size: 25px; }
+  .admin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 20px; }
+  .admin-stats > div { padding: 16px; }
+  .admin-stats > div:nth-child(2) { border-right: 0; }
+  .admin-stats > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  .admin-stats dd { font-size: 24px; }
+  .panel, .card { padding: 18px; }
+  .panel-layout, .section-stack { gap: 20px; }
+  .admin-toolbar, .billing-toolbar { align-items: stretch; gap: 14px; }
+  .admin-tools, .billing-tools { width: 100%; margin-left: 0; }
+  .view-updated { margin-right: auto; }
+  .filter-form { width: 100%; gap: 12px; }
+  .filter-form label { flex: 1 1 130px; }
+  .filter-form input[type="text"], .filter-form select { width: 100%; max-width: 100%; }
+  .filter-actions { flex-basis: 100%; }
+  .filter-actions .btn { flex: 1; }
   .usage-breakdown { grid-template-columns: minmax(0, 1fr); }
-  .panel-layout .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem 1rem; }
-  .panel { padding: 1rem; border-radius: 0.8rem; }
+  .panel-layout .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .facts { gap: 16px; }
+  .billing-detail-row > td { padding: 18px; }
+  .pager { gap: 8px; }
+  .pager p { flex-basis: 100%; margin-bottom: 4px; }
+  .login-body { grid-template-columns: minmax(0, 1fr); }
+  .login-intro { padding: 24px; gap: 28px; }
+  .login-intro > div:not(.brand), .login-intro > p { display: none; }
+  .login-card { margin-block: 36px; }
 }
-.table-scroll { max-width: 100%; overflow-x: auto; }
-.table-wide table { min-width: 34rem; }
-.table-scroll:not(.table-wide) th:first-child,
-.table-scroll:not(.table-wide) td:first-child { white-space: normal; overflow-wrap: anywhere; }
-.card h2 { margin-top: 0; }
-.refresh-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
-.pager { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin-top: 0.75rem; }
-.pager a { color: var(--accent); }
-.filter-form { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: end; margin: 1rem 0; }
-.filter-form label { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; font-size: 0.8rem; }
-.filter-form input, .filter-form select { max-width: 100%; padding: 0.45rem; background: var(--panel); border: 1px solid var(--line); border-radius: 0.5rem; color: var(--text); font: inherit; }
-.filter-form a { color: var(--accent); }
-
-.sidebar form { margin: 0; }
-
-.signout {
-  padding: 0.25rem 0.7rem;
-  background: transparent;
-  color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: 0.35rem;
-  font: inherit;
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
-.signout:hover { color: var(--text); border-color: var(--muted); }
-
-main#app { margin-left: 14.5rem; padding: 2.5rem clamp(1.25rem, 3vw, 3rem); min-width: 0; }
-@media (max-width: 760px) { main#app { margin: 0; padding: 1.4rem 1rem; } }
-
-.notice { min-height: 1.4rem; margin: 0 0 1rem; color: var(--muted); font-size: 0.75rem; }
-
-.muted { color: var(--muted); }
-.small { font-size: 0.78rem; }
-.error { color: var(--danger); margin: 0 0 0.75rem; }
-
-table { width: 100%; border-collapse: collapse; background: transparent; }
-
-th, td { padding: 0.75rem 0.7rem; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { background: #f3f6fb; }
-tbody tr:hover { background: #f8faff; }
-
-th { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
-
-tbody tr:last-child td { border-bottom: 0; }
-
-td a { color: var(--accent); text-decoration: none; }
-td a:hover { text-decoration: underline; }
-
-.badge {
-  display: inline-block;
-  padding: 0.1rem 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font-size: 0.74rem;
-  color: var(--muted);
-}
-
-.badge-starter { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
-.badge-pro { color: #2455df; border-color: #cbd9ff; background: #edf2ff; }
-.badge-ultra { color: #6b3d9b; border-color: #ddd0f0; background: #f5effc; }
-
-.badge-grant { color: #805413; border-color: #ead4a7; background: #fff8e9; }
-.badge-warning { color: var(--danger); border-color: #efccc7; background: #fff1ee; }
-.badge-healthy { color: #176444; border-color: #bce1ce; background: #edf9f2; }
-
-.plan-cell { display: inline-flex; align-items: center; gap: 0.35rem; }
-
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 1rem; padding: 1.25rem; margin-bottom: 1.2rem; }
-
-.card h1 { margin: 0 0 0.2rem; font-size: 1.25rem; }
-
-.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.5rem 1.25rem; margin: 0.75rem 0 0; padding: 0; }
-
-.facts div { min-width: 0; padding: 0.6rem 0; }
-.panel-layout .facts dd { font-size: 1.55rem; font-weight: 550; letter-spacing: -0.04em; }
-.panel-layout .facts { margin: 0; gap: 0.75rem 1.5rem; }
-@media (min-width: 761px) { .panel-layout .facts { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-.facts dt { color: var(--muted); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; }
-.facts dd { margin: 0.1rem 0 0; }
-
-h2 { font-size: 0.95rem; margin: 1.4rem 0 0.6rem; overflow-wrap: anywhere; }
-.facts dd, .card h1 { overflow-wrap: anywhere; }
-
-.plan-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-
-.plan-btn {
-  padding: 0.4rem 0.9rem;
-  background: var(--raised);
-  color: var(--text);
-  border: 1px solid #cbd9ef;
-  border-radius: 0.6rem;
-  font: inherit;
-  font-size: 0.84rem;
-  cursor: pointer;
-}
-
-.plan-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-
-.plan-btn:disabled { opacity: 0.45; cursor: default; }
-
-.back { display: inline-block; margin-bottom: 0.9rem; color: var(--muted); text-decoration: none; font-size: 0.84rem; }
-.back:hover { color: var(--text); }
-
-.login-body { display: grid; place-items: center; min-height: 100dvh; padding: 1.25rem; }
-
-.login-card { width: min(25rem, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 1.2rem; padding: 2rem; }
-.login-card h1 { letter-spacing: -0.03em; }
-@media (prefers-reduced-motion: no-preference) { a, button { transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease; } }
-
-.login-card h1 { margin: 0; font-size: 1.2rem; }
-
-.login-card form { display: grid; gap: 0.8rem; margin-top: 1rem; }
-
-.login-card label { display: grid; gap: 0.3rem; font-size: 0.8rem; color: var(--muted); }
-
-.login-card input {
-  padding: 0.5rem 0.6rem;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 0.35rem;
-  color: var(--text);
-  font: inherit;
-}
-
-.login-card input:focus { outline: 1px solid var(--accent); outline-offset: 1px; }
-
-.login-card button {
-  margin-top: 0.2rem;
-  padding: 0.55rem 0.8rem;
-  background: var(--accent);
-  color: #ffffff;
-  border: 0;
-  border-radius: 0.35rem;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
+@media (max-width: 400px) { .service-grid { grid-template-columns: minmax(0, 1fr); } .admin-stats dt { font-size: 11px; } .admin-stats > div { padding: 14px; } .breadcrumb { font-size: 11px; gap: 8px; } }
 `;
 
 export const ADMIN_JS = `
@@ -280,8 +258,30 @@ export const ADMIN_JS = `
   const noticeEl = document.getElementById("notice");
   const content = document.getElementById("content");
 
-  function setNotice(message) {
+  function setNotice(message, tone = "info") {
+    noticeEl.dataset.tone = tone;
     noticeEl.textContent = message;
+  }
+
+  function loading(message) {
+    content.textContent = "";
+    const state = document.createElement("div"); state.className = "load-state";
+    const indicator = document.createElement("span"); indicator.className = "loading-indicator"; indicator.setAttribute("aria-hidden", "true");
+    const label = document.createElement("span"); label.textContent = message;
+    state.append(indicator, label); content.append(state);
+  }
+
+  function unavailable(message, reload) {
+    content.textContent = "";
+    const state = document.createElement("div"); state.className = "empty-state";
+    const label = document.createElement("p"); label.textContent = message;
+    const retry = document.createElement("button"); retry.type = "button"; retry.className = "btn btn-secondary"; retry.textContent = "Try again";
+    retry.addEventListener("click", () => { void reload(); });
+    state.append(label, retry); content.append(state);
+  }
+
+  function emptyState(message) {
+    const state = document.createElement("p"); state.className = "empty-state"; state.textContent = message; return state;
   }
 
   // Everything is built with createElement + textContent: no innerHTML anywhere,
@@ -390,14 +390,14 @@ export const ADMIN_JS = `
   async function getJSON(url) {
     const res = await fetch(url, { headers: { accept: "application/json" } });
     if (res.status === 401) {
-      setNotice(EXPIRED);
+      setNotice(EXPIRED, "error");
       throw new Error("unauthorized");
     }
     if (!res.ok) {
       const body = await res.json().catch(() => null);
       const message =
         body && typeof body.message === "string" ? body.message : "request failed (" + res.status + ")";
-      setNotice(message);
+      setNotice(message, "error");
       throw new Error(message);
     }
     return res.json();
@@ -421,15 +421,18 @@ export const ADMIN_JS = `
   function groupSections() {
     const layout = document.createElement("div");
     layout.className = app.dataset.view === "overview" ? "panel-layout" : "section-stack";
+    const listView = ["attention", "users", "workspaces", "audit"].includes(app.dataset.view);
+    const toolbar = listView ? Array.from(content.children).find(node => node.className?.includes("admin-toolbar")) : undefined;
     let panel;
     for (const node of Array.from(content.children)) {
       if (node.tagName && node.tagName.toLowerCase() === "h2") {
         panel = document.createElement("section");
         panel.className = "panel";
         panel.setAttribute("aria-label", node.textContent);
-        if (["attention", "users", "workspaces", "audit"].includes(app.dataset.view)) node.className = "sr-only";
         if (app.dataset.view === "overview" && node.textContent === "Usage") panel.className += " panel-wide";
-        panel.append(node); layout.append(panel);
+        panel.append(node);
+        if (toolbar && !layout.children.length) panel.append(toolbar);
+        layout.append(panel);
       } else if (panel) panel.append(node);
     }
     if (layout.children.length) content.append(layout);
@@ -489,16 +492,16 @@ export const ADMIN_JS = `
     const at = checkedAt || new Date().toISOString(); updated.dateTime = at;
     updated.textContent = "View updated " + new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     updated.title = when(at) + " — page snapshot, not provider verification";
-    const refresh = document.createElement("button"); refresh.type = "button"; refresh.className = "plan-btn"; refresh.textContent = "Refresh"; refresh.addEventListener("click", () => { void reload(); });
+    const refresh = document.createElement("button"); refresh.type = "button"; refresh.className = "btn btn-secondary"; refresh.textContent = "Refresh"; refresh.addEventListener("click", () => { void reload(); });
     tools.append(updated, refresh); if (info) tools.append(dataNote(info, "Info"));
     toolbar.append(tools); content.append(toolbar); return toolbar;
   }
 
   async function loadOverview() {
-    content.textContent = "Checking service health…";
+    loading("Checking service health…");
     let data;
     try { data = await getJSON("/api/overview"); }
-    catch { content.textContent = "Monitoring unavailable. No current snapshot."; return; }
+    catch { unavailable("Monitoring unavailable. No current snapshot.", loadOverview); return; }
     content.textContent = "";
     setNotice("");
     const usageTotals = data.snapshot?.usage;
@@ -560,8 +563,7 @@ export const ADMIN_JS = `
     form.setAttribute("role", "search");
     for (const field of fields) {
       const label = document.createElement("label");
-      if (field.compact) { const text = document.createElement("span"); text.className = "sr-only"; text.textContent = field.label; label.append(text); }
-      else label.append(field.label);
+      const text = document.createElement("span"); text.textContent = field.label; label.append(text);
       const input = document.createElement(field.options ? "select" : "input");
       input.name = field.name;
       if (field.compact) input.setAttribute("aria-label", field.label);
@@ -570,8 +572,10 @@ export const ADMIN_JS = `
       } else { input.type = field.type || "text"; input.maxLength = 100; input.value = params.get(field.name) || ""; if (field.placeholder) input.placeholder = field.placeholder; }
       label.append(input); form.append(label);
     }
-    const submit = document.createElement("button"); submit.type = "submit"; submit.className = "plan-btn"; submit.textContent = "Filter";
-    form.append(submit, link(path, "Clear filters")); target.append(form);
+    const submit = document.createElement("button"); submit.type = "submit"; submit.className = "btn btn-primary"; submit.textContent = "Apply filters";
+    const clear = link(path, "Clear filters"); clear.className = "btn btn-secondary";
+    const actions = document.createElement("div"); actions.className = "filter-actions"; actions.append(submit, clear);
+    form.append(actions); target.append(form);
   }
 
   function quota(used, limit, storage) {
@@ -584,69 +588,70 @@ export const ADMIN_JS = `
     row.setAttribute("aria-label", "Pagination");
     const params = new URL(window.location.href).searchParams;
     const destination = page => { const query = new URLSearchParams(params); query.set(pageKey, String(page)); return path + "?" + query; };
-    if (data.page > 1) row.append(link(destination(data.page - 1), "Previous"));
+    const pageLink = (page, label) => { const item = link(destination(page), label); item.className = "btn btn-secondary btn-sm"; return item; };
+    if (data.page > 1) row.append(pageLink(data.page - 1, "Previous"));
     row.append(paragraph(data.total === 0 ? "0 records" : "Page " + data.page + " · " + data.total + " records"));
-    if (data.page * data.page_size < data.total) row.append(link(destination(data.page + 1), "Next"));
+    if (data.page * data.page_size < data.total) row.append(pageLink(data.page + 1, "Next"));
     target.append(row);
   }
 
   async function loadAttention() {
-    content.textContent = "Loading queued problems…";
+    loading("Loading queued problems…");
     const page = new URL(window.location.href).searchParams.get("page") || "1";
     let data;
     try { data = await getJSON("/api/attention?page=" + encodeURIComponent(page)); }
-    catch { content.textContent = "Queue details unavailable."; return; }
+    catch { unavailable("Queue details unavailable.", loadAttention); return; }
     content.textContent = "";
     setNotice("");
     statCards([["Queued problems", data.total], ["Jobs · page", data.jobs.length], ["Retries · page", data.jobs.filter(job => job.error_code !== null).length], ["Attempts · page", data.jobs.reduce((sum, job) => sum + job.attempts, 0)]]);
     pageToolbar(loadAttention, data.checked_at, [], "", "Jobs awaiting retry or pending over five minutes, oldest first. Page counts cover visible jobs; queued problems covers all matches. Delivery IDs correlate with GitHub deliveries and backend logs. No payloads or task content are shown. Account and billing flags are in Overview.");
     heading("GitHub queue");
     content.append(expandableTable(["Job", "Type", "Attempts", "Retry at"], data.jobs.map(job => ({ label: String(job.id), issue: job.error_code !== null, values: [String(job.id).slice(0, 8), String(job.kind), count(job.attempts), when(job.retry_at)], details: [["Job ID", String(job.id)], ["Delivery ID", job.delivery_id || "—"], ["Created", when(job.created_at)], ["Lease ends", timestamp(job.locked_until)], ["Error", job.error_code || "Pending"]] }))));
-    if (!data.jobs.length) content.append(paragraph(data.total ? "No jobs on this page. Use Previous to return." : "No jobs need attention."));
+    if (!data.jobs.length) content.append(emptyState(data.total ? "No jobs on this page. Use Previous to return." : "No jobs need attention."));
     pagination(data, "/attention");
     groupSections();
   }
 
   async function loadAudit() {
-    content.textContent = "Loading audit trail…";
+    loading("Loading audit trail…");
     let data;
     try { data = await getJSON("/api/audit?" + new URL(window.location.href).searchParams); }
-    catch { content.textContent = "Audit records unavailable."; return; }
+    catch { unavailable("Audit records unavailable.", loadAudit); return; }
     content.textContent = "";
     setNotice("");
     statCards([["Changes", data.total], ["Events · page", data.events.length], ["Operators · page", new Set(data.events.map(event => event.actor)).size], ["Deleted targets · page", data.events.filter(event => !event.target_user_id).length]]);
     pageToolbar(loadAudit, data.checked_at, [{ name: "actor", label: "Operator" }, { name: "user", label: "User name or ID" }, { name: "action", label: "Action", options: ["", "plan_override_changed"] }, { name: "from", label: "From (UTC)", type: "date" }, { name: "to", label: "Through (UTC)", type: "date" }], "/audit", "Changes covers all matching events; other cards cover the current page. Deleted targets counts events, not unique people. Date filters are inclusive UTC days. Only changes made after monitoring was deployed are recorded. One operator account identifies the account, not individual people sharing it. Revoking a grant never cancels a Stripe subscription.");
     heading("Change history");
     content.append(expandableTable(["When", "Operator", "Account", "Grant"], data.events.map(event => ({ label: String(event.target_username), values: [when(event.created_at), String(event.actor), event.target_user_id ? link("/users/" + encodeURIComponent(event.target_user_id), String(event.target_username)) : String(event.target_username) + " (deleted)", (event.from_plan || "—") + " → " + (event.to_plan || "—")], details: [["Action", String(event.action)], ["Previous grant", event.from_plan || "—"], ["New grant", event.to_plan || "—"]] }))));
-    if (!data.events.length) content.append(paragraph(data.total ? "No events on this page. Use Previous to return." : "No operator plan changes recorded yet."));
+    if (!data.events.length) content.append(emptyState(data.total ? "No events on this page. Use Previous to return." : "No operator plan changes recorded yet."));
     pagination(data, "/audit");
     groupSections();
   }
 
   async function loadWorkspaces() {
-    content.textContent = "Loading workspace support…";
+    loading("Loading workspace support…");
     let data;
     try { data = await getJSON("/api/workspaces?" + new URL(window.location.href).searchParams); }
-    catch { content.textContent = "Workspace support unavailable."; return; }
+    catch { unavailable("Workspace support unavailable.", loadWorkspaces); return; }
     content.textContent = "";
     setNotice("");
     statCards([["Workspaces", data.total], ["Members · page", data.workspaces.reduce((sum, workspace) => sum + workspace.members, 0)], ["Tasks · page", data.workspaces.reduce((sum, workspace) => sum + workspace.tasks, 0)], ["Files · page", data.workspaces.reduce((sum, workspace) => sum + workspace.files, 0)]]);
     pageToolbar(loadWorkspaces, data.checked_at, [{ name: "q", label: "Workspace, slug or owner", placeholder: "Search workspaces" }], "/workspaces", "Workspaces covers all matches; usage cards total this page only. Membership counts are not unique people. Limits follow the owner's effective plan and deployment mode. Tasks have no plan quota. Storage includes recorded attachments and logos, not orphaned bucket objects.");
     heading("Workspace directory");
     content.append(expandableTable(["Workspace", "Owner", "Plan", "Members"], data.workspaces.map(workspace => ({ label: workspace.name, values: [link("/workspaces/" + workspace.id, workspace.name), link("/users/" + workspace.owner.id, workspace.owner.username), badge(workspace.plan), quota(workspace.members, workspace.limits.members, false)], details: [["Kind", workspace.kind], ["Tasks", count(workspace.tasks)], ["Files", count(workspace.files)], ["Storage", quota(workspace.storage_bytes, workspace.limits.storage_bytes, true)]] }))));
-    if (!data.workspaces.length) content.append(paragraph("No workspaces match this page/filter."));
+    if (!data.workspaces.length) content.append(emptyState("No workspaces match this page/filter."));
     pagination(data, "/workspaces");
     groupSections();
   }
 
   async function loadWorkspace(id) {
-    content.textContent = "Loading workspace support…";
+    loading("Loading workspace support…");
     let data;
     try { data = await getJSON("/api/workspaces/" + encodeURIComponent(id)); }
-    catch { content.textContent = "Workspace details unavailable."; return; }
+    catch { unavailable("Workspace details unavailable.", () => loadWorkspace(id)); return; }
     content.textContent = "";
     setNotice("");
-    content.append(link("/workspaces", "← All workspaces"));
+    const back = link("/workspaces", "← All workspaces"); back.className = "back"; content.append(back);
     const workspace = data.workspace;
     statCards([["Members", quota(workspace.members.length, workspace.limits.members, false)], ["Tasks", workspace.tasks], ["Files", workspace.files], ["Storage", quota(workspace.storage_bytes, workspace.limits.storage_bytes, true)]]);
     pageToolbar(() => loadWorkspace(id), data.checked_at, [], "", "Limits follow the owner's effective plan and deployment mode. Tasks are uncapped; storage is recorded attachments/logos, not bucket inventory.");
@@ -667,7 +672,7 @@ export const ADMIN_JS = `
     heading("Workspace GitHub links");
     content.append(dataNote("Owner connection is personal; workspace issue links can be published by other members. No credentials or repository names are shown."));
     content.append(table(["Publication", "Sync", "Count"], workspace.github.issue_links.map(row => [row.publication_status, row.sync_status, count(row.count)])));
-    if (!workspace.github.issue_links.length) content.append(paragraph("No GitHub issue links recorded."));
+    if (!workspace.github.issue_links.length) content.append(emptyState("No GitHub issue links recorded."));
     groupSections();
   }
 
@@ -705,14 +710,14 @@ export const ADMIN_JS = `
   }
 
   async function loadBilling() {
-    content.textContent = "Loading billing…";
+    loading("Loading billing…");
     const params = new URL(window.location.href).searchParams;
     const query = new URLSearchParams();
     for (const key of ["page", "q", "status"]) if (params.get(key)) query.set(key, params.get(key));
     const historyQuery = new URLSearchParams(); historyQuery.set("page", params.get("history_page") || "1"); if (params.get("q")) historyQuery.set("q", params.get("q"));
     let data;
     try { data = await getJSON("/api/billing?" + query); }
-    catch { content.textContent = "Billing unavailable."; return; }
+    catch { unavailable("Billing unavailable.", loadBilling); return; }
     content.textContent = ""; setNotice("");
     let summary = data.summary;
     if (!summary) {
@@ -731,15 +736,16 @@ export const ADMIN_JS = `
     const ratio = value => value === null || value === undefined ? null : value + " / " + summary.accounts;
     const stats = statCards([["Accounts", summary.accounts], ["Active subscriptions", ratio(summary.active_subscriptions)], ["Grants", ratio(summary.grants)], ["Sync issues", ratio(summary.sync_issues)]]); stats.setAttribute("aria-label", "Matching account totals");
     const panel = document.createElement("section"); panel.className = "panel billing-panel"; panel.setAttribute("aria-label", "Subscriptions");
+    const title = document.createElement("h2"); title.textContent = "Accounts"; panel.append(title);
     const toolbar = document.createElement("div"); toolbar.className = "billing-toolbar";
     filters([{ name: "q", label: "User", placeholder: "Search accounts", compact: true }, { name: "status", label: "Status", compact: true, emptyLabel: "All statuses", optionLabels: { unknown: "Not verified", error: "Sync issues", grant: "Grants" }, options: ["", "unknown", "none", "active", "trialing", "past_due", "unpaid", "canceled", "paused", "incomplete", "incomplete_expired", "error", "canceling", "payment_failed", "grant"] }], "/billing", toolbar);
     const tools = document.createElement("div"); tools.className = "billing-tools";
     const updated = document.createElement("time"); updated.className = "view-updated"; updated.dateTime = data.checked_at;
     updated.textContent = "View updated " + new Date(data.checked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); updated.title = when(data.checked_at) + " — page snapshot, not Stripe verification";
-    const refresh = document.createElement("button"); refresh.type = "button"; refresh.className = "plan-btn"; refresh.textContent = "Refresh"; refresh.addEventListener("click", () => { void loadBilling(); });
+    const refresh = document.createElement("button"); refresh.type = "button"; refresh.className = "btn btn-secondary"; refresh.textContent = "Refresh"; refresh.addEventListener("click", () => { void loadBilling(); });
     const info = dataNote("Billing " + (data.configured ? "enabled" : "disabled") + ". Counts cover all matching accounts, not just this page. Active subscriptions are last observed active statuses, not proof of payment. Sync issues count accounts with a last reconciliation error; unassigned failures remain in history. Unknown means not verified since monitoring began. Grants are not subscriptions. Stripe updates only through existing webhooks/user sync; view updated is the page snapshot time. Last invoice event is a notification, not complete payment history.", "Info");
     tools.append(updated, refresh, info); toolbar.append(tools); panel.append(toolbar, billingAccountsTable(data.users));
-    if (!data.users.length) panel.append(paragraph(data.total ? "No accounts on this page." : "No matching accounts."));
+    if (!data.users.length) panel.append(emptyState(data.total ? "No accounts on this page." : "No matching accounts."));
     pagination(data, "/billing", "page", panel); content.append(panel);
     const historyPanel = document.createElement("section"); historyPanel.className = "panel billing-history";
     const historyTitle = document.createElement("h2"); historyTitle.textContent = "Sync history"; historyPanel.append(historyTitle);
@@ -748,17 +754,17 @@ export const ADMIN_JS = `
     try { history = await getJSON("/api/billing/history?" + historyQuery); }
     catch { historyPanel.append(paragraph("Sync history unavailable.")); return; }
     historyPanel.append(table(["When", "Account", "Source", "Outcome", "Error"], history.events.map(event => [when(event.created_at), event.user ? link("/users/" + event.user.id, event.user.username) : "Unassigned / deleted", event.source, event.outcome, event.error_code || "—"])));
-    if (!history.events.length) historyPanel.append(paragraph(history.total ? "No attempts on this page." : "No sync attempts."));
+    if (!history.events.length) historyPanel.append(emptyState(history.total ? "No attempts on this page." : "No sync attempts."));
     pagination(history, "/billing", "history_page", historyPanel);
   }
 
   async function loadUsers() {
-    content.textContent = "Loading users…";
+    loading("Loading users…");
     let data;
     try {
       data = await getJSON("/api/users");
     } catch {
-      content.textContent = "";
+      unavailable("Account directory unavailable.", loadUsers);
       return;
     }
     const users = Array.isArray(data.users) ? data.users : [];
@@ -769,7 +775,7 @@ export const ADMIN_JS = `
     heading("Account directory");
     if (users.length === 0) {
       const empty = document.createElement("p");
-      empty.className = "muted";
+      empty.className = "empty-state";
       empty.textContent = "No users yet.";
       content.append(empty);
       groupSections();
@@ -788,7 +794,7 @@ export const ADMIN_JS = `
       body: JSON.stringify({ plan: plan }),
     });
     if (res.status === 401) {
-      setNotice(EXPIRED);
+      setNotice(EXPIRED, "error");
       return;
     }
     if (!res.ok) {
@@ -809,12 +815,12 @@ export const ADMIN_JS = `
   }
 
   async function loadUser(id) {
-    content.textContent = "Loading profile…";
+    loading("Loading profile…");
     let data;
     try {
       data = await getJSON("/api/users/" + encodeURIComponent(id));
     } catch {
-      content.textContent = "";
+      unavailable("Account details unavailable.", () => loadUser(id));
       return;
     }
     const user = data.user;
@@ -909,7 +915,7 @@ export const ADMIN_JS = `
     content.append(wsHeading);
     if (workspaces.length === 0) {
       const empty = document.createElement("p");
-      empty.className = "muted";
+      empty.className = "empty-state";
       empty.textContent = "This user has not created a workspace.";
       content.append(empty);
       groupSections();

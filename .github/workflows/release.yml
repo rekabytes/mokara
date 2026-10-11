@@ -2,16 +2,16 @@
 #
 # Triggered by a version tag only:
 #
-#   git tag v0.2.0 && git push origin v0.2.0
+#   git tag v0.2.1 && git push origin v0.2.1
 #
-# Coolify then pulls `ghcr.io/<owner>/mokara-frontend:0.2.0`,
-# `mokara-backend:0.2.0` and `mokara-admin:0.2.0`; nothing is built on the
+# Coolify then pulls `ghcr.io/<owner>/mokara-frontend:0.2.1`,
+# `mokara-backend:0.2.1` and `mokara-admin:0.2.1`; nothing is built on the
 # server. Structure follows jejak-athlete's release.yml (matrix over services,
 # QEMU + Buildx, GHCR login with the built-in GITHUB_TOKEN, metadata-action tag
 # set, GHA layer caching, provenance disabled). The addition here is the `gate`
 # job — see its comment.
 #
-# `v*.*.*` deliberately excludes prereleases: a `v0.2.0-rc.1` tag never matches,
+# `v*.*.*` deliberately excludes prereleases: a `v0.2.1-rc.1` tag never matches,
 # so `latest` can never be moved by one. When prereleases are actually wanted,
 # add the pattern and make the `latest` tag conditional on
 # `github.event.base_ref`/ref name not containing a dash.

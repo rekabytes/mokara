@@ -27,6 +27,8 @@ How to work in this repository. Project **facts, decisions and traps** live in
 
 ## Code conventions
 
+- Design skills are scoped by product surface: use `.agents/skills/mokara-client-design/SKILL.md` for the signed-in frontend and `.agents/skills/mokara-admin-design/SKILL.md` for the operator console. The current client dashboard is the frontend benchmark; do not copy admin styling into it. Public marketing remains separate.
+
 - State: Jotai atoms for shared/global state (module-level, default store, no `<Provider>`); `useState` only for ephemeral UI. Shared hooks return memoised objects (safe in `useCallback` deps). Session: one `/me` probe per app lifetime; login/signup call `setSessionUser`.
 - Motion: framer-motion `^13`; **all constants and variants come from `lib/motion.ts`** — never inline an easing or duration. Portal popovers: `AnimatePresence` wraps the `createPortal` call, and measured positions are never cleared on close. Lists animate `layout="position"` only; the heatmap track/cells and `ChipShell` are off-limits to motion.
 - Dates: anchor day math on local midnight (`new Date(y, m, d)`); never derive day indexes from live timestamps or `.toISOString()` round-trips.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { cn } from "@/lib/cn";
 import { api } from "@/lib/api";
 import { ERROR_RULES } from "@/lib/errors";
@@ -117,25 +118,17 @@ export function SocialSignIn({
   );
 }
 
+// Official marks: developers.google.com/identity/branding-guidelines and brand.github.com/foundations/logo.
 function ProviderMark({ provider }: { provider: Provider }) {
   return (
-    <svg
-      className="size-[18px] flex-none"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+    <Image
+      className="size-[18px] flex-none object-contain"
+      src={provider === "google" ? "/auth/google.png" : "/auth/github.svg"}
+      width={18}
+      height={18}
+      alt=""
       aria-hidden="true"
-    >
-      {provider === "google" ? (
-        <path d="M20 7a9 9 0 1 0 1 5h-9m9 0v5" />
-      ) : (
-        <>
-          <path d="M8 20c-5 1-5-3-7-3m15 5v-4c0-1-.3-2-1-2.5 4-.5 7-2 7-6a5 5 0 0 0-1.5-3.5c.2-1 .1-2-.5-3-2 0-3 1-4 1.5a12 12 0 0 0-6 0C9 4 8 3 6 3c-.6 1-.7 2-.5 3A5 5 0 0 0 4 9.5c0 4 3 5.5 7 6-.7.5-1 1.5-1 2.5v4" />
-        </>
-      )}
-    </svg>
+      unoptimized
+    />
   );
 }

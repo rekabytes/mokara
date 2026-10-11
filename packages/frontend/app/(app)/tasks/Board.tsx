@@ -31,7 +31,7 @@ import { IconButton } from "./chrome";
 import { FilterIcon, LayoutIcon, PlusSmallIcon, SettingsIcon } from "./icons";
 import { TaskRow } from "./TaskRow";
 import type { Project, Task } from "@/lib/api";
-import type { GroupId, TaskFilter, TaskSort } from "@/lib/tasksView";
+import type { GroupId, TaskFilter, TaskSort } from "./task-view";
 import { DUR, snap, collapseVariants, reducedCollapseVariants } from "@/lib/motion";
 import { cn } from "@/lib/cn";
 

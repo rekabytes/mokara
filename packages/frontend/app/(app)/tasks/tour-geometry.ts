@@ -17,7 +17,7 @@ export const CARD_GAP = 14;
 /** Never let the card or the hole sit flush against the viewport edge. */
 export const EDGE = 16;
 
-export type CardSide = "right" | "left" | "bottom";
+type CardSide = import("@/lib/onboarding").CardSide;
 
 export function frameOf(el: Element): Rect {
   const r = el.getBoundingClientRect();

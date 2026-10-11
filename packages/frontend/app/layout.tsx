@@ -8,7 +8,7 @@ import "@fontsource-variable/instrument-sans";
 import "@fontsource/ibm-plex-mono/500.css";
 import type { Metadata, Viewport } from "next";
 import { MotionProvider } from "@/components/MotionProvider";
-import { siteOrigin } from "@/lib/legal";
+import { siteOrigin } from "@/lib/legal.server";
 
 const origin = siteOrigin();
 

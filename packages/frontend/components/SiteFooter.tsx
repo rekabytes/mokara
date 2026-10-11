@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { BrandMark } from "@/components/BrandMark";
-import { CONTACT, LEGAL_DOCS, LEGAL_LINKS, OPERATOR, siteHost } from "@/lib/legal";
+import { LEGAL_DOCS, LEGAL_LINKS } from "@/lib/legal-links";
+import { CONTACT, OPERATOR, siteHost } from "@/lib/legal.server";
 import { AUTH_COOKIE } from "@/lib/cookies";
 
 const PRODUCT_LINKS = [

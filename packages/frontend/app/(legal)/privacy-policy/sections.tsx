@@ -13,7 +13,8 @@ import {
   field,
   type LegalSection,
 } from "@/components/LegalDoc";
-import { CONTACT, LEGAL_DOCS, OPERATOR, siteHost } from "@/lib/legal";
+import { LEGAL_DOCS } from "@/lib/legal-links";
+import { CONTACT, OPERATOR, siteHost } from "@/lib/legal.server";
 // Privacy Policy — the document body.
 //
 // Server-rendered prose DATA, not rendering logic: `SECTIONS` is an array of

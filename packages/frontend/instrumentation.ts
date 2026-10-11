@@ -9,13 +9,13 @@
 // After the first ping, subsequent pings only log on state change (up→down or
 // down→up), so a healthy connection stays quiet.
 //
-// The target is BACKEND_URL (see lib/backend-url.ts), so this works unchanged
+// The target is BACKEND_URL (see lib/backend-url.server.ts), so this works unchanged
 // inside a container, where the browser-facing /api proxy would be meaningless.
 
 const PING_INTERVAL_MS = 30_000;
 const PING_TIMEOUT_MS = 5_000;
 
-import { getBackendUrl } from "./lib/backend-url";
+import { getBackendUrl } from "./lib/backend-url.server";
 
 function getHealthUrl(): string {
   // Absolute and server-side on purpose: this runs in the Next process, not the

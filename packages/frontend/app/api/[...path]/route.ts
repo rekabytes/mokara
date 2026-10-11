@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
-import { getBackendUrl } from "@/lib/backend-url";
-import { setAuthProxyHeaders } from "@/lib/auth-proxy";
+import { getBackendUrl } from "@/lib/backend-url.server";
+import { setAuthProxyHeaders } from "./auth-proxy.server";
 
 // Same-origin API proxy: the browser calls /api/… on this Next server and this
 // handler forwards it to the backend. Adapted from jejak-athlete's

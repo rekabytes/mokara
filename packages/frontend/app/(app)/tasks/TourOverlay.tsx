@@ -18,7 +18,7 @@ import {
   tourTargetSelector,
   type TourProgress,
 } from "@/lib/onboarding";
-import { CARD_W, cardPosition, frameOf, scrimPanels, type Rect } from "@/lib/tour-geometry";
+import { CARD_W, cardPosition, frameOf, scrimPanels, type Rect } from "./tour-geometry";
 import { DUR, snap, tourGlide, noMotion } from "@/lib/motion";
 
 // PRD-13: the first-run walkthrough. Dims the app, frames one real control,

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { BrandMark } from "@/components/BrandMark";
-import { OPERATOR } from "@/lib/legal";
+import { OPERATOR } from "@/lib/legal.server";
 
 const LINKS = [
   { href: "/#product", label: "Product" },

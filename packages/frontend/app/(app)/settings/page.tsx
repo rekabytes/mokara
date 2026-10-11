@@ -1,4 +1,4 @@
-import { CONTACT } from "@/lib/legal";
+import { CONTACT } from "@/lib/legal.server";
 import { SettingsView } from "./settings-view";
 
 // Server shell: LEG_CONTACT_EMAIL is server-only (lib/legal reads process.env

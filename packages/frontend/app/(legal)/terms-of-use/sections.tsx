@@ -12,7 +12,8 @@ import {
   field,
   type LegalSection,
 } from "@/components/LegalDoc";
-import { LEGAL_DOCS, OPERATOR, siteHost } from "@/lib/legal";
+import { LEGAL_DOCS } from "@/lib/legal-links";
+import { OPERATOR, siteHost } from "@/lib/legal.server";
 // Terms of Use — the document body.
 //
 // Server-rendered prose DATA, not rendering logic: `SECTIONS` is an array of

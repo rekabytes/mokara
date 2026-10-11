@@ -145,3 +145,29 @@ export function pct(t: Analytics["totals"]): number {
   const total = totalTasks(t);
   return total > 0 ? Math.round((t.completed / total) * 100) : 0;
 }
+
+/** Fill missing window dates with zeroes or the preceding cumulative totals. */
+export function normalizeWindowSeries(
+  data: Analytics | null,
+  windowDates: readonly string[]
+): AnalyticsSeriesItem[] {
+  if (!data) return [];
+  const byDate = new Map(data.series.map((d) => [d.date, d]));
+  const rows: AnalyticsSeriesItem[] = [];
+  for (const date of windowDates) {
+    const got = byDate.get(date);
+    if (got) {
+      rows.push(got);
+      continue;
+    }
+    const prev = rows[rows.length - 1];
+    rows.push({
+      date,
+      created: prev?.created ?? 0,
+      in_progress: prev?.in_progress ?? 0,
+      completed: prev?.completed ?? 0,
+      canceled: prev?.canceled ?? 0,
+    });
+  }
+  return rows;
+}

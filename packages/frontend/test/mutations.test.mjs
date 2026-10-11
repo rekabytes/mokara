@@ -289,7 +289,10 @@ async function settingsHarness() {
 
 test("profile duplicate submissions are blocked before render and a failure releases the guard", async (t) => {
   const { tree, user } = await settingsHarness();
-  const form = findElement(tree, (element) => element.type === "form");
+  const { ProfileTile } = await import("../app/(app)/settings/ProfileTile.tsx");
+  const profile = findElement(tree, (element) => element.type === ProfileTile);
+  const profileTree = capture(() => ProfileTile(profile.props));
+  const form = findElement(profileTree, (element) => element.type === "form");
   let reject;
   const request = t.mock.method(
     api,

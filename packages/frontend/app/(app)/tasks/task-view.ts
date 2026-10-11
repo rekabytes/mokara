@@ -1,7 +1,7 @@
 "use client";
 
 import { atom, useAtom } from "jotai";
-import type { TaskStatus } from "./api";
+import type { TaskStatus } from "@/lib/api";
 
 // Which slice of the task board a user is looking at is a per-user preference,
 // not page state: it currently dies on every navigation, so jumping to

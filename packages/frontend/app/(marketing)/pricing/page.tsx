@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { AUTH_COOKIE } from "@/lib/cookies";
-import { FAQ, IN_EVERY_PLAN, LATER_TIERS, TIERS, type Tier } from "@/lib/pricing";
+import { FAQ, IN_EVERY_PLAN, LATER_TIERS, TIERS, type Tier } from "./pricing-data";
 
 import "./pricing.css";
 

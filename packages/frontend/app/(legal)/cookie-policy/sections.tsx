@@ -11,7 +11,8 @@ import {
   Sub,
   type LegalSection,
 } from "@/components/LegalDoc";
-import { LEGAL_DOCS, OPERATOR } from "@/lib/legal";
+import { LEGAL_DOCS } from "@/lib/legal-links";
+import { OPERATOR } from "@/lib/legal.server";
 // Cookie Policy — the document body.
 //
 // Server-rendered prose DATA, not rendering logic: `SECTIONS` is an array of

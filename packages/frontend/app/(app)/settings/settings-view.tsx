@@ -1,41 +1,24 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type BillingInfo, type SessionInfo } from "@/lib/api";
-import { manualError } from "@/lib/errors";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { PageHeader } from "@/components/PageHeader";
-import { UsernameClaim } from "./UsernameClaim";
-import { BillingTile } from "./BillingTile";
 import { SocialSignIn } from "@/components/SocialSignIn";
-import { GitHubTile } from "./GitHubTile";
-import { setSessionUser, signOutServer, useSession } from "@/lib/session";
+import { useSession } from "@/lib/session";
 import { useContainers } from "@/lib/containers";
 import { tileIn, tileStagger } from "@/lib/motion";
+import { BillingTile } from "./BillingTile";
+import { GitHubTile } from "./GitHubTile";
+import { ProfileTile } from "./ProfileTile";
+import { PasswordTile } from "./PasswordTile";
+import { DevicesTile } from "./DevicesTile";
+import { useSettingsDevices } from "./use-settings-devices";
+import { useSettingsBilling } from "./use-settings-billing";
+import { AlertIcon, TILE } from "./settings-chrome";
 
-import { fmtMemberSince, timeAgo } from "./billing-copy";
-import {
-  AlertIcon,
-  DevicesIcon,
-  LockIcon,
-  Stat,
-  TILE,
-  TileHeader,
-  UserIcon,
-} from "./settings-chrome";
-
-// PRD-08 v3 — the premium pass on the bento: every tile gets a quiet header
-// (hand-drawn icon chip + title + caption) and a one-shot entrance stagger.
-// The grid: identity | password up top, the Plan & billing hero full-width
-// next (the page's one accent moment — current plan + live limits on the
-// left, and when Free on a billing-enabled instance, the upgrade pitch on
-// the right, rendered entirely from the tier ladder GET /me/billing
-// returns), then devices | danger strip. Collapses to one column under
-// 961px. Behavior is identical to PRD-08 v2; only presentation changed.
-
-// --- hand-drawn section icons (local per-file, like everywhere else) ---
+// Settings owns page composition and the shared action-error banner. Forms
+// own their drafts; route-local hooks own the device and billing lifecycles.
 
 export function SettingsView({ contactEmail }: { contactEmail: string | null }) {
   const session = useSession();
@@ -43,224 +26,9 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
   const { error, setError, clearError, run } = useAsyncError();
   const user = session.status === "authed" ? session.user : null;
 
-  // --- account: display name ---
-  const [nameDraft, setNameDraft] = useState<string | null>(null);
-  const profilePending = useRef(false);
-  const [profileBusy, setProfileBusy] = useState(false);
-  const [profileSaved, setProfileSaved] = useState(false);
-  const nameValue = nameDraft ?? user?.display_name ?? "";
-
-  const onProfileSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (profilePending.current) return;
-    profilePending.current = true;
-    setProfileBusy(true);
-    try {
-      clearError();
-      setProfileSaved(false);
-      const trimmed = nameValue.trim();
-      const updated = await run(
-        () => api.updateMe({ display_name: trimmed.length > 0 ? trimmed : null }),
-        {
-          fallback: "Couldn't save your profile. Try again.",
-        }
-      );
-      if (updated === null) return;
-      setSessionUser(updated.user);
-      setNameDraft(null);
-      setProfileSaved(true);
-    } finally {
-      profilePending.current = false;
-      setProfileBusy(false);
-    }
-  };
-
-  // --- security: password ---
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const passwordPending = useRef(false);
-  const [passwordBusy, setPasswordBusy] = useState(false);
-  const [passwordSaved, setPasswordSaved] = useState(false);
-
-  const onPasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (passwordPending.current) return;
-    setPasswordSaved(false);
-    if (newPassword !== confirmPassword) {
-      setError(manualError("The new passwords don't match."));
-      return;
-    }
-    clearError();
-    passwordPending.current = true;
-    setPasswordBusy(true);
-    try {
-      const ok = await run(
-        () => api.changePassword({ current_password: currentPassword, new_password: newPassword }),
-        { fallback: "Couldn't update the password. Try again." }
-      );
-      if (ok === null) return;
-      setPasswordSaved(true);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-    } finally {
-      passwordPending.current = false;
-      setPasswordBusy(false);
-    }
-  };
-
-  // --- devices: live session registry ---
-  const { error: devicesError, clearError: clearDevicesError, run: runDevices } = useAsyncError();
-  const devicesRead = useRef<AbortController | null>(null);
-  const [devices, setDevices] = useState<SessionInfo[] | null>(null);
-
-  const loadDevices = useCallback(async () => {
-    devicesRead.current?.abort();
-    const controller = new AbortController();
-    devicesRead.current = controller;
-    clearDevicesError();
-    const data = await runDevices(() => api.listSessions(controller.signal), {
-      fallback: "Couldn't load your devices.",
-      signal: controller.signal,
-    });
-    if (data === null) return;
-    setDevices(data.sessions);
-  }, [runDevices, clearDevicesError]);
-
-  // Initial device load — the documented allowed effect: a one-time read of
-  // something outside React (the session registry over the API), re-run only
-  // when the stable loadDevices identity changes.
-  useEffect(() => {
-    void loadDevices();
-    return () => devicesRead.current?.abort();
-  }, [loadDevices]);
-
-  const devicesPending = useRef(false);
-  const [devicesBusy, setDevicesBusy] = useState(false);
-
-  const onRevokeDevice = async (id: string) => {
-    if (devicesPending.current) return;
-    devicesPending.current = true;
-    setDevicesBusy(true);
-    devicesRead.current?.abort();
-    clearError();
-    try {
-      const row = devices?.find((d) => d.id === id);
-      const ok = await run(() => api.revokeSession(id), {
-        fallback: "Couldn't sign out that device. Try again.",
-      });
-      if (ok === null) return;
-      if (row?.current) {
-        // Revoking yourself is a sign-out: clear the now-dead cookie and exit
-        // hard to the front door — no client transition to race (2026-09-04).
-        // This session is already revoked; leaving is safe even if the cookie
-        // cleanup request fails. The server will reject the revoked token.
-        await run(signOutServer);
-        window.location.assign("/");
-        return;
-      }
-      await loadDevices();
-    } finally {
-      devicesPending.current = false;
-      setDevicesBusy(false);
-    }
-  };
-
-  const onRevokeAll = async () => {
-    if (devicesPending.current) return;
-    devicesPending.current = true;
-    setDevicesBusy(true);
-    devicesRead.current?.abort();
-    clearError();
-    try {
-      const ok = await run(() => api.revokeAllSessions(), {
-        fallback: "Couldn't sign out your sessions. Try again.",
-      });
-      if (ok === null) return;
-      // The endpoint already cleared the cookie — just leave, hard.
-      window.location.assign("/");
-    } finally {
-      devicesPending.current = false;
-      setDevicesBusy(false);
-    }
-  };
-
-  // --- plan & billing (PRD-11 Phase 2) ---
-  const { error: billingError, clearError: clearBillingError, run: runBilling } = useAsyncError();
-  const billingRead = useRef<AbortController | null>(null);
-  const [billing, setBilling] = useState<BillingInfo | null>(null);
-  const [billingBusy, setBillingBusy] = useState(false);
-  const billingPending = useRef(false);
-
-  const loadBilling = useCallback(async () => {
-    billingRead.current?.abort();
-    const controller = new AbortController();
-    billingRead.current = controller;
-    clearBillingError();
-    // Sync BEFORE reading: the return trip from Stripe-hosted checkout lands
-    // here, and in local dev the webhook cannot reach localhost — the server
-    // applies the same mapping either way. Void endpoint → ignore the value.
-    const synced = await runBilling(() => api.syncBilling(), {
-      fallback: "Couldn't reach billing.",
-      signal: controller.signal,
-    });
-    if (synced === null || controller.signal.aborted) return;
-    const data = await runBilling(() => api.getBilling(controller.signal), {
-      fallback: "Couldn't load your plan.",
-      signal: controller.signal,
-    });
-    if (data) setBilling(data);
-  }, [runBilling, clearBillingError]);
-
-  // Initial billing load — a one-time read of server state outside React
-  // (same documented pattern as the devices list above).
-  useEffect(() => {
-    void loadBilling();
-    return () => billingRead.current?.abort();
-  }, [loadBilling]);
-
-  // Checkout is workspace-scoped (leader-only), but the PLAN is the account's:
-  // any container the caller leads works — the personal workspace always
-  // qualifies. Stripe's page is outside the app, so the redirect is a hard
-  // navigation, not a router push.
-  const onUpgrade = async () => {
-    if (billingPending.current) return;
-    const team = containers.find((c) => c.role === "owner") ?? containers[0];
-    if (!team) return;
-    billingPending.current = true;
-    setBillingBusy(true);
-    clearError();
-    try {
-      const res = await run(() => api.startCheckout(team.id), {
-        fallback: "Couldn't start checkout. Try again.",
-      });
-      if (!res) return;
-      window.location.assign(res.url);
-    } finally {
-      billingPending.current = false;
-      setBillingBusy(false);
-    }
-  };
-
-  const onManage = async () => {
-    if (billingPending.current) return;
-    billingPending.current = true;
-    setBillingBusy(true);
-    clearError();
-    try {
-      const res = await run(() => api.billingPortal(), {
-        fallback: "Couldn't open the billing portal.",
-      });
-      if (!res) return;
-      window.location.assign(res.url);
-    } finally {
-      billingPending.current = false;
-      setBillingBusy(false);
-    }
-  };
-
-  const showPitch = billing !== null && billing.plan === "free" && billing.checkout_configured;
+  const deviceState = useSettingsDevices({ run, clearError });
+  const { billing, billingError, billingBusy, loadBilling, onUpgrade, onManage, showPitch } =
+    useSettingsBilling({ run, clearError, containers });
 
   return (
     <div>
@@ -278,138 +46,20 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
         className="mx-auto mt-6 grid w-full max-w-[980px] grid-cols-12 gap-3.5"
       >
         {/* ======== Identity ======== */}
-        <motion.section variants={tileIn} className={`${TILE} col-span-12 min-[961px]:col-span-7`}>
-          <TileHeader
-            icon={<UserIcon />}
-            title="Profile"
-            caption="How teammates see you across the workspace"
-          />
-          <div className="mt-4 flex items-center gap-4">
-            <div className="grid size-14 flex-none place-items-center rounded-full bg-[linear-gradient(135deg,var(--color-progress),var(--color-accent))] text-[1.4rem] font-extrabold text-white shadow-[0_0_0_5px_var(--color-accent-soft)]">
-              {(user?.display_name || user?.username || "?").slice(0, 1).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <b className="truncate text-[1.2rem] font-extrabold tracking-[-0.01em]">
-                  {user?.display_name || user?.username || ""}
-                </b>
-                <span className="flex-none rounded-[var(--radius-pill)] border border-[var(--color-border-soft)] bg-[rgba(148,163,184,0.1)] px-2 py-0.5 font-mono text-[0.76rem] text-[var(--color-ink-muted)]">
-                  @{user?.username ?? ""}
-                </span>
-              </div>
-              <div className="mt-1 text-[0.8rem] text-[var(--color-ink-faint)]">
-                {user ? `Member since ${fmtMemberSince(user.created_at)}` : ""}
-              </div>
-            </div>
-          </div>
-          <form onSubmit={onProfileSubmit} className="mt-4 flex flex-wrap items-end gap-2.5">
-            <label className="flex min-w-0 flex-1 flex-col gap-1">
-              <span className="text-[0.84rem] font-semibold text-[var(--color-ink-muted)]">
-                Display name
-              </span>
-              <input
-                type="text"
-                maxLength={50}
-                placeholder="Shown next to your comments and activity"
-                disabled={profileBusy}
-                value={nameValue}
-                onChange={(e) => setNameDraft(e.target.value)}
-                className="field"
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={profileBusy || nameDraft === null}
-              className="btn-base btn-ghost px-3.5 py-2 text-[0.85rem] disabled:cursor-default disabled:opacity-50"
-            >
-              {profileBusy ? "Saving…" : "Save"}
-            </button>
-          </form>
-          {user && !user.username_claimed && <UsernameClaim temporaryUsername={user.username} />}
-          {profileSaved && (
-            <p role="status" className="mb-0 mt-2 text-[0.84rem] text-[var(--color-ink-muted)]">
-              Profile saved.
-            </p>
-          )}
-          <div className="mt-4 grid grid-cols-3 gap-2.5 border-t border-[var(--color-border-soft)] pt-3.5">
-            <Stat value={devices?.length ?? "—"} label="signed-in devices" />
-            <Stat value="7d" label="session length" />
-            <Stat value={containers.length || "—"} label="containers" />
-          </div>
-        </motion.section>
+        <ProfileTile
+          run={run}
+          clearError={clearError}
+          deviceCount={deviceState.devices?.length ?? null}
+          containerCount={containers.length}
+        />
 
         {/* ======== Password ======== */}
-        <motion.section variants={tileIn} className={`${TILE} col-span-12 min-[961px]:col-span-5`}>
-          <TileHeader
-            icon={<LockIcon />}
-            title="Password"
-            caption="Changing it signs out every other device"
-          />
-          {user?.password_login_enabled ? (
-            <form onSubmit={onPasswordSubmit} className="mt-4 flex flex-col gap-3 text-left">
-              <label className="flex flex-col gap-1">
-                <span className="text-[0.84rem] font-semibold text-[var(--color-ink-muted)]">
-                  Current password
-                </span>
-                <input
-                  disabled={passwordBusy}
-                  type="password"
-                  required
-                  autoComplete="current-password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="field"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-[0.84rem] font-semibold text-[var(--color-ink-muted)]">
-                  New password
-                </span>
-                <input
-                  disabled={passwordBusy}
-                  type="password"
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="field"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-[0.84rem] font-semibold text-[var(--color-ink-muted)]">
-                  Confirm new password
-                </span>
-                <input
-                  disabled={passwordBusy}
-                  type="password"
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="field"
-                />
-              </label>
-              {passwordSaved && (
-                <p role="status" className="m-0 text-[0.84rem] text-[var(--color-ink-muted)]">
-                  Password updated — other devices were signed out.
-                </p>
-              )}
-              <button
-                disabled={passwordBusy}
-                type="submit"
-                className="btn-base btn-primary mt-1 w-full"
-              >
-                {passwordBusy ? "Updating…" : "Update password"}
-              </button>
-            </form>
-          ) : (
-            <p className="mt-4 text-sm text-[var(--color-ink-muted)]">
-              Your account uses Google or GitHub to sign in. There is no Mokara password to change.
-            </p>
-          )}
-        </motion.section>
+        <PasswordTile
+          run={run}
+          clearError={clearError}
+          setError={setError}
+          passwordLoginEnabled={user?.password_login_enabled ?? false}
+        />
 
         <section className={`${TILE} col-span-12`}>
           <h2 className="text-base font-semibold">Sign-in methods</h2>
@@ -445,79 +95,7 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
         <GitHubTile run={run} />
 
         {/* ======== Devices ======== */}
-        <motion.section variants={tileIn} className={`${TILE} col-span-12`}>
-          <TileHeader
-            icon={<DevicesIcon />}
-            title="Devices"
-            caption="Sessions expire after 7 days"
-            right={
-              <span className="flex-none rounded-[var(--radius-pill)] bg-[var(--color-pill-bg)] px-2.5 py-1 text-[0.76rem] font-semibold text-[var(--color-ink-muted)]">
-                {devices?.length ?? "—"} active
-              </span>
-            }
-          />
-          <ErrorBanner className="mt-2" message={devicesError?.message} />
-          {devicesError && (
-            <button
-              type="button"
-              className="btn-base btn-ghost mt-2"
-              onClick={() => void loadDevices()}
-            >
-              Retry devices
-            </button>
-          )}
-          {/* Capped scroller — the same 252px convention as the analytics KPI
-              list, so one app pattern governs both long lists. */}
-          <ul className="m-0 mt-2 flex max-h-[252px] list-none flex-col overflow-y-auto p-0">
-            {devices === null && !devicesError && (
-              <li className="py-2 text-[0.85rem] text-[var(--color-ink-faint)]">
-                Loading devices…
-              </li>
-            )}
-            {devices !== null && devices.length === 0 && (
-              <li className="py-2 text-[0.85rem] text-[var(--color-ink-faint)]">
-                No signed-in devices yet — this page’s own request registers one in a moment.
-              </li>
-            )}
-            {devices !== null &&
-              devices.map((d) => (
-                <li
-                  key={d.id}
-                  className="flex items-center justify-between gap-3 border-t border-[var(--color-border-soft)] py-2 first:border-t-0"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-[0.9rem] font-semibold">{d.device}</span>
-                      {d.current && (
-                        <span className="flex-none rounded-[var(--radius-pill)] border border-[var(--color-accent)] px-2 py-0.5 text-[0.7rem] font-semibold text-[var(--color-accent)]">
-                          This device
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[0.76rem] text-[var(--color-ink-faint)]">
-                      Added {timeAgo(d.created_at)} · Active {timeAgo(d.last_seen_at)}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={devicesBusy}
-                    onClick={() => onRevokeDevice(d.id)}
-                    className="btn-base btn-ghost shrink-0 border border-[var(--color-border-soft)] px-3 py-1.5 text-[0.84rem]"
-                  >
-                    Log out
-                  </button>
-                </li>
-              ))}
-          </ul>
-          <button
-            type="button"
-            disabled={devicesBusy}
-            onClick={onRevokeAll}
-            className="btn-base btn-ghost mt-3 w-full border border-[var(--color-danger-border)] text-[var(--color-danger-ink)]"
-          >
-            Sign out everywhere
-          </button>
-        </motion.section>
+        <DevicesTile {...deviceState} />
 
         {/* ======== Danger strip ======== */}
         <motion.section

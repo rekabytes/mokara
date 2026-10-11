@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Fragment } from "react";
-import { LEGAL_LINKS } from "@/lib/legal";
+import { LEGAL_LINKS } from "@/lib/legal-links";
 
 /**
  * The one-line legal link strip used under the auth forms. Kept in one place so

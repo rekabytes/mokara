@@ -1,5 +1,5 @@
 import type { TourState } from "./api";
-import type { CardSide } from "./tour-geometry";
+export type CardSide = "right" | "left" | "bottom";
 
 // PRD-13: the guided walkthrough — its content, its one visibility rule, and the
 // little engine that walks it. Pure data and pure functions (no React, no DOM)

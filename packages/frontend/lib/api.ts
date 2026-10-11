@@ -228,7 +228,46 @@ function uploadViaXhr(
 
 export const api = {
   // ---- Auth ----
-  signUp: (data: { username: string; password: string; display_name?: string }) =>
+  socialProviders: () =>
+    req<{ providers: { provider: "google" | "github"; enabled: boolean }[] }>(
+      "/auth/social/providers",
+      { cache: "no-store" }
+    ),
+  socialConnections: () =>
+    req<{ connections: { provider: string; email: string | null }[] }>("/auth/social/connections", {
+      cache: "no-store",
+    }),
+  startSocial: (provider: "google" | "github", data: { intent: "login" | "link"; from?: string }) =>
+    req<{ url: string }>(`/auth/social/${provider}/start`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  claimUsername: (username: string) =>
+    req<{ user: SessionUser }>("/auth/social/username/claim", {
+      method: "POST",
+      body: JSON.stringify({ username }),
+    }),
+  pendingSocial: () =>
+    req<{ provider: "google" | "github"; email: string; display_name: string }>(
+      "/auth/social/pending",
+      { cache: "no-store" }
+    ),
+  completeSocial: (data: { turnstile_token?: string }) =>
+    req<{ user: SessionUser; redirect: string }>("/auth/social/complete", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  signupProtection: () =>
+    req<{ required: boolean; site_key: string | null }>("/auth/signup-protection", {
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    }),
+  signUp: (data: {
+    username: string;
+    password: string;
+    display_name?: string;
+    turnstile_token?: string;
+  }) =>
     req<{ user: SessionUser }>("/auth/signup", {
       method: "POST",
       body: JSON.stringify(data),

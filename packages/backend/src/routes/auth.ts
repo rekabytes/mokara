@@ -25,11 +25,54 @@ import { log } from "../lib/logger.ts";
 import { toMe, type TourState } from "../lib/types.ts";
 import { ensureUniqueSlug, slugify } from "../lib/slug.ts";
 import type { Vars } from "../middleware/auth.ts";
+import { env } from "../env.ts";
+import { authRateLimit } from "../middleware/auth-rate-limit.ts";
+import {
+  consumeAuthLimit,
+  signupProtection,
+  verifySignupChallenge,
+} from "../lib/auth-protection.ts";
+import { socialAuthRoutes } from "./social-auth.ts";
 
 export const authRoutes = new Hono<{ Variables: Vars }>();
+authRoutes.route("/", socialAuthRoutes);
 
-authRoutes.post("/signup", validate("json", signUpSchema), async (c) => {
-  const { username, password, display_name } = c.req.valid("json");
+authRoutes.get("/signup-protection", (c) => {
+  c.header("Cache-Control", "no-store");
+  const protection = signupProtection(env);
+  if (protection.required && !protection.configured) {
+    return c.json(
+      {
+        error: "auth_protection_unavailable",
+        message: "Registration verification is not configured.",
+      },
+      503
+    );
+  }
+  return c.json({
+    required: protection.required,
+    site_key: protection.required ? protection.siteKey : null,
+  });
+});
+
+authRoutes.post("/signup", authRateLimit("signup"), validate("json", signUpSchema), async (c) => {
+  const { username, password, display_name, turnstile_token } = c.req.valid("json");
+  const verification = await verifySignupChallenge(turnstile_token, env);
+  if (verification === "unavailable") {
+    return c.json(
+      {
+        error: "auth_protection_unavailable",
+        message: "Registration verification is temporarily unavailable. Please try again.",
+      },
+      503
+    );
+  }
+  if (verification === "invalid") {
+    return c.json(
+      { error: "verification_failed", message: "Please complete the verification again." },
+      400
+    );
+  }
 
   const hash = await hashPassword(password);
   try {
@@ -66,8 +109,34 @@ authRoutes.post("/signup", validate("json", signUpSchema), async (c) => {
   }
 });
 
-authRoutes.post("/login", validate("json", loginSchema), async (c) => {
+authRoutes.post("/login", authRateLimit("login"), validate("json", loginSchema), async (c) => {
   const { username, password } = c.req.valid("json");
+
+  // Account-wide as well as per-IP: rotating addresses must not grant an
+  // unlimited password-guessing budget. Successes count too; no permanent lock.
+  try {
+    const retry = await consumeAuthLimit(
+      getRedis(),
+      "account",
+      username,
+      env.AUTH_SECRET || "mokara-local-auth-limits"
+    );
+    if (retry) {
+      c.header("Retry-After", String(retry));
+      return c.json(
+        { error: "auth_rate_limited", message: "Too many attempts. Please try again later." },
+        429
+      );
+    }
+  } catch {
+    return c.json(
+      {
+        error: "auth_protection_unavailable",
+        message: "Sign-in protection is temporarily unavailable. Please try again.",
+      },
+      503
+    );
+  }
 
   const u = await prisma.user.findUnique({
     where: { username },
@@ -77,6 +146,7 @@ authRoutes.post("/login", validate("json", loginSchema), async (c) => {
       displayName: true,
       createdAt: true,
       passwordHash: true,
+      usernameClaimed: true,
       tourState: true,
       tourResolvedAt: true,
     },
@@ -86,7 +156,7 @@ authRoutes.post("/login", validate("json", loginSchema), async (c) => {
   const fail = () =>
     c.json({ error: "invalid_credentials", message: "invalid username or password" }, 401);
 
-  if (!u) return fail();
+  if (!u?.passwordHash) return fail();
   const ok = await verifyPassword(password, u.passwordHash);
   if (!ok) return fail();
 
@@ -128,6 +198,15 @@ authRoutes.post("/password", authRequired, validate("json", changePasswordSchema
   });
   if (!u) {
     return c.json({ error: "lookup_failed", message: "user not found" }, 500);
+  }
+  if (!u.passwordHash) {
+    return c.json(
+      {
+        error: "password_login_disabled",
+        message: "This account uses social sign-in and has no password.",
+      },
+      400
+    );
   }
   const ok = await verifyPassword(current_password, u.passwordHash);
   if (!ok) {
@@ -192,6 +271,8 @@ export async function updateMe(userId: string, displayName: string | null) {
       createdAt: true,
       tourState: true,
       tourResolvedAt: true,
+      passwordHash: true,
+      usernameClaimed: true,
     },
   });
   return toMe(u);
@@ -235,6 +316,8 @@ export async function meHandler(c: Context<{ Variables: Vars }>) {
       createdAt: true,
       tourState: true,
       tourResolvedAt: true,
+      passwordHash: true,
+      usernameClaimed: true,
     },
   });
   if (!u) {

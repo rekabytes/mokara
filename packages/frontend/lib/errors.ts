@@ -36,12 +36,73 @@ export type ErrorRule = {
 /** Every code the backend can emit, plus the client-only ones. */
 export const ERROR_RULES: Record<string, ErrorRule> = {
   // --- session / credentials ---
+  username_already_claimed: {
+    kind: "conflict",
+    action: "inline",
+    message: "Your account already has a claimed username. Refresh Settings to see it.",
+  },
+  social_expired: {
+    kind: "auth",
+    action: "inline",
+    message: "Sign-in expired. Please start again.",
+  },
+  social_cancelled: {
+    kind: "auth",
+    action: "inline",
+    message: "Sign-in was cancelled. You can try again.",
+  },
+  social_failed: {
+    kind: "auth",
+    action: "inline",
+    message: "We couldn't verify your account. Please try again with a verified email.",
+  },
+  social_unavailable: {
+    kind: "server",
+    action: "retry",
+    message: "This sign-in method is temporarily unavailable. Please try again later.",
+  },
+  social_identity_in_use: {
+    kind: "conflict",
+    action: "inline",
+    message: "This provider account is already connected. Sign in to its Mokara account instead.",
+  },
+  social_session_changed: {
+    kind: "auth",
+    action: "inline",
+    message: "Your session changed. Sign in again, then connect accounts in Settings.",
+  },
+  social_busy: {
+    kind: "conflict",
+    action: "inline",
+    message: "Registration is being processed. Please wait before trying again.",
+  },
+  password_login_disabled: {
+    kind: "auth",
+    action: "inline",
+    message: "Use your connected Google or GitHub account to sign in.",
+  },
   not_authenticated: {
     kind: "auth",
     action: "redirect",
     message: "Your session has expired — sign in again.",
   },
   invalid_credentials: { kind: "auth", action: "inline", message: "Wrong username or password." },
+  auth_rate_limited: {
+    kind: "auth",
+    action: "inline",
+    message: "Too many attempts. Please wait before trying again.",
+    serverSays: true,
+  },
+  auth_protection_unavailable: {
+    kind: "server",
+    action: "retry",
+    message: "Verification is temporarily unavailable. Please try again shortly.",
+  },
+  verification_failed: {
+    kind: "input",
+    action: "inline",
+    message: "Verification expired or failed. Please complete it again.",
+  },
   incorrect_password: {
     kind: "auth",
     action: "inline",

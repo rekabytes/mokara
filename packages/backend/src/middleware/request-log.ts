@@ -1,5 +1,6 @@
 import type { Context, Next } from "hono";
 import { log } from "../lib/logger.ts";
+import { recordOperationalRequest } from "../lib/operational-metrics.ts";
 import type { Vars } from "./auth.ts";
 
 // Per-request logger. Skips /health so the probe doesn't flood the terminal.
@@ -30,19 +31,19 @@ function statusColor(status: number): string {
 }
 
 /** Pull `{ error, message }` out of a failed response without consuming it. */
-async function errorDetail(res: Response): Promise<string> {
+async function errorDetail(res: Response): Promise<{ code: string; detail: string }> {
   try {
     const body = await res.clone().text();
-    if (!body) return "";
+    if (!body) return { code: "unknown_error", detail: "" };
     const parsed: unknown = JSON.parse(body);
-    if (typeof parsed !== "object" || parsed === null) return "";
-    const { error, message } = parsed as { error?: unknown; message?: unknown };
+    if (typeof parsed !== "object" || parsed === null) return { code: "unknown_error", detail: "" };
+    const error = "error" in parsed ? parsed.error : undefined;
+    const message = "message" in parsed ? parsed.message : undefined;
     const code = typeof error === "string" ? error : "";
     const msg = typeof message === "string" ? message : "";
-    if (!code && !msg) return "";
-    return `${code}${msg ? ` "${msg}"` : ""}`.slice(0, 160);
+    return { code, detail: `${code}${msg ? ` "${msg}"` : ""}`.slice(0, 160) };
   } catch {
-    return ""; // non-JSON error body — the status line is still useful
+    return { code: "unknown_error", detail: "" }; // non-JSON failure
   }
 }
 
@@ -58,8 +59,13 @@ export async function requestLogger(c: Ctx, next: Next) {
   const mc = METHOD_COLOR[c.req.method] ?? "";
   const who = c.get("username");
   const user = who ? ` ${DIM}· ${who}${RESET}` : "";
-  const detail = status >= 400 ? await errorDetail(c.res) : "";
-  const why = detail ? ` ${DIM}· ${detail}${RESET}` : "";
+  const failure = status >= 400 ? await errorDetail(c.res) : null;
+  const why = failure?.detail ? ` ${DIM}· ${failure.detail}${RESET}` : "";
+  // Exclude the operator's own reads and unknown/non-API traffic. Redis keeps
+  // shared minute counters, so replicas aggregate without collecting content.
+  if (path.startsWith("/api/") && path !== "/api/admin" && !path.startsWith("/api/admin/")) {
+    void recordOperationalRequest(status, failure?.code, path === "/api/billing/webhook");
+  }
 
   console.log(
     `${mc}[${c.req.method}]${RESET} ${path} → ${statusColor(status)}${status}${RESET} ` +

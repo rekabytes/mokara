@@ -6,9 +6,8 @@ const projectRoot = path.resolve(__dirname, "..", "..");
 
 // --- Security response headers ---------------------------------------------
 // Applied to every route below. The CSP is deliberately conservative and
-// enforced (not report-only): the codebase contains no third-party script,
-// font, frame or analytics source — fonts are self-hosted and images are
-// local files — so same-origin subresources are all it needs to admit.
+// enforced (not report-only). Turnstile is the only allowed third-party
+// script/frame origin; fonts and app assets remain same-origin.
 const isProdBuild = process.env.NODE_ENV === "production";
 
 // Next's inline hydration/bootstrap scripts require 'unsafe-inline'; dev's
@@ -19,8 +18,9 @@ const isProdBuild = process.env.NODE_ENV === "production";
 const csp = [
   "default-src 'self'",
   isProdBuild
-    ? "script-src 'self' 'unsafe-inline'"
-    : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    ? "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com"
+    : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com",
+  "frame-src https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self'",
   "font-src 'self'",

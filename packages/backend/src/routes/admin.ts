@@ -5,7 +5,16 @@ import { issueAdminToken, safeEqual } from "../lib/admin-token.ts";
 import { log } from "../lib/logger.ts";
 import { effectivePlan } from "../lib/plans.ts";
 import { validate } from "../lib/validate.ts";
-import { adminLoginSchema, adminPlanSchema } from "../lib/validation.ts";
+import {
+  adminLoginSchema,
+  adminPlanSchema,
+  adminPageSchema,
+  adminUserParamSchema,
+  adminAuditQuerySchema,
+} from "../lib/validation.ts";
+import { GITHUB_USER_VERIFICATION_TTL_MS } from "../lib/github-repositories.ts";
+import { monitoringOverview, attentionJobs, ADMIN_PAGE_SIZE } from "./admin-monitoring.ts";
+import { adminSupportRoutes, auditFilter } from "./admin-support.ts";
 import { adminRequired } from "../middleware/admin.ts";
 
 // The operator console's API. Mounted on the public `api` app (index.ts) before
@@ -18,7 +27,43 @@ import { adminRequired } from "../middleware/admin.ts";
 // billing's honest `billing_not_configured`, an admin surface should not
 // announce that it could exist.
 
-export const adminRoutes = new Hono();
+export const adminRoutes = new Hono<{ Variables: { adminActor: string } }>();
+
+adminRoutes.route("/", adminSupportRoutes);
+
+adminRoutes.get("/overview", adminRequired, async (c) => c.json(await monitoringOverview()));
+adminRoutes.get("/attention", adminRequired, validate("query", adminPageSchema), async (c) =>
+  c.json(await attentionJobs(c.req.valid("query").page))
+);
+adminRoutes.get("/audit", adminRequired, validate("query", adminAuditQuerySchema), async (c) => {
+  const query = c.req.valid("query");
+  const { page } = query;
+  const where = auditFilter(query);
+  const [total, events] = await prisma.$transaction([
+    prisma.adminAuditEvent.count({ where }),
+    prisma.adminAuditEvent.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip: (page - 1) * ADMIN_PAGE_SIZE,
+      take: ADMIN_PAGE_SIZE,
+    }),
+  ]);
+  return c.json({
+    page,
+    page_size: ADMIN_PAGE_SIZE,
+    total,
+    events: events.map((event) => ({
+      id: event.id,
+      actor: event.actor,
+      action: event.action,
+      target_user_id: event.targetUserId,
+      target_username: event.targetUsername,
+      from_plan: event.fromPlan,
+      to_plan: event.toPlan,
+      created_at: event.createdAt.toISOString(),
+    })),
+  });
+});
 
 // POST /login — credentials + the login-URL key, all three compared before any
 // answer so a failure costs the same time whichever one was wrong (the user
@@ -50,6 +95,15 @@ adminRoutes.get("/users", adminRequired, async (c) => {
       plan: true,
       planOverride: true,
       createdAt: true,
+      graceUntil: true,
+      githubConnection: { select: { status: true, verifiedAt: true } },
+      _count: {
+        select: {
+          githubIssueLinks: {
+            where: { OR: [{ status: "failed" }, { syncStatus: { in: ["failed", "paused"] } }] },
+          },
+        },
+      },
     },
   });
   const owned = await prisma.team.groupBy({ by: ["ownerId"], _count: { _all: true } });
@@ -67,6 +121,15 @@ adminRoutes.get("/users", adminRequired, async (c) => {
       plan_override: u.planOverride,
       created_at: u.createdAt.toISOString(),
       workspaces: ownedBy.get(u.id) ?? 0,
+      attention_flags: [
+        ...(u.graceUntil ? ["billing_grace_flag"] : []),
+        ...(u.githubConnection?.status === "revoked" ? ["github_connection_revoked"] : []),
+        ...(u.githubConnection?.status === "active" &&
+        Date.now() - u.githubConnection.verifiedAt.getTime() > GITHUB_USER_VERIFICATION_TTL_MS
+          ? ["github_reauthorization_required"]
+          : []),
+        ...(u._count.githubIssueLinks > 0 ? ["github_links_need_attention"] : []),
+      ],
     })),
   });
 });
@@ -74,11 +137,8 @@ adminRoutes.get("/users", adminRequired, async (c) => {
 // GET /users/:id — profile detail: the effective plan with BOTH of its inputs
 // (what Stripe says, any operator grant), the billing context that explains
 // them, and every workspace this user created with member counts.
-adminRoutes.get("/users/:id", adminRequired, async (c) => {
-  const id = c.req.param("id");
-  if (id === undefined) {
-    return c.json({ error: "not_found", message: "user not found" }, 404);
-  }
+adminRoutes.get("/users/:id", adminRequired, validate("param", adminUserParamSchema), async (c) => {
+  const { id } = c.req.valid("param");
   const user = await prisma.user.findUnique({
     where: { id },
     select: {
@@ -91,6 +151,29 @@ adminRoutes.get("/users/:id", adminRequired, async (c) => {
       stripeCustomerId: true,
       periodEnd: true,
       graceUntil: true,
+      githubConnection: {
+        select: {
+          status: true,
+          verifiedAt: true,
+          _count: {
+            select: {
+              repositories: {
+                where: {
+                  enabled: true,
+                  repository: { active: true, installation: { status: "active" } },
+                },
+              },
+            },
+          },
+        },
+      },
+      _count: {
+        select: {
+          githubIssueLinks: {
+            where: { OR: [{ status: "failed" }, { syncStatus: { in: ["failed", "paused"] } }] },
+          },
+        },
+      },
     },
   });
   if (!user) {
@@ -122,6 +205,17 @@ adminRoutes.get("/users/:id", adminRequired, async (c) => {
       has_stripe_customer: user.stripeCustomerId !== null,
       period_end: user.periodEnd ? user.periodEnd.toISOString() : null,
       grace_until: user.graceUntil ? user.graceUntil.toISOString() : null,
+      github: user.githubConnection
+        ? {
+            status: user.githubConnection.status,
+            verified_at: user.githubConnection.verifiedAt.toISOString(),
+            active_repositories: user.githubConnection._count.repositories,
+            reauthorization_required:
+              Date.now() - user.githubConnection.verifiedAt.getTime() >
+              GITHUB_USER_VERIFICATION_TTL_MS,
+          }
+        : null,
+      github_issue_links_needing_attention: user._count.githubIssueLinks,
     },
     total_workspaces: workspaces.length,
     workspaces: workspaces.map((t) => ({
@@ -156,30 +250,41 @@ adminRoutes.get("/users/:id", adminRequired, async (c) => {
 adminRoutes.patch(
   "/users/:id/plan",
   adminRequired,
+  validate("param", adminUserParamSchema),
   validate("json", adminPlanSchema),
   async (c) => {
-    const id = c.req.param("id");
-    if (id === undefined) {
-      return c.json({ error: "not_found", message: "user not found" }, 404);
-    }
+    const { id } = c.req.valid("param");
     const { plan } = c.req.valid("json");
-    const existing = await prisma.user.findUnique({
-      where: { id },
-      select: { username: true, plan: true, planOverride: true },
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${id}::uuid FOR UPDATE`;
+      const existing = await tx.user.findUnique({
+        where: { id },
+        select: { id: true, username: true, plan: true, planOverride: true },
+      });
+      if (!existing) return null;
+      const override = plan === "free" ? null : plan;
+      if (existing.planOverride === override) return { user: existing, changed: false };
+      const user = await tx.user.update({
+        where: { id },
+        data: { planOverride: override },
+        select: { id: true, username: true, plan: true, planOverride: true },
+      });
+      await tx.adminAuditEvent.create({
+        data: {
+          actor: c.get("adminActor"),
+          action: "plan_override_changed",
+          targetUserId: user.id,
+          targetUsername: user.username,
+          fromPlan: existing.planOverride,
+          toPlan: override,
+        },
+      });
+      return { user, changed: true };
     });
-    if (!existing) {
-      return c.json({ error: "not_found", message: "user not found" }, 404);
-    }
-    const user = await prisma.user.update({
-      where: { id },
-      data: { planOverride: plan === "free" ? null : plan },
-      select: { id: true, username: true, plan: true, planOverride: true },
-    });
-    log.ok(
-      `admin: ${user.username} grant ${existing.planOverride ?? "none"} → ${
-        user.planOverride ?? "none"
-      } (stripe ${user.plan}, effective ${effectivePlan(user)})`
-    );
+    if (!result) return c.json({ error: "not_found", message: "user not found" }, 404);
+    const { user } = result;
+    if (result.changed)
+      log.ok(`admin: ${user.username} operator grant changed (effective ${effectivePlan(user)})`);
     return c.json({
       user: {
         id: user.id,

@@ -34,24 +34,25 @@ export const SECTIONS: LegalSection[] = [
         <L
           items={[
             <>
-              <Strong>We set one cookie.</Strong> It is called{" "}
+              <Strong>We use necessary sign-in cookies.</Strong> It is called{" "}
               <Code key="mokara_token">mokara_token</Code> — prefixed{" "}
               <Code key="host">__Host-</Code> in production — it keeps you signed in, and it lasts
-              seven days.
+              seven days. Social sign-in adds temporary security cookies lasting ten minutes.
             </>,
             <>
-              <Strong>No analytics, advertising, social or performance cookies.</Strong> No third
-              party sets a cookie through our pages, because no third party appears on them.
+              <Strong>No analytics, advertising or performance cookies.</Strong>
+              Registration may load Cloudflare Turnstile for security verification, as described
+              under third-party scripts below. This integration does not enable pre-clearance.
             </>,
             <>
-              <Strong>No cookie consent banner — deliberately.</Strong> The single cookie is
+              <Strong>No cookie consent banner — deliberately.</Strong> These sign-in cookies are
               strictly necessary to provide the feature you asked for, which is the exemption every
               sensible e-privacy regime recognises. Section 4 explains it.
             </>,
             <>
-              <Strong>No other storage on your device.</Strong> No <Code>localStorage</Code>, no{" "}
-              <Code>sessionStorage</Code>, no IndexedDB, no service worker. Nothing is written to
-              your browser except that one cookie.
+              <Strong>No other application storage on your device.</Strong> No{" "}
+              <Code>localStorage</Code>, no <Code>sessionStorage</Code>, no IndexedDB, no service
+              worker. Third-party security verification is described below.
             </>,
             <>
               If this ever changes — an analytics tool, a preference stored between visits, a
@@ -79,7 +80,7 @@ export const SECTIONS: LegalSection[] = [
   },
   {
     id: "the-cookie-we-set",
-    title: "The cookie we set",
+    title: "The cookies we set",
     body: (
       <>
         <LegalTable
@@ -172,9 +173,8 @@ export const SECTIONS: LegalSection[] = [
           ]}
         />
         <P>
-          We are not relying on a generous reading of “strictly necessary” either: the cookie
-          authenticates API requests for a service you asked for by logging in. Remove it and the
-          product stops working, which is the test the exemption was written for.
+          The session cookie authenticates API requests. Temporary social sign-in cookies bind
+          provider callbacks to the browser that requested them and retain an unfinished signup.
         </P>
       </>
     ),
@@ -220,23 +220,34 @@ export const SECTIONS: LegalSection[] = [
     body: (
       <>
         <P>
-          No third party sets a cookie through our pages, and loading our pages does not make your
-          browser ask anyone else for anything. There is no analytics script, no advertising pixel,
-          no social embed, no video embed, no map, no chat widget, no A/B-testing tool and no error
-          reporting service. Even the webfonts are served from our own origin rather than a font
-          CDN, so a page view does not leak your visit to Google.
+          When registration verification is enabled, the signup page loads a script and verification
+          frame from Cloudflare Turnstile. This sends technical browser and network information to
+          Cloudflare for abuse prevention. See the{" "}
+          <a href="https://www.cloudflare.com/turnstile-privacy-policy/">
+            Turnstile Privacy Addendum
+          </a>
+          . This integration does not enable Cloudflare pre-clearance or its clearance cookie. There
+          are no advertising or analytics scripts, and webfonts remain self-hosted.
         </P>
         <P>
-          Requests the browser does make go to our own API under the same origin, and the response
-          headers allow-credentials only for origins the operator has configured. The images of the
-          product on our landing page are screenshots stored as files on our server, not embedded
-          previews of your own data.
+          Choosing Google or GitHub sign-in takes you to that provider, which applies its own cookie
+          and privacy policies. Mokara sets HttpOnly, SameSite=Lax security cookies named
+          mokara_social_google, mokara_social_github and mokara_social_pending (prefixed __Host- and
+          marked Secure in production), scoped to Path=/ without a Domain. Each lasts at most ten
+          minutes. Callback cookies are cleared on processing; the pending cookie is cleared on
+          successful registration. They contain random opaque values, not provider tokens.
         </P>
-        <Callout title="A self-hosted instance is stricter still">
+        <P>
+          Application API requests go to our own API under the same origin, and the response headers
+          allow-credentials only for origins the operator has configured. The images of the product
+          on our landing page are screenshots stored as files on our server, not embedded previews
+          of your own data.
+        </P>
+        <Callout title="Self-hosted registration verification is optional">
           <P>
-            Because nothing in the software calls out to us, an installation behind your firewall
-            issues no third-party requests at all. Your browser will not contact our servers unless
-            you point it there.
+            Self-hosted operators can leave Turnstile disabled. When enabled, registration contacts
+            Cloudflare as described above. The application does not contact Mokara&apos;s hosted
+            servers unless the operator points it there.
           </P>
         </Callout>
       </>

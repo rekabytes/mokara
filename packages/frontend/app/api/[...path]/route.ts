@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { getBackendUrl } from "@/lib/backend-url";
+import { setAuthProxyHeaders } from "@/lib/auth-proxy";
 
 // Same-origin API proxy: the browser calls /api/… on this Next server and this
 // handler forwards it to the backend. Adapted from jejak-athlete's
@@ -88,6 +89,30 @@ async function proxy(request: NextRequest): Promise<Response> {
   const target = new URL(`${backendUrl}${request.nextUrl.pathname}${request.nextUrl.search}`);
   const headers = new Headers(request.headers);
   for (const name of REQUEST_HEADERS_TO_REMOVE) headers.delete(name);
+
+  if (
+    (request.method === "POST" &&
+      [
+        "/api/auth/signup",
+        "/api/auth/login",
+        "/api/auth/social/complete",
+        "/api/auth/social/username/claim",
+      ].includes(request.nextUrl.pathname)) ||
+    /^\/api\/auth\/social\/(google|github)\/(start|callback)$/.test(request.nextUrl.pathname)
+  ) {
+    try {
+      setAuthProxyHeaders(headers);
+    } catch {
+      console.error("[proxy] Auth client-IP forwarding is not configured correctly");
+      return Response.json(
+        {
+          error: "auth_protection_unavailable",
+          message: "Authentication protection is temporarily unavailable.",
+        },
+        { status: 503 }
+      );
+    }
+  }
 
   const body = request.body ? await request.arrayBuffer() : undefined;
 

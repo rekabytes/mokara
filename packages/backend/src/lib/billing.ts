@@ -56,6 +56,37 @@ function periodEndForSubscription(sub: Stripe.Subscription): Date | null {
   return end === null ? null : new Date(end * 1000);
 }
 
+type BillingSource = "webhook" | "user_sync";
+function billingFailureCode(error: unknown): string {
+  if (error instanceof Stripe.errors.StripeError) {
+    if (error.type === "StripeConnectionError") return "stripe_unavailable";
+    if (error.type === "StripeRateLimitError") return "stripe_rate_limited";
+    if (error.type === "StripeAuthenticationError") return "stripe_configuration_error";
+  }
+  return "billing_reconciliation_failed";
+}
+function subscriptionWarning(sub: Stripe.Subscription): string | null {
+  return (sub.status === "active" || sub.status === "trialing") && planForSubscription(sub) === null
+    ? "billing_unmapped_price"
+    : null;
+}
+async function recordBillingAttempt(
+  userId: string | null,
+  source: BillingSource,
+  errorCode: string | null
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    if (userId)
+      await tx.user.update({
+        where: { id: userId },
+        data: { billingAttemptedAt: new Date(), billingErrorCode: errorCode },
+      });
+    await tx.billingReconciliationEvent.create({
+      data: { userId, source, outcome: errorCode ? "failed" : "verified", errorCode },
+    });
+  });
+}
+
 async function writePlan(
   userId: string,
   data: {
@@ -64,7 +95,8 @@ async function writePlan(
     periodEnd: Date | null;
     /** Retire an operator grant — see the active/trialing branch below. */
     clearGrant?: boolean;
-  }
+  },
+  sub: Stripe.Subscription
 ): Promise<void> {
   await prisma.user.update({
     where: { id: userId },
@@ -73,6 +105,10 @@ async function writePlan(
       ...(data.clearGrant ? { planOverride: null } : {}),
       graceUntil: data.graceUntil,
       periodEnd: data.periodEnd,
+      billingStatus: sub.status,
+      billingCancelAtPeriodEnd: sub.cancel_at_period_end,
+      billingCancelAt: sub.cancel_at ? new Date(sub.cancel_at * 1000) : null,
+      billingVerifiedAt: new Date(),
     },
   });
 }
@@ -90,29 +126,37 @@ export async function applySubscription(userId: string, sub: Stripe.Subscription
           `billing: subscription ${sub.id} has no plan for its price lookup_key — user kept at free`
         );
       }
-      await writePlan(userId, {
-        plan: plan ?? "free",
-        // Money outranks an operator: a subscription that resolves to a known
-        // tier retires the grant, so the two writers cannot disagree afterwards.
-        // An UNMAPPED price is a config bug (warned about above), not a purchase
-        // — it must not silently revoke someone's comp.
-        clearGrant: plan !== null,
-        graceUntil: null,
-        periodEnd: periodEndForSubscription(sub),
-      });
+      await writePlan(
+        userId,
+        {
+          plan: plan ?? "free",
+          // Money outranks an operator: a subscription that resolves to a known
+          // tier retires the grant, so the two writers cannot disagree afterwards.
+          // An UNMAPPED price is a config bug (warned about above), not a purchase
+          // — it must not silently revoke someone's comp.
+          clearGrant: plan !== null,
+          graceUntil: null,
+          periodEnd: periodEndForSubscription(sub),
+        },
+        sub
+      );
       return;
     }
     case "past_due":
       // Keep whatever plan they had; only the grace clock moves.
-      await writePlan(userId, {
-        graceUntil: new Date(Date.now() + GRACE_DAYS * 86_400_000),
-        periodEnd: null,
-      });
+      await writePlan(
+        userId,
+        {
+          graceUntil: new Date(Date.now() + GRACE_DAYS * 86_400_000),
+          periodEnd: null,
+        },
+        sub
+      );
       return;
     default:
       // canceled / incomplete_expired / unpaid / paused / unknown → the
       // subscription pays for nothing.
-      await writePlan(userId, { plan: "free", graceUntil: null, periodEnd: null });
+      await writePlan(userId, { plan: "free", graceUntil: null, periodEnd: null }, sub);
   }
 }
 
@@ -135,15 +179,25 @@ async function userIdForSubscription(sub: Stripe.Subscription): Promise<string |
  * Re-fetch the subscription and apply it. Webhook payloads can arrive out of
  * order, so the payload is a trigger only — the retrieved object is the truth.
  */
-export async function applySubscriptionById(subscriptionId: string): Promise<void> {
-  if (!billingConfigured) return;
-  const sub = await stripeClient().subscriptions.retrieve(subscriptionId);
-  const userId = await userIdForSubscription(sub);
-  if (!userId) {
-    log.warn(`billing: subscription ${subscriptionId} matches no user — ignored`);
-    return;
+export async function applySubscriptionById(subscriptionId: string): Promise<string | null> {
+  if (!billingConfigured) return null;
+  let userId: string | null = null;
+  try {
+    const sub = await stripeClient().subscriptions.retrieve(subscriptionId);
+    userId = await userIdForSubscription(sub);
+    if (!userId) {
+      log.warn("billing: subscription matches no user — ignored");
+      return null;
+    }
+    await applySubscription(userId, sub);
+    await recordBillingAttempt(userId, "webhook", subscriptionWarning(sub));
+    return userId;
+  } catch (error) {
+    await recordBillingAttempt(userId, "webhook", billingFailureCode(error)).catch(() =>
+      log.warn("Billing failure history unavailable")
+    );
+    throw error;
   }
-  await applySubscription(userId, sub);
 }
 
 /**
@@ -151,18 +205,47 @@ export async function applySubscriptionById(subscriptionId: string): Promise<voi
  * without the Stripe CLI, a dropped event): re-read this user's subscriptions
  * and apply the live one. A user with no customer has nothing to sync.
  */
-export async function syncBillingForUser(userId: string): Promise<void> {
+export async function syncBillingForUser(
+  userId: string,
+  source: BillingSource = "user_sync"
+): Promise<void> {
   if (!billingConfigured) return;
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { stripeCustomerId: true },
   });
   if (!user?.stripeCustomerId) return;
-  const list = await stripeClient().subscriptions.list({
-    customer: user.stripeCustomerId,
+  try {
+    const warning = await reconcileBillingForUser(userId, user.stripeCustomerId);
+    await recordBillingAttempt(userId, source, warning);
+  } catch (error) {
+    await recordBillingAttempt(userId, source, billingFailureCode(error)).catch(() =>
+      log.warn("Billing failure history unavailable")
+    );
+    throw error;
+  }
+}
+
+async function reconcileBillingForUser(userId: string, customerId: string): Promise<string | null> {
+  let page = await stripeClient().subscriptions.list({
+    customer: customerId,
     status: "all",
-    limit: 10,
+    limit: 100,
   });
+  const subscriptions = [...page.data];
+  const cursors = new Set<string>();
+  while (page.has_more) {
+    const cursor = page.data.at(-1)?.id;
+    if (!cursor || cursors.has(cursor)) throw new Error("Invalid billing pagination");
+    cursors.add(cursor);
+    page = await stripeClient().subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 100,
+      starting_after: cursor,
+    });
+    subscriptions.push(...page.data);
+  }
   // A customer with NO subscription at all has nothing to reconcile, and that
   // state is routine rather than rare: starting a checkout persists the customer
   // (routes/billing.ts) whether or not anyone ever pays, so an abandoned Stripe
@@ -173,16 +256,31 @@ export async function syncBillingForUser(userId: string): Promise<void> {
   //
   // A CANCELED subscription is still in this list (status: "all"), so the
   // cancel → free fallthrough below is untouched and a churned payer still drops.
-  if (list.data.length === 0) return;
+  if (subscriptions.length === 0) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        billingStatus: "none",
+        billingCancelAtPeriodEnd: false,
+        billingCancelAt: null,
+        billingVerifiedAt: new Date(),
+      },
+    });
+    return null;
+  }
 
   const live =
-    list.data.find((s) => s.status === "active" || s.status === "trialing") ??
-    list.data.find((s) => s.status === "past_due");
+    subscriptions.find((s) => s.status === "active" || s.status === "trialing") ??
+    subscriptions.find((s) => s.status === "past_due");
   if (live) {
     await applySubscription(userId, live);
-    return;
+    return subscriptionWarning(live);
   }
-  await writePlan(userId, { plan: "free", graceUntil: null, periodEnd: null });
+  // Preserve the existing free-plan fallthrough while recording the newest
+  // terminal subscription's actual status rather than inventing cancellation.
+  const terminal = [...subscriptions].sort((a, b) => b.created - a.created)[0];
+  if (terminal) await applySubscription(userId, terminal);
+  return null;
 }
 
 /** Create-or-reuse the customer; the id is persisted the first time. */
@@ -250,7 +348,7 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<void> {
   switch (event.type) {
     case "checkout.session.completed": {
       const userId = event.data.object.client_reference_id;
-      if (userId) await syncBillingForUser(userId);
+      if (userId) await syncBillingForUser(userId, "webhook");
       return;
     }
     case "customer.subscription.created":
@@ -262,7 +360,25 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<void> {
     case "invoice.paid":
     case "invoice.payment_failed": {
       const subscriptionId = invoiceSubscriptionId(event.data.object);
-      if (subscriptionId) await applySubscriptionById(subscriptionId);
+      if (subscriptionId) {
+        const userId = await applySubscriptionById(subscriptionId);
+        if (userId) {
+          const observedAt = new Date(event.created * 1000);
+          await prisma.user.updateMany({
+            where: {
+              id: userId,
+              OR: [
+                { billingInvoiceObservedAt: null },
+                { billingInvoiceObservedAt: { lt: observedAt } },
+              ],
+            },
+            data: {
+              billingInvoiceStatus: event.type === "invoice.paid" ? "paid" : "payment_failed",
+              billingInvoiceObservedAt: observedAt,
+            },
+          });
+        }
+      }
       return;
     }
     default:

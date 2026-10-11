@@ -10,6 +10,25 @@ const EnvSchema = z
     // back to a labelled dev secret). The refine below makes "unset" fatal in
     // production instead — see the comment there.
     AUTH_SECRET: z.string().default(""),
+    // Social sign-in uses separate credentials from repository integration.
+    AUTH_PUBLIC_URL: z.string().trim().default(""),
+    GOOGLE_AUTH_CLIENT_ID: z.string().trim().default(""),
+    GOOGLE_AUTH_CLIENT_SECRET: z.string().trim().default(""),
+    GITHUB_AUTH_CLIENT_ID: z.string().trim().default(""),
+    GITHUB_AUTH_CLIENT_SECRET: z.string().trim().default(""),
+    // Public registration requires Turnstile on hosted production instances.
+    // Self-hosters/development opt in by configuring all three values.
+    TURNSTILE_SITE_KEY: z.string().trim().default(""),
+    TURNSTILE_SECRET_KEY: z.string().trim().default(""),
+    TURNSTILE_HOSTNAMES: z.string().trim().default(""),
+    // Shared ONLY with the frontend server to authenticate client-IP assertions.
+    AUTH_PROXY_SECRET: z
+      .string()
+      .default("")
+      .refine(
+        (value) => !value || value.length >= 32,
+        "AUTH_PROXY_SECRET must be at least 32 characters"
+      ),
     // Session-revocation denylist (lib/sessions.ts). The default points at
     // docker-compose's exposed port so development boots with no .env value.
     // Unlike AUTH_SECRET there is no production refine here: a missing or dead

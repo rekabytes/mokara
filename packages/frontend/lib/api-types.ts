@@ -178,6 +178,8 @@ export type TourState = "completed" | "skipped";
 // never carries a tour flag, so putting it there would be a type lie about every
 // comment payload.
 export type SessionUser = User & {
+  password_login_enabled: boolean;
+  username_claimed: boolean;
   /** null = never resolved, so the tour still runs. */
   tour_state: TourState | null;
   /** Bookkeeping only — no visibility rule reads it. */

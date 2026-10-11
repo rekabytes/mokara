@@ -96,24 +96,31 @@ export const SECTIONS: LegalSection[] = [
         <L
           items={[
             <>
-              <Strong>We do not ask for your email address.</Strong> {OPERATOR.productName} accounts
-              are a username, an optional display name and a password. There is no email field, no
-              phone number, no payment instrument and no identity document anywhere in the schema.
+              <Strong>You choose how to sign in.</Strong> Password accounts use a username, optional
+              display name and password hash. If you choose Google or GitHub, we receive your stable
+              provider ID, verified email address and display name. We do not request access to your
+              mailbox.
             </>,
             <>
-              <Strong>One cookie.</Strong> A single first-party, <Code>httpOnly</Code> session
-              cookie keeps you signed in. It is strictly necessary, which is why there is no consent
-              banner — see the <Internal href={LEGAL_DOCS.cookies.href}>Cookie Policy</Internal>.
+              <Strong>Necessary sign-in cookies.</Strong> A first-party, <Code>httpOnly</Code>{" "}
+              session cookie keeps you signed in. It is strictly necessary, which is why there is no
+              consent banner. Social sign-in also uses temporary security cookies lasting ten
+              minutes — see the <Internal href={LEGAL_DOCS.cookies.href}>Cookie Policy</Internal>.
             </>,
             <>
-              <Strong>No trackers at all.</Strong> No analytics scripts, no advertising pixels, no
-              social plugins, no third-party CDN, no fingerprinting. Even the webfonts are
-              self-hosted, so loading a page does not contact anyone else’s server.
+              <Strong>No advertising or analytics trackers.</Strong> Webfonts are self-hosted. When
+              registration verification is enabled, the signup page loads Cloudflare Turnstile to
+              prevent automated abuse. Cloudflare processes technical browser and network
+              information for this check; see its{" "}
+              <a href="https://www.cloudflare.com/turnstile-privacy-policy/">
+                Turnstile Privacy Addendum
+              </a>
+              .
             </>,
             <>
-              <Strong>No client-side storage.</Strong> We do not use <Code>localStorage</Code>,{" "}
-              <Code>sessionStorage</Code> or IndexedDB. Closing the tab clears nothing you need to
-              worry about, because nothing was written.
+              <Strong>Application storage.</Strong> The application does not use{" "}
+              <Code>localStorage</Code>, <Code>sessionStorage</Code> or IndexedDB. The optional
+              registration verification provider is described in the Cookie Policy.
             </>,
             <>
               <Strong>We never sell or share personal data</Strong> for advertising, and we do not
@@ -145,7 +152,7 @@ export const SECTIONS: LegalSection[] = [
           rows={[
             [
               "Username",
-              "3–20 characters, lowercase letters, digits and underscore. Unique case-insensitively. It is your identity inside the app and how teammates invite you.",
+              "3–20 characters, lowercase letters, digits and underscore. Unique case-insensitively. New social accounts receive a temporary username and can claim a preferred username in Settings. It is your identity inside the app and how teammates invite you.",
               <Code key="users.username">users.username</Code>,
             ],
             [
@@ -155,7 +162,7 @@ export const SECTIONS: LegalSection[] = [
             ],
             [
               "Password",
-              "Stored only as a bcrypt hash (cost 10). We cannot read it, and “forgotten password” does not exist because we never see it — see the caveat in section 12.",
+              "Password signups store only a bcrypt hash (cost 10). Social-only accounts have no password hash. Self-service password reset is not currently available.",
               <Code key="users.password_hash">users.password_hash</Code>,
             ],
             [
@@ -245,9 +252,12 @@ export const SECTIONS: LegalSection[] = [
         </P>
         <Sub n="3.5">Information from other sources</Sub>
         <P>
-          None. There is no social login, no email-verification provider, no address or company
-          enrichment service, and no advertising network. We do not receive data about you from
-          anyone else, and we do not combine data across installations.
+          When you choose Google or GitHub sign-in, that provider supplies a stable account ID,
+          verified email address and display name. We store the linked identity and verified email;
+          provider access and refresh tokens are not persisted. These details authenticate the
+          account you connect, and do not silently merge accounts with matching emails. GitHub
+          sign-in is separate from the optional repository integration. There is no advertising
+          enrichment or combination of data across installations.
         </P>
       </>
     ),
@@ -258,11 +268,11 @@ export const SECTIONS: LegalSection[] = [
     body: (
       <>
         <P>
-          It is easier to trust a policy that names what is missing, so: email address, phone
-          number, postal address, date of birth, government or tax identifiers, payment card data,
-          precise geolocation, contacts, calendar, files, camera or microphone, browsing history
-          outside this Service, advertising identifiers, device fingerprints, and behavioural
-          profiles of you as a person.
+          It is easier to trust a policy that names what is missing, so: phone number, postal
+          address, date of birth, government or tax identifiers, payment card data, precise
+          geolocation, contacts, calendar, files, camera or microphone, browsing history outside
+          this Service, advertising identifiers, device fingerprints, and behavioural profiles of
+          you as a person.
         </P>
         <P>
           The ambient background animation on our landing page runs entirely in your browser’s
@@ -287,7 +297,7 @@ export const SECTIONS: LegalSection[] = [
           rows={[
             [
               "Create and operate your account; authenticate you on each visit",
-              "Username, password hash, session cookie",
+              "Username, password hash or linked provider identity, session cookie",
               "Performance of a contract (Art. 6(1)(b))",
               "Consent, s. 6(1)",
             ],
@@ -337,11 +347,15 @@ export const SECTIONS: LegalSection[] = [
     body: (
       <>
         <P>
-          {OPERATOR.productName} sets exactly one cookie, <Code>mokara_token</Code> (prefixed{" "}
+          {OPERATOR.productName} sets a session cookie, <Code>mokara_token</Code> (prefixed{" "}
           <Code>__Host-</Code> in production), which holds a signed session token so the Service
           knows you are already logged in. It is <Code>httpOnly</Code> (invisible to JavaScript on
           the page), <Code>SameSite=Lax</Code>, scoped to this site, marked <Code>Secure</Code> in
-          production, and expires after seven days. Logging out deletes it immediately.
+          production, and expires after seven days. Logging out deletes it immediately. Social
+          sign-in additionally sets temporary HttpOnly cookies named mokara_social_google,
+          mokara_social_github and mokara_social_pending (prefixed __Host- in production) to bind
+          callbacks and finish registration. They and temporary Redis flow/profile records expire
+          after ten minutes; callback cookies are cleared when processed.
         </P>
         <P>
           Because that cookie is strictly necessary to provide the feature you asked for, it is
@@ -519,7 +533,7 @@ export const SECTIONS: LegalSection[] = [
           head={["Data", "Kept for", "How it ends"]}
           rows={[
             [
-              "Account (username, display name, password hash)",
+              "Account (username, display name, password hash or linked provider identity/email)",
               "As long as the account exists",
               "Deleted on request; see section 11.1",
             ],
@@ -678,12 +692,11 @@ export const SECTIONS: LegalSection[] = [
       <>
         <P>
           Write to <Mailto /> — the route is spelled out in{" "}
-          <Internal href="#contact">Contact and complaints</Internal>. Because accounts have no
-          email address, we identify requests by the account itself — send it while signed in, or
-          have your workspace owner confirm it — and we will not fulfil a request that we cannot tie
-          to a real account. We respond within 21 days for a PDPA access request and within one
-          month where GDPR or UK GDPR applies; complex requests may take longer, and we will tell
-          you. There is no fee for a reasonable request.
+          <Internal href="#contact">Contact and complaints</Internal>. We identify requests by the
+          account itself — send it while signed in, or have your workspace owner confirm it — and we
+          will not fulfil a request that we cannot tie to a real account. We respond within 21 days
+          for a PDPA access request and within one month where GDPR or UK GDPR applies; complex
+          requests may take longer, and we will tell you. There is no fee for a reasonable request.
         </P>
         <LegalTable
           head={["Right", "What it means here", "How"]}
@@ -974,10 +987,10 @@ export const SECTIONS: LegalSection[] = [
         <P>
           Tell us what you want — write to <Mailto />. Access, correction, deletion, a copy of your
           data, or an objection to a specific processing activity. We would rather fix it than have
-          you escalate it, and we answer every request that we can attribute to an account. Note the
-          deliberate asymmetry: you can write to us from wherever you like, but because we hold no
-          email address for your account, we cannot reach you outside the product — so a decision or
-          notice about your request is something you read by signing in.
+          you escalate it, and we answer every request that we can attribute to an account.
+          Password-only accounts do not supply an email address. Social identity emails are used for
+          authentication, not marketing or automatic account recovery. We verify the account
+          associated with your request before responding.
         </P>
         <Sub n="20.2">Complaining to a regulator</Sub>
         <L

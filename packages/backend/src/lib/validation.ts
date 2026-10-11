@@ -17,6 +17,7 @@ export const signUpSchema = z.object({
   username: usernameSchema,
   password: passwordSchema,
   display_name: z.string().trim().max(50, "display name must be 50 characters or fewer").optional(),
+  turnstile_token: z.string().min(1).max(2048).optional(),
 });
 
 export const loginSchema = z.object({

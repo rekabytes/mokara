@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { setSessionUser } from "@/lib/session";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { SocialSignIn } from "@/components/SocialSignIn";
 import { LegalLinksLine } from "@/components/LegalLinksLine";
 
 export default function LoginPage() {
@@ -58,6 +59,13 @@ function LoginForm() {
         <p className="m-0 mb-6 text-[0.92rem] text-[var(--color-ink-muted)]">
           Sign in to your account.
         </p>
+
+        <SocialSignIn />
+        <div className="my-5 flex items-center gap-3 text-xs text-[var(--color-ink-muted)]">
+          <span className="h-px flex-1 bg-[var(--color-border-soft)]" />
+          or use your username
+          <span className="h-px flex-1 bg-[var(--color-border-soft)]" />
+        </div>
 
         <form onSubmit={onSubmit} className="flex flex-col gap-[0.85rem] text-left">
           <label className="flex flex-col gap-[0.35rem]">

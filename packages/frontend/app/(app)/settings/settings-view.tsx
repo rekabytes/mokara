@@ -8,6 +8,7 @@ import { useAsyncError } from "@/hooks/useAsyncError";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { BillingTile } from "./BillingTile";
+import { SocialSignIn } from "@/components/SocialSignIn";
 import { GitHubTile } from "./GitHubTile";
 import { setSessionUser, signOutServer, useSession } from "@/lib/session";
 import { useContainers } from "@/lib/containers";
@@ -257,58 +258,73 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
             title="Password"
             caption="Changing it signs out every other device"
           />
-          <form onSubmit={onPasswordSubmit} className="mt-4 flex flex-col gap-3 text-left">
-            <label className="flex flex-col gap-1">
-              <span className="text-[0.84rem] font-semibold text-[var(--color-ink-muted)]">
-                Current password
-              </span>
-              <input
-                type="password"
-                required
-                autoComplete="current-password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                className="field"
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-[0.84rem] font-semibold text-[var(--color-ink-muted)]">
-                New password
-              </span>
-              <input
-                type="password"
-                required
-                minLength={8}
-                autoComplete="new-password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="field"
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-[0.84rem] font-semibold text-[var(--color-ink-muted)]">
-                Confirm new password
-              </span>
-              <input
-                type="password"
-                required
-                minLength={8}
-                autoComplete="new-password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="field"
-              />
-            </label>
-            {passwordSaved && (
-              <p role="status" className="m-0 text-[0.84rem] text-[var(--color-ink-muted)]">
-                Password updated — other devices were signed out.
-              </p>
-            )}
-            <button type="submit" className="btn-base btn-primary mt-1 w-full">
-              Update password
-            </button>
-          </form>
+          {user?.password_login_enabled ? (
+            <form onSubmit={onPasswordSubmit} className="mt-4 flex flex-col gap-3 text-left">
+              <label className="flex flex-col gap-1">
+                <span className="text-[0.84rem] font-semibold text-[var(--color-ink-muted)]">
+                  Current password
+                </span>
+                <input
+                  type="password"
+                  required
+                  autoComplete="current-password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="field"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[0.84rem] font-semibold text-[var(--color-ink-muted)]">
+                  New password
+                </span>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="field"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[0.84rem] font-semibold text-[var(--color-ink-muted)]">
+                  Confirm new password
+                </span>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="field"
+                />
+              </label>
+              {passwordSaved && (
+                <p role="status" className="m-0 text-[0.84rem] text-[var(--color-ink-muted)]">
+                  Password updated — other devices were signed out.
+                </p>
+              )}
+              <button type="submit" className="btn-base btn-primary mt-1 w-full">
+                Update password
+              </button>
+            </form>
+          ) : (
+            <p className="mt-4 text-sm text-[var(--color-ink-muted)]">
+              Your account uses Google or GitHub to sign in. There is no Mokara password to change.
+            </p>
+          )}
         </motion.section>
+
+        <section className={`${TILE} col-span-12`}>
+          <h2 className="text-base font-semibold">Sign-in methods</h2>
+          <p className="mb-4 text-sm text-[var(--color-ink-muted)]">
+            Connect an account to sign in to this same Mokara account. GitHub sign-in is separate
+            from repository integration.
+          </p>
+          <SocialSignIn intent="link" />
+        </section>
 
         {/* ======== Plan & billing — the hero ======== */}
         <BillingTile

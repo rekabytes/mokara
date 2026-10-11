@@ -7,7 +7,9 @@ import { api } from "@/lib/api";
 import { setSessionUser } from "@/lib/session";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { SocialSignIn } from "@/components/SocialSignIn";
 import { LegalLinksLine } from "@/components/LegalLinksLine";
+import { SignupVerification, type SignupVerificationState } from "./SignupVerification";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -16,10 +18,12 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const { error, setError, run } = useAsyncError();
   const [loading, setLoading] = useState(false);
+  const [verification, setVerification] = useState<SignupVerificationState>({ ready: false });
+  const [verificationAttempt, setVerificationAttempt] = useState(0);
 
   const usernameValid = /^[a-z0-9_]{3,20}$/.test(username);
   const passwordValid = password.length >= 8;
-  const canSubmit = usernameValid && passwordValid && !loading;
+  const canSubmit = usernameValid && passwordValid && verification.ready && !loading;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -32,11 +36,16 @@ export default function SignupPage() {
           username: username.trim(),
           password,
           display_name: displayName.trim() || undefined,
+          turnstile_token: verification.token,
         }),
       { fallback: "Sign up failed" }
     );
     setLoading(false);
-    if (!res) return;
+    if (!res) {
+      setVerification({ ready: false });
+      setVerificationAttempt((value) => value + 1);
+      return;
+    }
     setSessionUser(res.user);
     router.push("/tasks");
     router.refresh();
@@ -57,6 +66,13 @@ export default function SignupPage() {
         <p className="m-0 mb-6 text-[0.92rem] text-[var(--color-ink-muted)]">
           Pick a username. It&apos;s how teammates will invite you.
         </p>
+
+        <SocialSignIn />
+        <div className="my-5 flex items-center gap-3 text-xs text-[var(--color-ink-muted)]">
+          <span className="h-px flex-1 bg-[var(--color-border-soft)]" />
+          or use your username
+          <span className="h-px flex-1 bg-[var(--color-border-soft)]" />
+        </div>
 
         <form onSubmit={onSubmit} className="flex flex-col gap-[0.85rem] text-left">
           <label className="flex flex-col gap-[0.35rem]">
@@ -117,6 +133,7 @@ export default function SignupPage() {
             )}
           </label>
 
+          <SignupVerification key={verificationAttempt} onChange={setVerification} />
           <ErrorBanner className="mb-4" message={error?.message} />
 
           <button type="submit" className="btn-base btn-primary mt-2 w-full" disabled={!canSubmit}>

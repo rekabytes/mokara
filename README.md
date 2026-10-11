@@ -6,6 +6,8 @@ Basic task management web app. pnpm workspace monorepo: Hono (TypeScript) backen
 
 See [`docs/development/PRD-01.md`](docs/development/PRD-01.md) and [`docs/development/PRD-02.md`](docs/development/PRD-02.md) for the full spec (tasks + auth + teams + invitations).
 
+Registration and login use Redis rate limits. Hosted production registration also requires Turnstile; configure its keys and trusted client-IP forwarding before rollout. See [authentication abuse protection and Google/GitHub sign-in setup](docs/development/auth-protection.md). Google/GitHub login use separate provider credentials; existing users connect them in Settings.
+
 For the frontend design system (colors, spacing, components, layout patterns), see [`docs/design/system.md`](docs/design/system.md).
 
 ## Structure

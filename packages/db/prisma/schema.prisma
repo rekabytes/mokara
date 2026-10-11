@@ -12,7 +12,7 @@ datasource db {
 model User {
   id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   username         String    @unique @db.Citext
-  passwordHash     String    @map("password_hash")
+  passwordHash     String?   @map("password_hash")
   displayName      String?   @map("display_name")
   // PRD-11: subscription tier (free | starter | pro | ultra). Lives on the
   // user, not the team — a workspace's tier is its leader's plan. Plain String
@@ -72,10 +72,26 @@ model User {
   attachments       Attachment[]
   adminAuditEvents  AdminAuditEvent[]
   githubConnection  GitHubAccountConnection?
+  authIdentities    AuthIdentity[]
   githubIssueLinks  GitHubIssueLink[]        @relation("GitHubIssueCreator")
   lastContainer     Team?                    @relation("LastContainer", fields: [lastContainerId], references: [id], onDelete: SetNull)
 
   @@map("users")
+}
+
+// Login identities are separate from repository integration permissions.
+// Email is a verified provider snapshot, never an account-merge key.
+model AuthIdentity {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  provider String
+  subject String
+  email String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, subject])
+  @@unique([userId, provider])
+  @@map("auth_identities")
 }
 
 // Classified provider reconciliation outcomes, never raw provider payloads.

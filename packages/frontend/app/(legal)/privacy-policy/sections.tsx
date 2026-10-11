@@ -152,7 +152,7 @@ export const SECTIONS: LegalSection[] = [
           rows={[
             [
               "Username",
-              "3–20 characters, lowercase letters, digits and underscore. Unique case-insensitively. It is your identity inside the app and how teammates invite you.",
+              "3–20 characters, lowercase letters, digits and underscore. Unique case-insensitively. New social accounts receive a temporary username and can claim a preferred username in Settings. It is your identity inside the app and how teammates invite you.",
               <Code key="users.username">users.username</Code>,
             ],
             [

@@ -7,6 +7,7 @@ import { manualError } from "@/lib/errors";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { PageHeader } from "@/components/PageHeader";
+import { UsernameClaim } from "./UsernameClaim";
 import { BillingTile } from "./BillingTile";
 import { SocialSignIn } from "@/components/SocialSignIn";
 import { GitHubTile } from "./GitHubTile";
@@ -239,6 +240,7 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
               Save
             </button>
           </form>
+          {user && !user.username_claimed && <UsernameClaim temporaryUsername={user.username} />}
           {profileSaved && (
             <p role="status" className="mb-0 mt-2 text-[0.84rem] text-[var(--color-ink-muted)]">
               Profile saved.

@@ -242,8 +242,6 @@ socialAuthRoutes.get("/social/pending", async (c) => {
 
 const CompleteSchema = z
   .object({
-    username: usernameSchema,
-    display_name: z.string().trim().max(50).optional(),
     turnstile_token: z.string().min(1).max(2048).optional(),
   })
   .strict();
@@ -266,7 +264,7 @@ socialAuthRoutes.post(
           409
         );
       const { key, pending } = await pendingProfile(c);
-      const { username, display_name, turnstile_token } = c.req.valid("json");
+      const { turnstile_token } = c.req.valid("json");
       const verification = await verifySignupChallenge(turnstile_token, env);
       if (verification !== "ok")
         return c.json(
@@ -294,9 +292,10 @@ socialAuthRoutes.post(
       const user = await prisma.$transaction(async (tx) => {
         const u = await tx.user.create({
           data: {
-            username,
+            username: `u_${tokenDigest(randomToken()).slice(0, 18)}`,
+            usernameClaimed: false,
             passwordHash: null,
-            displayName: display_name || null,
+            displayName: pending.profile.name.slice(0, 50) || null,
             authIdentities: {
               create: {
                 provider: pending.profile.provider,
@@ -324,8 +323,11 @@ socialAuthRoutes.post(
     } catch (error) {
       if (isUniqueViolation(error, "users_username_key"))
         return c.json(
-          { error: "username_taken", message: "This username is already taken. Choose another." },
-          409
+          {
+            error: "social_unavailable",
+            message: "Could not assign a temporary username. Please try again.",
+          },
+          503
         );
       if (isUniqueViolation(error, "auth_identities"))
         return c.json(
@@ -354,6 +356,50 @@ socialAuthRoutes.post(
           /* bounded expiry handles an unavailable Redis */
         }
       }
+    }
+  }
+);
+
+const ClaimUsernameSchema = z.object({ username: usernameSchema }).strict();
+socialAuthRoutes.post(
+  "/social/username/claim",
+  authRequired,
+  authRateLimit("oauth"),
+  validate("json", ClaimUsernameSchema),
+  async (c) => {
+    if (!trustedOrigin(c))
+      return c.json(
+        { error: "forbidden", message: "Claim your username from Mokara Settings." },
+        403
+      );
+    try {
+      // The conditional write serializes concurrent claims. Existing chosen
+      // usernames cannot be changed by this endpoint; ownership uses user ID.
+      const user = await prisma.$transaction(async (tx) => {
+        const changed = await tx.user.updateMany({
+          where: { id: c.get("userId"), usernameClaimed: false },
+          data: { username: c.req.valid("json").username, usernameClaimed: true },
+        });
+        if (changed.count !== 1) return null;
+        return tx.user.findUnique({ where: { id: c.get("userId") } });
+      });
+      if (!user)
+        return c.json(
+          {
+            error: "username_already_claimed",
+            message: "Your account already has a claimed username.",
+          },
+          409
+        );
+      setAuthCookie(c, await issueToken(user.id, user.username));
+      return c.json({ user: toMe(user) });
+    } catch (error) {
+      if (isUniqueViolation(error, "users_username_key"))
+        return c.json(
+          { error: "username_taken", message: "This username is already taken. Choose another." },
+          409
+        );
+      throw error;
     }
   }
 );

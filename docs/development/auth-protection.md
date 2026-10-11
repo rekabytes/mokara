@@ -130,9 +130,12 @@ with the normal dependency/bootstrap flow.
 Existing users should sign in with their password, then connect Google/GitHub in
 **Settings → Sign-in methods**. Emails and GitHub handles never silently merge
 accounts. A provider identity can belong to only one Mokara user; one user can
-connect one identity per provider. A new social user chooses a unique Mokara
-username and completes the same signup verification/limits before any account
-or Personal workspace is created. Social-only accounts do not have a password
+connect one identity per provider. A new social user completes the same signup verification/limits before any account
+or Personal workspace is created. The server assigns a random temporary username
+and takes the display name from the verified provider profile. The user can claim
+a preferred username once in Settings; uniqueness and conditional claim writes
+prevent conflicts or concurrent reclaims. Existing chosen usernames stay claimed.
+Deploy migration `20261011150000_username_claim` with this change. Social-only accounts do not have a password
 change form; password creation/recovery and unlinking are outside this change.
 Provider email is a verified snapshot, not a recovery email or proof that two
 Mokara accounts should be merged. Social login does not guarantee one account

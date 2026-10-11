@@ -228,6 +228,7 @@ export type TourState = "completed" | "skipped";
 // Two mappers, two audiences.
 export type MeResponse = UserResponse & {
   password_login_enabled: boolean;
+  username_claimed: boolean;
   tour_state: TourState | null;
   tour_resolved_at: string | null;
 };
@@ -242,11 +243,13 @@ export function toMe(
     | "tourState"
     | "tourResolvedAt"
     | "passwordHash"
+    | "usernameClaimed"
   >
 ): MeResponse {
   return {
     ...toUser(u),
     password_login_enabled: Boolean(u.passwordHash),
+    username_claimed: u.usernameClaimed,
     // Narrowed by comparison, never cast. A value outside the enum cannot exist
     // (the CHECK forbids it) but if one ever did — a hand-written UPDATE, say —
     // it reads as NULL, which means "show the tour". Non-destructive, and the

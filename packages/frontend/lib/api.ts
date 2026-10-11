@@ -242,12 +242,17 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  claimUsername: (username: string) =>
+    req<{ user: SessionUser }>("/auth/social/username/claim", {
+      method: "POST",
+      body: JSON.stringify({ username }),
+    }),
   pendingSocial: () =>
     req<{ provider: "google" | "github"; email: string; display_name: string }>(
       "/auth/social/pending",
       { cache: "no-store" }
     ),
-  completeSocial: (data: { username: string; display_name?: string; turnstile_token?: string }) =>
+  completeSocial: (data: { turnstile_token?: string }) =>
     req<{ user: SessionUser; redirect: string }>("/auth/social/complete", {
       method: "POST",
       body: JSON.stringify(data),

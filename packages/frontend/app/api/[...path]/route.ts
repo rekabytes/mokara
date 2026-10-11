@@ -92,9 +92,12 @@ async function proxy(request: NextRequest): Promise<Response> {
 
   if (
     (request.method === "POST" &&
-      ["/api/auth/signup", "/api/auth/login", "/api/auth/social/complete"].includes(
-        request.nextUrl.pathname
-      )) ||
+      [
+        "/api/auth/signup",
+        "/api/auth/login",
+        "/api/auth/social/complete",
+        "/api/auth/social/username/claim",
+      ].includes(request.nextUrl.pathname)) ||
     /^\/api\/auth\/social\/(google|github)\/(start|callback)$/.test(request.nextUrl.pathname)
   ) {
     try {

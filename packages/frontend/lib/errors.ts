@@ -36,6 +36,11 @@ export type ErrorRule = {
 /** Every code the backend can emit, plus the client-only ones. */
 export const ERROR_RULES: Record<string, ErrorRule> = {
   // --- session / credentials ---
+  username_already_claimed: {
+    kind: "conflict",
+    action: "inline",
+    message: "Your account already has a claimed username. Refresh Settings to see it.",
+  },
   social_expired: {
     kind: "auth",
     action: "inline",

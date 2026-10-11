@@ -146,6 +146,7 @@ authRoutes.post("/login", authRateLimit("login"), validate("json", loginSchema),
       displayName: true,
       createdAt: true,
       passwordHash: true,
+      usernameClaimed: true,
       tourState: true,
       tourResolvedAt: true,
     },
@@ -271,6 +272,7 @@ export async function updateMe(userId: string, displayName: string | null) {
       tourState: true,
       tourResolvedAt: true,
       passwordHash: true,
+      usernameClaimed: true,
     },
   });
   return toMe(u);
@@ -315,6 +317,7 @@ export async function meHandler(c: Context<{ Variables: Vars }>) {
       tourState: true,
       tourResolvedAt: true,
       passwordHash: true,
+      usernameClaimed: true,
     },
   });
   if (!u) {

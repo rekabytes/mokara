@@ -179,6 +179,7 @@ export type TourState = "completed" | "skipped";
 // comment payload.
 export type SessionUser = User & {
   password_login_enabled: boolean;
+  username_claimed: boolean;
   /** null = never resolved, so the tour still runs. */
   tour_state: TourState | null;
   /** Bookkeeping only — no visibility rule reads it. */

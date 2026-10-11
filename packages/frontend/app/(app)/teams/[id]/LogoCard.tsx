@@ -31,27 +31,39 @@ export function LogoCard({
 }) {
   const { error, run } = useAsyncError();
   const inputRef = useRef<HTMLInputElement>(null);
+  const pending = useRef(false);
   const [busy, setBusy] = useState(false);
 
   async function upload(file: File | undefined) {
-    if (!file) return;
+    if (!file || pending.current) return;
+    pending.current = true;
     setBusy(true);
-    const res = await run(() => api.setTeamLogo(team.id, file), {
-      fallback: "Failed to set the logo",
-    });
-    setBusy(false);
-    if (!res) return;
-    onTeam(res.team);
+    try {
+      const res = await run(() => api.setTeamLogo(team.id, file), {
+        fallback: "Failed to set the logo",
+      });
+      if (!res) return;
+      onTeam(res.team);
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
   }
 
   async function remove() {
+    if (pending.current) return;
+    pending.current = true;
     setBusy(true);
-    const res = await run(() => api.removeTeamLogo(team.id), {
-      fallback: "Failed to remove the logo",
-    });
-    setBusy(false);
-    if (!res) return;
-    onTeam(res.team);
+    try {
+      const res = await run(() => api.removeTeamLogo(team.id), {
+        fallback: "Failed to remove the logo",
+      });
+      if (!res) return;
+      onTeam(res.team);
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
   }
 
   return (

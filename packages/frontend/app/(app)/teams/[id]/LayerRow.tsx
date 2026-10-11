@@ -4,7 +4,7 @@ import { ArchiveIcon, PencilIcon, TrashIcon, UnarchiveIcon } from "./team-icons"
 import { cn } from "@/lib/cn";
 import { DUR, snap } from "@/lib/motion";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useRef, useState } from "react";
 // One project/KPI row inside `LayersPanel`: the colour dot or KPI badge, the
 // inline rename field, the archived state, and the rename / archive / delete
 // affordances.
@@ -45,29 +45,52 @@ export function LayerRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
+  const pending = useRef(false);
   const [busy, setBusy] = useState(false);
 
   async function save() {
     const trimmed = draft.trim();
-    if (!trimmed || busy) return false;
+    if (!trimmed || pending.current) return false;
+    pending.current = true;
     setBusy(true);
-    const ok = await onRename(trimmed);
-    setBusy(false);
-    if (ok) setEditing(false);
-    return ok;
+    try {
+      const ok = await onRename(trimmed);
+      if (ok) setEditing(false);
+      return ok;
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
   }
 
   async function remove() {
-    if (busy) return;
+    if (pending.current) return;
     if (
       !confirm(
         `Delete ${kind} "${name}"?${archived ? "" : " (it stays visible under Archived if it has tasks)"}`
       )
     )
       return;
+    pending.current = true;
     setBusy(true);
-    await onDelete();
-    setBusy(false);
+    try {
+      await onDelete();
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function archive() {
+    if (pending.current || !onArchive) return;
+    pending.current = true;
+    setBusy(true);
+    try {
+      await onArchive(!archived);
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
   }
 
   return (
@@ -101,6 +124,7 @@ export function LayerRow({
             autoFocus
             className="field min-w-0 flex-1"
             type="text"
+            disabled={busy}
             value={draft}
             maxLength={60}
             onChange={(e) => setDraft(e.target.value)}
@@ -160,6 +184,7 @@ export function LayerRow({
             >
               <button
                 type="button"
+                disabled={busy}
                 aria-label={`Rename ${name}`}
                 title="Rename"
                 onClick={() => {
@@ -175,7 +200,8 @@ export function LayerRow({
                   type="button"
                   aria-label={archived ? `Unarchive ${name}` : `Archive ${name}`}
                   title={archived ? "Unarchive" : "Archive"}
-                  onClick={() => void onArchive(!archived)}
+                  disabled={busy}
+                  onClick={() => void archive()}
                   className="grid size-6 cursor-pointer place-items-center rounded-md text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
                 >
                   {archived ? <UnarchiveIcon /> : <ArchiveIcon />}
@@ -183,6 +209,7 @@ export function LayerRow({
               )}
               <button
                 type="button"
+                disabled={busy}
                 aria-label={`Delete ${name}`}
                 title="Delete"
                 onClick={() => void remove()}

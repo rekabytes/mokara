@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, type FormEvent } from "react";
+import { Suspense, useState, useRef, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { setSessionUser } from "@/lib/session";
@@ -27,20 +27,27 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const { error, setError, run } = useAsyncError();
   const [loading, setLoading] = useState(false);
+  const pending = useRef(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setError(null);
-    setLoading(true);
-    const res = await run(() => api.login({ username: username.trim(), password }), {
-      fallback: "Login failed",
-    });
-    setLoading(false);
-    if (!res) return;
-    setSessionUser(res.user);
-    const from = search.get("from") || "/tasks";
-    router.push(from);
-    router.refresh();
+    if (pending.current) return;
+    pending.current = true;
+    try {
+      setError(null);
+      setLoading(true);
+      const res = await run(() => api.login({ username: username.trim(), password }), {
+        fallback: "Login failed",
+      });
+      if (!res) return;
+      setSessionUser(res.user);
+      const from = search.get("from") || "/tasks";
+      router.push(from);
+      router.refresh();
+    } finally {
+      pending.current = false;
+      setLoading(false);
+    }
   }
 
   return (

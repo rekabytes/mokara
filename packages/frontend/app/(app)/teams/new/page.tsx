@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
 import { manualError } from "@/lib/errors";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -12,12 +11,14 @@ import { useContainers } from "@/lib/containers";
 export default function NewTeamPage() {
   const router = useRouter();
   const [name, setName] = useState("");
-  const { error, setError, run } = useAsyncError();
-  const { load: reloadContainers, setSelectedId } = useContainers();
+  const { error, setError } = useAsyncError();
+  const { create, error: containersError } = useContainers();
+  const pending = useRef(false);
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (pending.current) return;
     setError(null);
     const trimmed = name.trim();
     if (!trimmed) {
@@ -28,16 +29,15 @@ export default function NewTeamPage() {
       setError(manualError("Team name must be 50 chars or fewer"));
       return;
     }
+    pending.current = true;
     setLoading(true);
-    const res = await run(() => api.createTeam({ name: trimmed, kind: "team" }), {
-      fallback: "Failed to create team",
-    });
-    setLoading(false);
-    if (!res) return;
-    // Keep the switcher atoms in sync, then land on the new container.
-    setSelectedId(res.team.id);
-    await reloadContainers();
-    router.push(`/teams/${res.team.id}`);
+    try {
+      const team = await create(trimmed, "team");
+      if (team) router.push(`/teams/${team.id}`);
+    } finally {
+      pending.current = false;
+      setLoading(false);
+    }
   }
 
   return (
@@ -65,13 +65,14 @@ export default function NewTeamPage() {
             autoFocus
             required
             maxLength={50}
+            disabled={loading}
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Acme"
           />
         </label>
 
-        <ErrorBanner className="mb-4" message={error?.message} />
+        <ErrorBanner className="mb-4" message={error?.message ?? containersError?.message} />
 
         <div className="mt-2 flex justify-end gap-2">
           <Link href="/tasks" className="btn-base btn-ghost">

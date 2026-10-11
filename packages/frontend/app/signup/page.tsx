@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useState, useRef, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { setSessionUser } from "@/lib/session";
@@ -17,6 +17,7 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const { error, setError, run, clearError } = useAsyncError();
   const [loading, setLoading] = useState(false);
+  const pending = useRef(false);
   const [verification, setVerification] = useState<SignupVerificationState>({ ready: false });
   const [verificationAttempt, setVerificationAttempt] = useState(0);
   const onVerificationChange = useCallback(
@@ -35,26 +36,32 @@ export default function SignupPage() {
     e.preventDefault();
     setError(null);
     if (!canSubmit) return;
-    setLoading(true);
-    const res = await run(
-      () =>
-        api.signUp({
-          username: username.trim(),
-          password,
-          display_name: displayName.trim() || undefined,
-          turnstile_token: verification.token,
-        }),
-      { fallback: "Sign up failed" }
-    );
-    setLoading(false);
-    if (!res) {
-      setVerification({ ready: false });
-      setVerificationAttempt((value) => value + 1);
-      return;
+    if (pending.current) return;
+    pending.current = true;
+    try {
+      setLoading(true);
+      const res = await run(
+        () =>
+          api.signUp({
+            username: username.trim(),
+            password,
+            display_name: displayName.trim() || undefined,
+            turnstile_token: verification.token,
+          }),
+        { fallback: "Sign up failed" }
+      );
+      if (!res) {
+        setVerification({ ready: false });
+        setVerificationAttempt((value) => value + 1);
+        return;
+      }
+      setSessionUser(res.user);
+      router.push("/tasks");
+      router.refresh();
+    } finally {
+      pending.current = false;
+      setLoading(false);
     }
-    setSessionUser(res.user);
-    router.push("/tasks");
-    router.refresh();
   }
 
   return (

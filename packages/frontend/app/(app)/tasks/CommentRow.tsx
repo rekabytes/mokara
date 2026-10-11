@@ -16,6 +16,7 @@ import { useState } from "react";
 
 export function CommentRow({
   comment,
+  disabled = false,
   now,
   isOwn,
   replyToUsername,
@@ -24,6 +25,7 @@ export function CommentRow({
   onReply,
   onPreview,
 }: {
+  disabled?: boolean;
   comment: Comment;
   now: number;
   isOwn: boolean;
@@ -41,11 +43,13 @@ export function CommentRow({
   const initial = name.trim().charAt(0).toUpperCase() || "?";
 
   function startEdit() {
+    if (disabled) return;
     setDraft(comment.body);
     setEditing(true);
   }
 
   function commitEdit() {
+    if (disabled) return;
     const body = draft.trim();
     setEditing(false);
     if (body && body !== comment.body) onSave(body);
@@ -78,6 +82,7 @@ export function CommentRow({
                 <span className="flex items-center gap-1 text-[0.7rem] text-[var(--color-danger)]">
                   Delete?
                   <button
+                    disabled={disabled}
                     type="button"
                     onClick={onDelete}
                     className="cursor-pointer font-medium underline"
@@ -85,6 +90,7 @@ export function CommentRow({
                     Yes
                   </button>
                   <button
+                    disabled={disabled}
                     type="button"
                     onClick={() => setConfirming(false)}
                     className="cursor-pointer text-[var(--color-ink-muted)] underline"
@@ -95,6 +101,7 @@ export function CommentRow({
               ) : (
                 <>
                   <button
+                    disabled={disabled}
                     type="button"
                     aria-label="Reply to comment"
                     onClick={onReply}
@@ -105,6 +112,7 @@ export function CommentRow({
                   {isOwn && (
                     <>
                       <button
+                        disabled={disabled}
                         type="button"
                         aria-label="Edit comment"
                         onClick={startEdit}
@@ -113,6 +121,7 @@ export function CommentRow({
                         <PencilIcon />
                       </button>
                       <button
+                        disabled={disabled}
                         type="button"
                         aria-label="Delete comment"
                         onClick={() => setConfirming(true)}
@@ -131,6 +140,7 @@ export function CommentRow({
         {editing ? (
           <div className="mt-1">
             <textarea
+              disabled={disabled}
               autoFocus
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -151,12 +161,13 @@ export function CommentRow({
               <button
                 type="button"
                 onClick={commitEdit}
-                disabled={!draft.trim()}
+                disabled={disabled || !draft.trim()}
                 className="cursor-pointer rounded-full bg-[var(--color-accent)] px-2.5 py-0.5 text-[0.72rem] font-medium text-white disabled:cursor-default disabled:opacity-40"
               >
                 Save
               </button>
               <button
+                disabled={disabled}
                 type="button"
                 onClick={() => {
                   setDraft(comment.body);
@@ -186,6 +197,7 @@ export function CommentRow({
                 {comment.attachments.map((a) =>
                   isImage(a) ? (
                     <button
+                      disabled={disabled}
                       key={a.id}
                       type="button"
                       onClick={() => onPreview(a)}

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type BillingInfo, type SessionInfo } from "@/lib/api";
 import { manualError } from "@/lib/errors";
 import { useAsyncError } from "@/hooks/useAsyncError";
@@ -45,109 +45,179 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
 
   // --- account: display name ---
   const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const profilePending = useRef(false);
+  const [profileBusy, setProfileBusy] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const nameValue = nameDraft ?? user?.display_name ?? "";
 
   const onProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    clearError();
-    setProfileSaved(false);
-    const trimmed = nameValue.trim();
-    const updated = await run(
-      () => api.updateMe({ display_name: trimmed.length > 0 ? trimmed : null }),
-      {
-        fallback: "Couldn't save your profile. Try again.",
-      }
-    );
-    if (updated === null) return;
-    setSessionUser(updated.user);
-    setNameDraft(null);
-    setProfileSaved(true);
+    if (profilePending.current) return;
+    profilePending.current = true;
+    setProfileBusy(true);
+    try {
+      clearError();
+      setProfileSaved(false);
+      const trimmed = nameValue.trim();
+      const updated = await run(
+        () => api.updateMe({ display_name: trimmed.length > 0 ? trimmed : null }),
+        {
+          fallback: "Couldn't save your profile. Try again.",
+        }
+      );
+      if (updated === null) return;
+      setSessionUser(updated.user);
+      setNameDraft(null);
+      setProfileSaved(true);
+    } finally {
+      profilePending.current = false;
+      setProfileBusy(false);
+    }
   };
 
   // --- security: password ---
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const passwordPending = useRef(false);
+  const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordSaved, setPasswordSaved] = useState(false);
 
   const onPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (passwordPending.current) return;
     setPasswordSaved(false);
     if (newPassword !== confirmPassword) {
       setError(manualError("The new passwords don't match."));
       return;
     }
     clearError();
-    const ok = await run(
-      () => api.changePassword({ current_password: currentPassword, new_password: newPassword }),
-      { fallback: "Couldn't update the password. Try again." }
-    );
-    if (ok === null) return;
-    setPasswordSaved(true);
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
+    passwordPending.current = true;
+    setPasswordBusy(true);
+    try {
+      const ok = await run(
+        () => api.changePassword({ current_password: currentPassword, new_password: newPassword }),
+        { fallback: "Couldn't update the password. Try again." }
+      );
+      if (ok === null) return;
+      setPasswordSaved(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } finally {
+      passwordPending.current = false;
+      setPasswordBusy(false);
+    }
   };
 
   // --- devices: live session registry ---
+  const { error: devicesError, clearError: clearDevicesError, run: runDevices } = useAsyncError();
+  const devicesRead = useRef<AbortController | null>(null);
   const [devices, setDevices] = useState<SessionInfo[] | null>(null);
 
   const loadDevices = useCallback(async () => {
-    const data = await run(() => api.listSessions(), { fallback: "Couldn't load your devices." });
+    devicesRead.current?.abort();
+    const controller = new AbortController();
+    devicesRead.current = controller;
+    clearDevicesError();
+    const data = await runDevices(() => api.listSessions(controller.signal), {
+      fallback: "Couldn't load your devices.",
+      signal: controller.signal,
+    });
     if (data === null) return;
     setDevices(data.sessions);
-  }, [run]);
+  }, [runDevices, clearDevicesError]);
 
   // Initial device load — the documented allowed effect: a one-time read of
   // something outside React (the session registry over the API), re-run only
   // when the stable loadDevices identity changes.
   useEffect(() => {
     void loadDevices();
+    return () => devicesRead.current?.abort();
   }, [loadDevices]);
 
+  const devicesPending = useRef(false);
+  const [devicesBusy, setDevicesBusy] = useState(false);
+
   const onRevokeDevice = async (id: string) => {
-    const row = devices?.find((d) => d.id === id);
-    const ok = await run(() => api.revokeSession(id), {
-      fallback: "Couldn't sign out that device. Try again.",
-    });
-    if (ok === null) return;
-    if (row?.current) {
-      // Revoking yourself is a sign-out: clear the now-dead cookie and exit
-      // hard to the front door — no client transition to race (2026-09-04).
-      await signOutServer();
-      window.location.assign("/");
-      return;
+    if (devicesPending.current) return;
+    devicesPending.current = true;
+    setDevicesBusy(true);
+    devicesRead.current?.abort();
+    clearError();
+    try {
+      const row = devices?.find((d) => d.id === id);
+      const ok = await run(() => api.revokeSession(id), {
+        fallback: "Couldn't sign out that device. Try again.",
+      });
+      if (ok === null) return;
+      if (row?.current) {
+        // Revoking yourself is a sign-out: clear the now-dead cookie and exit
+        // hard to the front door — no client transition to race (2026-09-04).
+        // This session is already revoked; leaving is safe even if the cookie
+        // cleanup request fails. The server will reject the revoked token.
+        await run(signOutServer);
+        window.location.assign("/");
+        return;
+      }
+      await loadDevices();
+    } finally {
+      devicesPending.current = false;
+      setDevicesBusy(false);
     }
-    void loadDevices();
   };
 
   const onRevokeAll = async () => {
-    const ok = await run(() => api.revokeAllSessions(), {
-      fallback: "Couldn't sign out your sessions. Try again.",
-    });
-    if (ok === null) return;
-    // The endpoint already cleared the cookie — just leave, hard.
-    window.location.assign("/");
+    if (devicesPending.current) return;
+    devicesPending.current = true;
+    setDevicesBusy(true);
+    devicesRead.current?.abort();
+    clearError();
+    try {
+      const ok = await run(() => api.revokeAllSessions(), {
+        fallback: "Couldn't sign out your sessions. Try again.",
+      });
+      if (ok === null) return;
+      // The endpoint already cleared the cookie — just leave, hard.
+      window.location.assign("/");
+    } finally {
+      devicesPending.current = false;
+      setDevicesBusy(false);
+    }
   };
 
   // --- plan & billing (PRD-11 Phase 2) ---
+  const { error: billingError, clearError: clearBillingError, run: runBilling } = useAsyncError();
+  const billingRead = useRef<AbortController | null>(null);
   const [billing, setBilling] = useState<BillingInfo | null>(null);
   const [billingBusy, setBillingBusy] = useState(false);
+  const billingPending = useRef(false);
 
   const loadBilling = useCallback(async () => {
+    billingRead.current?.abort();
+    const controller = new AbortController();
+    billingRead.current = controller;
+    clearBillingError();
     // Sync BEFORE reading: the return trip from Stripe-hosted checkout lands
     // here, and in local dev the webhook cannot reach localhost — the server
     // applies the same mapping either way. Void endpoint → ignore the value.
-    await run(() => api.syncBilling(), { fallback: "Couldn't reach billing." });
-    const data = await run(() => api.getBilling(), { fallback: "Couldn't load your plan." });
+    const synced = await runBilling(() => api.syncBilling(), {
+      fallback: "Couldn't reach billing.",
+      signal: controller.signal,
+    });
+    if (synced === null || controller.signal.aborted) return;
+    const data = await runBilling(() => api.getBilling(controller.signal), {
+      fallback: "Couldn't load your plan.",
+      signal: controller.signal,
+    });
     if (data) setBilling(data);
-  }, [run]);
+  }, [runBilling, clearBillingError]);
 
   // Initial billing load — a one-time read of server state outside React
   // (same documented pattern as the devices list above).
   useEffect(() => {
     void loadBilling();
+    return () => billingRead.current?.abort();
   }, [loadBilling]);
 
   // Checkout is workspace-scoped (leader-only), but the PLAN is the account's:
@@ -155,25 +225,39 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
   // qualifies. Stripe's page is outside the app, so the redirect is a hard
   // navigation, not a router push.
   const onUpgrade = async () => {
+    if (billingPending.current) return;
     const team = containers.find((c) => c.role === "owner") ?? containers[0];
     if (!team) return;
+    billingPending.current = true;
     setBillingBusy(true);
-    const res = await run(() => api.startCheckout(team.id), {
-      fallback: "Couldn't start checkout. Try again.",
-    });
-    setBillingBusy(false);
-    if (!res) return;
-    window.location.assign(res.url);
+    clearError();
+    try {
+      const res = await run(() => api.startCheckout(team.id), {
+        fallback: "Couldn't start checkout. Try again.",
+      });
+      if (!res) return;
+      window.location.assign(res.url);
+    } finally {
+      billingPending.current = false;
+      setBillingBusy(false);
+    }
   };
 
   const onManage = async () => {
+    if (billingPending.current) return;
+    billingPending.current = true;
     setBillingBusy(true);
-    const res = await run(() => api.billingPortal(), {
-      fallback: "Couldn't open the billing portal.",
-    });
-    setBillingBusy(false);
-    if (!res) return;
-    window.location.assign(res.url);
+    clearError();
+    try {
+      const res = await run(() => api.billingPortal(), {
+        fallback: "Couldn't open the billing portal.",
+      });
+      if (!res) return;
+      window.location.assign(res.url);
+    } finally {
+      billingPending.current = false;
+      setBillingBusy(false);
+    }
   };
 
   const showPitch = billing !== null && billing.plan === "free" && billing.checkout_configured;
@@ -227,6 +311,7 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
                 type="text"
                 maxLength={50}
                 placeholder="Shown next to your comments and activity"
+                disabled={profileBusy}
                 value={nameValue}
                 onChange={(e) => setNameDraft(e.target.value)}
                 className="field"
@@ -234,10 +319,10 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
             </label>
             <button
               type="submit"
-              disabled={nameDraft === null}
+              disabled={profileBusy || nameDraft === null}
               className="btn-base btn-ghost px-3.5 py-2 text-[0.85rem] disabled:cursor-default disabled:opacity-50"
             >
-              Save
+              {profileBusy ? "Saving…" : "Save"}
             </button>
           </form>
           {user && !user.username_claimed && <UsernameClaim temporaryUsername={user.username} />}
@@ -267,6 +352,7 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
                   Current password
                 </span>
                 <input
+                  disabled={passwordBusy}
                   type="password"
                   required
                   autoComplete="current-password"
@@ -280,6 +366,7 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
                   New password
                 </span>
                 <input
+                  disabled={passwordBusy}
                   type="password"
                   required
                   minLength={8}
@@ -294,6 +381,7 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
                   Confirm new password
                 </span>
                 <input
+                  disabled={passwordBusy}
                   type="password"
                   required
                   minLength={8}
@@ -308,8 +396,12 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
                   Password updated — other devices were signed out.
                 </p>
               )}
-              <button type="submit" className="btn-base btn-primary mt-1 w-full">
-                Update password
+              <button
+                disabled={passwordBusy}
+                type="submit"
+                className="btn-base btn-primary mt-1 w-full"
+              >
+                {passwordBusy ? "Updating…" : "Update password"}
               </button>
             </form>
           ) : (
@@ -329,6 +421,18 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
         </section>
 
         {/* ======== Plan & billing — the hero ======== */}
+        {billingError && (
+          <div className="col-span-12">
+            <ErrorBanner message={billingError.message} />
+            <button
+              type="button"
+              className="btn-base btn-ghost mt-2"
+              onClick={() => void loadBilling()}
+            >
+              Retry plan
+            </button>
+          </div>
+        )}
         <BillingTile
           billing={billing}
           showPitch={showPitch}
@@ -348,14 +452,24 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
             caption="Sessions expire after 7 days"
             right={
               <span className="flex-none rounded-[var(--radius-pill)] bg-[var(--color-pill-bg)] px-2.5 py-1 text-[0.76rem] font-semibold text-[var(--color-ink-muted)]">
-                {devices?.length ?? 0} active
+                {devices?.length ?? "—"} active
               </span>
             }
           />
+          <ErrorBanner className="mt-2" message={devicesError?.message} />
+          {devicesError && (
+            <button
+              type="button"
+              className="btn-base btn-ghost mt-2"
+              onClick={() => void loadDevices()}
+            >
+              Retry devices
+            </button>
+          )}
           {/* Capped scroller — the same 252px convention as the analytics KPI
               list, so one app pattern governs both long lists. */}
           <ul className="m-0 mt-2 flex max-h-[252px] list-none flex-col overflow-y-auto p-0">
-            {devices === null && (
+            {devices === null && !devicesError && (
               <li className="py-2 text-[0.85rem] text-[var(--color-ink-faint)]">
                 Loading devices…
               </li>
@@ -386,6 +500,7 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
                   </div>
                   <button
                     type="button"
+                    disabled={devicesBusy}
                     onClick={() => onRevokeDevice(d.id)}
                     className="btn-base btn-ghost shrink-0 border border-[var(--color-border-soft)] px-3 py-1.5 text-[0.84rem]"
                   >
@@ -396,6 +511,7 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
           </ul>
           <button
             type="button"
+            disabled={devicesBusy}
             onClick={onRevokeAll}
             className="btn-base btn-ghost mt-3 w-full border border-[var(--color-danger-border)] text-[var(--color-danger-ink)]"
           >

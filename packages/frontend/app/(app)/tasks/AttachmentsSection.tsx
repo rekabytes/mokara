@@ -1,12 +1,15 @@
 "use client";
 
+import { useDialogFocus } from "@/hooks/use-dialog-focus";
+import { restoreRemovedItems } from "./optimistic-list";
 import { CloseSmallIcon, PaperclipIcon } from "./icons";
 import { formatBytes, isImage } from "./task-format";
+import { ErrorBanner } from "@/components/ErrorBanner";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { api, type Attachment, type User } from "@/lib/api";
 import { backdropVariants, sheetVariants } from "@/lib/motion";
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 // Task attachments: `AttachmentsSection` (thumbnail grid, upload, delete) and
 // `AttachmentLightbox` (the full-size view), which is EXPORTED because the
@@ -29,40 +32,65 @@ export function AttachmentsSection({
   // uploads them right after the task exists, and this section — now part of
   // the description area — only ever SHOWS them. No composer, no drop zone:
   // post-creation images belong in comments. Hidden entirely when the task has
-  // none; a failed load also renders as nothing (req() already logged it),
-  // which is the honest reading of "don't show if none".
+  // none; failed loads are distinct and offer retry through the shared handler.
   const [files, setFiles] = useState<Attachment[] | null>(null);
   // Set by clicking an image; rendered as a full-screen preview (portal).
   const [viewing, setViewing] = useState<Attachment | null>(null);
   const { error, setError, run } = useAsyncError();
 
+  const read = useRef<AbortController | null>(null);
   const load = useCallback(async () => {
-    try {
-      const res = await api.listAttachments(taskId);
-      setFiles(res.attachments);
-    } catch {
-      setFiles(null); // an unloadable list reads as "no files" — logged in req()
-    }
-  }, [taskId]);
+    read.current?.abort();
+    const controller = new AbortController();
+    read.current = controller;
+    setError(null);
+    const res = await run(() => api.listAttachments(taskId, controller.signal), {
+      fallback: "Couldn't load files.",
+      signal: controller.signal,
+    });
+    if (res) setFiles(res.attachments);
+  }, [taskId, run, setError]);
 
-  // Server sync: load the list when the task changes (outside React).
+  // External server read; component identity follows taskId and cleanup
+  // cancels obsolete data and error handling when that task leaves the drawer.
   useEffect(() => {
-    load();
+    void load();
+    return () => read.current?.abort();
   }, [load]);
 
+  const deleting = useRef(new Set<string>());
+
   async function remove(file: Attachment) {
+    if (deleting.current.has(file.id)) return;
+    deleting.current.add(file.id);
+    read.current?.abort();
+    setError(null);
     const snapshot = files ?? [];
-    setFiles(snapshot.filter((f) => f.id !== file.id));
+    setFiles((current) => (current ?? []).filter((f) => f.id !== file.id));
     // DELETE resolves void → undefined, so test for null, not falsiness.
-    const ok = await run(() => api.deleteAttachment(file.id), {
-      fallback: "Failed to delete the file",
-      onError: () => setFiles(snapshot),
-    });
-    if (ok !== null) setError(null);
+    try {
+      await run(() => api.deleteAttachment(file.id), {
+        fallback: "Failed to delete the file",
+        onError: () =>
+          setFiles((current) => restoreRemovedItems(current ?? [], snapshot, new Set([file.id]))),
+      });
+    } finally {
+      deleting.current.delete(file.id);
+    }
+    // Another concurrent deletion may have failed; success must not clear it.
   }
 
   // A task with no files renders nothing at all (owner: "don't show if none").
-  if (!files || files.length === 0) return null;
+  if (!files || files.length === 0) {
+    return error ? (
+      <div className="mt-2">
+        <ErrorBanner message={error.message} />
+        <button type="button" className="btn-base btn-ghost mt-2" onClick={() => void load()}>
+          Retry files
+        </button>
+      </div>
+    ) : null;
+  }
 
   return (
     <div
@@ -115,7 +143,7 @@ export function AttachmentsSection({
         );
       })}
 
-      {error && <p className="w-full text-[0.72rem] text-[var(--color-danger)]">{error.message}</p>}
+      <ErrorBanner className="w-full" message={error?.message} />
 
       {/* Large view — shared with the comment thread (same component, same
           rules); one presence check so it animates out on close. */}
@@ -139,6 +167,7 @@ export function AttachmentLightbox({
   attachment: Attachment | null;
   onClose: () => void;
 }) {
+  const previewFocus = useDialogFocus();
   useEffect(() => {
     if (!attachment) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
@@ -152,6 +181,9 @@ export function AttachmentLightbox({
     <AnimatePresence>
       {attachment && (
         <motion.div
+          ref={previewFocus}
+          data-focus-scope
+          tabIndex={-1}
           role="dialog"
           aria-modal="true"
           aria-label={`Preview of ${attachment.filename}`}

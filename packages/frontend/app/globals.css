@@ -595,3 +595,15 @@
     animation: none !important;
   }
 }
+
+/* Respect the OS preference for CSS movement as well as Motion components. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}

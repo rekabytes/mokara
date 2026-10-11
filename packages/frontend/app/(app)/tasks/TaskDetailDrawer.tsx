@@ -30,7 +30,7 @@ import { ERROR_RULES } from "@/lib/errors";
 import Link from "next/link";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
-import { useAtom } from "jotai";
+import { useAtomValue } from "jotai";
 // The task detail drawer: `TaskDetailDrawer` (header, chips, description,
 // checklist, files, comment thread) and `DescriptionField` (the inline
 // save-on-blur textarea).
@@ -80,7 +80,7 @@ export function TaskDetailDrawer({
   // ---- PRD-10/11: container members, read from the shared atom — the page
   // effect keeps the current container's list warm; the drawer manages no
   // member state of its own.
-  const [members] = useAtom(containerMembersAtom);
+  const members = useAtomValue(containerMembersAtom);
 
   // ---- Due date: read straight off the task, persisted via PATCH on every
   //      change. DatePicker is fully controlled by `task.due_date`, so a
@@ -93,7 +93,10 @@ export function TaskDetailDrawer({
   //      keydown listener is outside React, so this effect stays. ----
   useEffect(() => {
     function onKey(e: globalThis.KeyboardEvent) {
-      if (e.key !== "Escape") return;
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      // A higher overlay/menu owns Escape; never close the task behind it.
+      if (document.querySelector("[data-focus-scope], [data-dropdown-menu], [data-date-menu]"))
+        return;
       const active = document.activeElement;
       if (
         active &&
@@ -114,10 +117,6 @@ export function TaskDetailDrawer({
   function startRename() {
     setTitleDraft(task.title);
     setTitleEditing(true);
-    requestAnimationFrame(() => {
-      titleInputRef.current?.focus();
-      titleInputRef.current?.select();
-    });
   }
 
   function commitRename() {
@@ -186,6 +185,8 @@ export function TaskDetailDrawer({
         {titleEditing ? (
           <input
             ref={titleInputRef}
+            autoFocus
+            onFocus={(event) => event.currentTarget.select()}
             value={titleDraft}
             onChange={(e) => setTitleDraft(e.target.value)}
             onBlur={commitRename}
@@ -196,7 +197,14 @@ export function TaskDetailDrawer({
           <h2
             data-tour="drawer-title"
             onDoubleClick={startRename}
-            title="Double-click to rename"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                startRename();
+              }
+            }}
+            title="Double-click or press Enter to rename"
             className={cn(
               "cursor-text rounded-md px-1 py-0.5 -mx-1 text-[1.3rem] font-semibold tracking-[-0.012em] transition-colors duration-150 hover:bg-[var(--color-surface-2)] line-clamp-2",
               task.status === "done"
@@ -423,7 +431,7 @@ export function TaskDetailDrawer({
         <SubtasksSection key={task.id} task={task} />
 
         {/* Comments — fills remaining drawer height (PRD-03 Phase 1) */}
-        <CommentsSection taskId={task.id} currentUser={currentUser} />
+        <CommentsSection key={task.id} taskId={task.id} currentUser={currentUser} />
       </div>
 
       {/* Footer — the walkthrough frames this on a LOOK step on purpose: the

@@ -27,6 +27,10 @@ How to work in this repository. Project **facts, decisions and traps** live in
 
 ## Code conventions
 
+- Engineering behavior: use `.agents/skills/mokara-engineering/SKILL.md` for Jotai state, effects, Framer Motion, typed errors and relevant production concerns. Use official Jotai utilities instead of recreating them; effects are a last choice for necessary external synchronization and never drive animations. Extend the existing unified error path instead of adding private handlers.
+
+- Architecture and module placement: use `.agents/skills/mokara-architecture/SKILL.md` when adding features, planning boundaries or splitting modules. Its research-backed guidance extends the existing ownership conventions; it does not authorize unrelated restructuring.
+
 - Design skills are scoped by product surface: use `.agents/skills/mokara-client-design/SKILL.md` for the signed-in frontend and `.agents/skills/mokara-admin-design/SKILL.md` for the operator console. The current client dashboard is the frontend benchmark; do not copy admin styling into it. Public marketing remains separate.
 
 - State: Jotai atoms for shared/global state (module-level, default store, no `<Provider>`); `useState` only for ephemeral UI. Shared hooks return memoised objects (safe in `useCallback` deps). Session: one `/me` probe per app lifetime; login/signup call `setSessionUser`.

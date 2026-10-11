@@ -1,3 +1,41 @@
+import {
+  analyticsSchema,
+  attachmentsSchema,
+  billingSchema,
+  commentResultSchema,
+  commentsSchema,
+  completeSocialSchema,
+  emptySchema,
+  githubIntegrationSchema,
+  githubIssueResultSchema,
+  invitationResponseSchema,
+  invitationResultSchema,
+  invitationsSchema,
+  kpiProgressListSchema,
+  kpiResultSchema,
+  kpisSchema,
+  navigationSchema,
+  notificationListSchema,
+  notificationReadSchema,
+  parseResponse,
+  pendingSocialSchema,
+  progressSchema,
+  projectDeletionSchema,
+  projectResultSchema,
+  projectsSchema,
+  sessionSchema,
+  sessionsSchema,
+  signupProtectionSchema,
+  socialConnectionsSchema,
+  socialProvidersSchema,
+  subtaskResultSchema,
+  taskSchema,
+  tasksSchema,
+  teamDetailSchema,
+  teamResultSchema,
+  teamsSchema,
+  uploadSchema,
+} from "./api-validation";
 // Same-origin by design: every request goes to /api/… on this Next server, which
 // proxies it to the backend (app/api/[...path]/route.ts). The backend's real
 // address is BACKEND_URL, a runtime value the proxy reads — never a NEXT_PUBLIC_*
@@ -10,31 +48,13 @@ const BASE = "/api";
 // `import { type Task } from "@/lib/api"` keeps working untouched.
 // `export type` (not `export`) because isolatedModules is on.
 import type {
-  TaskStatus,
-  TaskPriority,
-  TaskPatch,
-  BindingDraft,
-  SubtaskItem,
   Attachment,
-  Task,
+  BindingDraft,
   ContainerScope,
-  Project,
-  Kpi,
-  KpiProgress,
+  TaskPatch,
+  TaskPriority,
+  TaskStatus,
   TourState,
-  SessionUser,
-  NotificationInfo,
-  SessionInfo,
-  BillingInfo,
-  GitHubIntegration,
-  GitHubIssue,
-  Team,
-  TeamWithRole,
-  TeamDetail,
-  TeamInvitation,
-  Comment,
-  Analytics,
-  Progress,
 } from "./api-types";
 
 export type {
@@ -81,6 +101,7 @@ export type {
 export { isApiError } from "@/lib/errors";
 export type { ApiError } from "@/lib/errors";
 import { ERROR_RULES, type ApiError } from "@/lib/errors";
+import type { z } from "zod";
 
 // The browser console is failure-only (PRD: routine calls stay silent — the
 // success trail already lives in the backend's request log, which prints to
@@ -94,7 +115,7 @@ function logCall(method: string, path: string, status: number, ms: number, detai
   else console.warn(line);
 }
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
+async function req<T>(schema: z.ZodType<T>, path: string, init?: RequestInit): Promise<T> {
   const method = (init?.method ?? "GET").toUpperCase();
   const start = Date.now();
   const done = (status: number, detail?: string) =>
@@ -114,7 +135,8 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
         ...(init?.headers ?? {}),
       },
     });
-  } catch {
+  } catch (error) {
+    if (init?.signal?.aborted) throw error;
     // fetch() itself rejected: server down, offline, CORS or DNS. Hand back the
     // same shape as every other failure so callers never special-case it.
     done(0, "network_error");
@@ -153,19 +175,24 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       /* keep default */
     }
-    const detail = payload.error === "unknown" ? "" : `${payload.error} "${payload.message}"`;
+    const detail = Object.hasOwn(ERROR_RULES, payload.error) ? payload.error : "unknown_error";
     done(res.status, detail);
     throw payload;
   }
   done(res.status);
-  if (res.status === 204) return undefined as T;
+  if (res.status === 204) return parseResponse(schema, undefined);
   const text = await res.text();
-  // The one place the client asserts a shape it cannot check: the endpoint's
-  // declared return type IS the contract, and every response is built by a
-  // mapper in backend/lib/types.ts. Going through `unknown` keeps that trust
-  // explicit instead of silently widening whatever JSON.parse returned.
-  const body: unknown = text ? JSON.parse(text) : undefined;
-  return body as T;
+  // Every successful response crosses a runtime schema before reaching state.
+  try {
+    const body: unknown = text ? JSON.parse(text) : undefined;
+    return parseResponse(schema, body);
+  } catch {
+    throw {
+      error: "invalid_response",
+      message: "Unexpected server response.",
+      status: 502,
+    } satisfies ApiError;
+  }
 }
 
 /** Narrow the `{ error, … }` envelope of a failed response before trusting it. */
@@ -198,9 +225,10 @@ function uploadViaXhr(
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
-          resolve(JSON.parse(xhr.responseText) as { attachment: Attachment });
+          const body: unknown = JSON.parse(xhr.responseText);
+          resolve(parseResponse(uploadSchema, body));
         } catch {
-          reject({ error: "invalid_response", message: "upload failed", status: 0 });
+          reject({ error: "invalid_response", message: "upload failed", status: 502 });
         }
         return;
       }
@@ -228,39 +256,36 @@ function uploadViaXhr(
 
 export const api = {
   // ---- Auth ----
-  socialProviders: () =>
-    req<{ providers: { provider: "google" | "github"; enabled: boolean }[] }>(
-      "/auth/social/providers",
-      { cache: "no-store" }
-    ),
-  socialConnections: () =>
-    req<{ connections: { provider: string; email: string | null }[] }>("/auth/social/connections", {
+  socialProviders: (signal?: AbortSignal) =>
+    req(socialProvidersSchema, "/auth/social/providers", { cache: "no-store", signal }),
+  socialConnections: (signal?: AbortSignal) =>
+    req(socialConnectionsSchema, "/auth/social/connections", {
       cache: "no-store",
+      signal,
     }),
   startSocial: (provider: "google" | "github", data: { intent: "login" | "link"; from?: string }) =>
-    req<{ url: string }>(`/auth/social/${provider}/start`, {
+    req(navigationSchema, `/auth/social/${provider}/start`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
   claimUsername: (username: string) =>
-    req<{ user: SessionUser }>("/auth/social/username/claim", {
+    req(sessionSchema, "/auth/social/username/claim", {
       method: "POST",
       body: JSON.stringify({ username }),
     }),
-  pendingSocial: () =>
-    req<{ provider: "google" | "github"; email: string; display_name: string }>(
-      "/auth/social/pending",
-      { cache: "no-store" }
-    ),
+  pendingSocial: (signal?: AbortSignal) =>
+    req(pendingSocialSchema, "/auth/social/pending", { cache: "no-store", signal }),
   completeSocial: (data: { turnstile_token?: string }) =>
-    req<{ user: SessionUser; redirect: string }>("/auth/social/complete", {
+    req(completeSocialSchema, "/auth/social/complete", {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  signupProtection: () =>
-    req<{ required: boolean; site_key: string | null }>("/auth/signup-protection", {
+  signupProtection: (signal?: AbortSignal) =>
+    req(signupProtectionSchema, "/auth/signup-protection", {
       cache: "no-store",
-      signal: AbortSignal.timeout(10_000),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(10_000)])
+        : AbortSignal.timeout(10_000),
     }),
   signUp: (data: {
     username: string;
@@ -268,97 +293,101 @@ export const api = {
     display_name?: string;
     turnstile_token?: string;
   }) =>
-    req<{ user: SessionUser }>("/auth/signup", {
+    req(sessionSchema, "/auth/signup", {
       method: "POST",
       body: JSON.stringify(data),
     }),
   login: (data: { username: string; password: string }) =>
-    req<{ user: SessionUser }>("/auth/login", {
+    req(sessionSchema, "/auth/login", {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  logout: () => req<void>("/auth/logout", { method: "POST" }),
+  logout: () => req(emptySchema, "/auth/logout", { method: "POST" }),
   // PRD-05: the notification drawer's REST surface (live delivery rides SSE).
-  listNotifications: () =>
-    req<{ notifications: NotificationInfo[]; unread_count: number }>("/notifications"),
+  listNotifications: (signal?: AbortSignal) =>
+    req(notificationListSchema, "/notifications", { signal }),
   markNotificationsRead: (ids: string[] | null) =>
-    req<{ marked: number }>("/notifications/read", {
+    req(notificationReadSchema, "/notifications/read", {
       method: "POST",
       body: JSON.stringify({ ids }),
     }),
   // PRD-08: password change also signs out every other device (revocation
   // floor); this device stays signed in via the fresh cookie in the response.
   changePassword: (data: { current_password: string; new_password: string }) =>
-    req<void>("/auth/password", { method: "POST", body: JSON.stringify(data) }),
-  revokeAllSessions: () => req<void>("/auth/revoke-all", { method: "POST" }),
+    req(emptySchema, "/auth/password", { method: "POST", body: JSON.stringify(data) }),
+  revokeAllSessions: () => req(emptySchema, "/auth/revoke-all", { method: "POST" }),
   // Settings device list: every live session, tagged with `current` for the
   // calling device. Revoking the current row acts like a logout.
-  listSessions: () => req<{ sessions: SessionInfo[] }>("/auth/sessions"),
-  revokeSession: (id: string) => req<void>(`/auth/sessions/${id}`, { method: "DELETE" }),
+  listSessions: (signal?: AbortSignal) => req(sessionsSchema, "/auth/sessions", { signal }),
+  revokeSession: (id: string) => req(emptySchema, `/auth/sessions/${id}`, { method: "DELETE" }),
   updateMe: (data: { display_name: string | null }) =>
-    req<{ user: SessionUser }>("/me", { method: "PATCH", body: JSON.stringify(data) }),
-  me: () => req<{ user: SessionUser }>("/me"),
+    req(sessionSchema, "/me", { method: "PATCH", body: JSON.stringify(data) }),
+  me: (signal?: AbortSignal) => req(sessionSchema, "/me", { signal }),
   // PRD-13: record that the first-run tour was finished or skipped. Idempotent,
   // and the enum has no null — nothing here can re-arm the tour. Fire-and-forget
   // from the overlay (204, void → test `=== null`).
   patchTourState: (state: TourState) =>
-    req<void>("/me/onboarding", { method: "PATCH", body: JSON.stringify({ state }) }),
+    req(emptySchema, "/me/onboarding", { method: "PATCH", body: JSON.stringify({ state }) }),
 
   // ---- Billing (PRD-11 Phase 2) ----
   // GET /me/billing answers on every instance (self-hosted reads plan "free"
   // with billing_configured false) — the settings tile renders from it.
-  getBilling: () => req<BillingInfo>("/me/billing"),
+  getBilling: (signal?: AbortSignal) => req(billingSchema, "/me/billing", { signal }),
   // Checkout/portal return a Stripe-hosted URL to navigate to; the redirect
   // grants nothing (the webhook + sync do), so a failed click is harmless.
   startCheckout: (teamId: string) =>
-    req<{ url: string }>(`/teams/${teamId}/billing/checkout`, { method: "POST" }),
-  billingPortal: () => req<{ url: string }>("/me/billing/portal", { method: "POST" }),
+    req(navigationSchema, `/teams/${teamId}/billing/checkout`, { method: "POST" }),
+  billingPortal: () => req(navigationSchema, "/me/billing/portal", { method: "POST" }),
   // Re-reads this user's subscriptions server-side — the settings tile calls
   // it on mount so a checkout return lands the plan even where the webhook
   // cannot reach (local dev). Void → test `=== null`.
-  syncBilling: () => req<void>("/me/billing/sync", { method: "POST" }),
+  syncBilling: () => req(emptySchema, "/me/billing/sync", { method: "POST" }),
 
   // ---- GitHub App integration ----
-  getGitHubIntegration: () => req<GitHubIntegration>("/me/integrations/github"),
-  connectGitHub: () => req<{ url: string }>("/me/integrations/github/connect", { method: "POST" }),
-  installGitHub: () => req<{ url: string }>("/me/integrations/github/install", { method: "POST" }),
-  refreshGitHub: () => req<{ url: string }>("/me/integrations/github/refresh", { method: "POST" }),
-  disconnectGitHub: () => req<void>("/me/integrations/github", { method: "DELETE" }),
+  getGitHubIntegration: (signal?: AbortSignal) =>
+    req(githubIntegrationSchema, "/me/integrations/github", { signal }),
+  connectGitHub: () => req(navigationSchema, "/me/integrations/github/connect", { method: "POST" }),
+  installGitHub: () => req(navigationSchema, "/me/integrations/github/install", { method: "POST" }),
+  refreshGitHub: () => req(navigationSchema, "/me/integrations/github/refresh", { method: "POST" }),
+  disconnectGitHub: () => req(emptySchema, "/me/integrations/github", { method: "DELETE" }),
   setGitHubRepositories: (repositoryIds: string[]) =>
-    req<GitHubIntegration>("/me/integrations/github/repositories", {
+    req(githubIntegrationSchema, "/me/integrations/github/repositories", {
       method: "PUT",
       body: JSON.stringify({ repository_ids: repositoryIds }),
     }),
   retryGitHubSync: (taskId: string) =>
-    req<Task>(`/tasks/${taskId}/github-sync`, { method: "POST" }),
+    req(taskSchema, `/tasks/${taskId}/github-sync`, { method: "POST" }),
   publishGitHubIssue: (taskId: string, repositoryId: string) =>
-    req<{ github_issue: GitHubIssue }>(`/tasks/${taskId}/github-issue`, {
+    req(githubIssueResultSchema, `/tasks/${taskId}/github-issue`, {
       method: "POST",
       body: JSON.stringify({ repository_id: repositoryId }),
     }),
 
   // ---- Teams ----
   createTeam: (data: { name: string; kind?: "workspace" | "team" }) =>
-    req<{ team: Team }>("/teams", {
+    req(teamResultSchema, "/teams", {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  listTeams: () => req<{ teams: TeamWithRole[]; last_container_id: string | null }>("/teams"),
+  listTeams: (signal?: AbortSignal) => req(teamsSchema, "/teams", { signal }),
   // Owner (2026-09-06): persist the last-selected container server-side so a
   // refresh restores it. Fire-and-forget from the switcher; membership is
   // checked by the route.
   setLastContainer: (teamId: string) =>
-    req<void>("/me/last-container", { method: "PUT", body: JSON.stringify({ team_id: teamId }) }),
-  getTeam: (id: string) => req<TeamDetail>(`/teams/${id}`),
-  leaveTeam: (id: string) => req<void>(`/teams/${id}/leave`, { method: "POST" }),
+    req(emptySchema, "/me/last-container", {
+      method: "PUT",
+      body: JSON.stringify({ team_id: teamId }),
+    }),
+  getTeam: (id: string, signal?: AbortSignal) => req(teamDetailSchema, `/teams/${id}`, { signal }),
+  leaveTeam: (id: string) => req(emptySchema, `/teams/${id}/leave`, { method: "POST" }),
   inviteToTeam: (id: string, data: { username: string }) =>
-    req<{ invitation: TeamInvitation }>(`/teams/${id}/invitations`, {
+    req(invitationResultSchema, `/teams/${id}/invitations`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   // ---- Invitations ----
-  listInvitations: () => req<{ invitations: TeamInvitation[] }>("/invitations"),
+  listInvitations: () => req(invitationsSchema, "/invitations"),
   respondToInvitation: (
     id: string,
     action: "accept" | "decline"
@@ -367,7 +396,7 @@ export const api = {
     status: string;
     team_id?: string;
   }> =>
-    req(`/invitations/${id}/respond`, {
+    req(invitationResponseSchema, `/invitations/${id}/respond`, {
       method: "POST",
       body: JSON.stringify({ action }),
     }),
@@ -375,13 +404,13 @@ export const api = {
   // ---- Tasks (team-scoped) ----
   // PRD-11: full payload for one task — used right after the create→upload
   // chain, since the create response predates its own steps and files.
-  getTask: (id: string) => req<Task>(`/tasks/${id}`),
+  getTask: (id: string) => req(taskSchema, `/tasks/${id}`),
   // The cross-container due-soon set now lives in the notifications table
   // (PRD-11 §1.5, persistent rows). The bell badge + drawer render it
   // through the existing listNotifications() surface — no per-request
   // /me/due-soon endpoint any more.
-  listTeamTasks: (teamId: string, status?: string) =>
-    req<Task[]>(`/teams/${teamId}/tasks${status ? `?status=${status}` : ""}`),
+  listTeamTasks: (teamId: string, status?: string, signal?: AbortSignal) =>
+    req(tasksSchema, `/teams/${teamId}/tasks${status ? `?status=${status}` : ""}`, { signal }),
   createTeamTask: (
     teamId: string,
     data: {
@@ -396,89 +425,92 @@ export const api = {
       kpis?: BindingDraft[];
     }
   ) =>
-    req<Task>(`/teams/${teamId}/tasks`, {
+    req(taskSchema, `/teams/${teamId}/tasks`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   // ---- Projects & KPIs (PRD-06) ----
-  listProjects: (teamId: string, all?: boolean) =>
-    req<{ projects: Project[] }>(`/teams/${teamId}/projects${all ? "?all=1" : ""}`),
+  listProjects: (teamId: string, all?: boolean, signal?: AbortSignal) =>
+    req(projectsSchema, `/teams/${teamId}/projects${all ? "?all=1" : ""}`, { signal }),
   createProject: (
     teamId: string,
     data: { name: string; color?: string | null; scope?: ContainerScope }
   ) =>
-    req<{ project: Project }>(`/teams/${teamId}/projects`, {
+    req(projectResultSchema, `/teams/${teamId}/projects`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
   updateProject: (id: string, data: { name?: string; color?: string | null; archived?: boolean }) =>
-    req<{ project: Project }>(`/projects/${id}`, {
+    req(projectResultSchema, `/projects/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
-  deleteProject: (id: string) => req<void>(`/projects/${id}`, { method: "DELETE" }),
-  listKpis: (teamId: string) => req<{ kpis: Kpi[] }>(`/teams/${teamId}/kpis`),
+  deleteProject: (id: string) =>
+    req(projectDeletionSchema, `/projects/${id}`, { method: "DELETE" }),
+  listKpis: (teamId: string, signal?: AbortSignal) =>
+    req(kpisSchema, `/teams/${teamId}/kpis`, { signal }),
   createKpi: (teamId: string, data: { name: string }) =>
-    req<{ kpi: Kpi }>(`/teams/${teamId}/kpis`, {
+    req(kpiResultSchema, `/teams/${teamId}/kpis`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
   updateKpi: (id: string, data: { name?: string }) =>
-    req<{ kpi: Kpi }>(`/kpis/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-  deleteKpi: (id: string) => req<void>(`/kpis/${id}`, { method: "DELETE" }),
-  getKpiProgress: (teamId: string) =>
-    req<{ kpis: KpiProgress[] }>(`/teams/${teamId}/kpis/progress`),
+    req(kpiResultSchema, `/kpis/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteKpi: (id: string) => req(emptySchema, `/kpis/${id}`, { method: "DELETE" }),
+  getKpiProgress: (teamId: string, signal?: AbortSignal) =>
+    req(kpiProgressListSchema, `/teams/${teamId}/kpis/progress`, { signal }),
   // Replace-all binding set for a task; [] clears.
   setTaskKpis: (id: string, kpis: BindingDraft[]) =>
-    req<Task>(`/tasks/${id}/kpis`, { method: "PUT", body: JSON.stringify({ kpis }) }),
+    req(taskSchema, `/tasks/${id}/kpis`, { method: "PUT", body: JSON.stringify({ kpis }) }),
   updateTask: (id: string, data: TaskPatch) =>
-    req<Task>(`/tasks/${id}`, {
+    req(taskSchema, `/tasks/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
-  deleteTask: (id: string) => req<void>(`/tasks/${id}`, { method: "DELETE" }),
-  flagTask: (id: string) => req<Task>(`/tasks/${id}/flag`, { method: "POST" }),
+  deleteTask: (id: string) => req(emptySchema, `/tasks/${id}`, { method: "DELETE" }),
+  flagTask: (id: string) => req(taskSchema, `/tasks/${id}/flag`, { method: "POST" }),
 
   // ---- Comments ----
-  listComments: (taskId: string) => req<{ comments: Comment[] }>(`/tasks/${taskId}/comments`),
+  listComments: (taskId: string, signal?: AbortSignal) =>
+    req(commentsSchema, `/tasks/${taskId}/comments`, { signal }),
   createComment: (taskId: string, body: string, parentId?: string) =>
-    req<{ comment: Comment }>(`/tasks/${taskId}/comments`, {
+    req(commentResultSchema, `/tasks/${taskId}/comments`, {
       method: "POST",
       body: JSON.stringify({ body, ...(parentId ? { parent_id: parentId } : {}) }),
     }),
   updateComment: (id: string, body: string) =>
-    req<{ comment: Comment }>(`/comments/${id}`, {
+    req(commentResultSchema, `/comments/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ body }),
     }),
-  deleteComment: (id: string) => req<void>(`/comments/${id}`, { method: "DELETE" }),
+  deleteComment: (id: string) => req(emptySchema, `/comments/${id}`, { method: "DELETE" }),
 
   // ---- Subtasks (PRD-11 Phase 1.2) ----
   // No list endpoint: the checklist is embedded in every task response, so the
   // drawer renders `task.subtasks` and reconciles these mutations into it.
   createSubtask: (taskId: string, title: string) =>
-    req<{ subtask: SubtaskItem }>(`/tasks/${taskId}/subtasks`, {
+    req(subtaskResultSchema, `/tasks/${taskId}/subtasks`, {
       method: "POST",
       body: JSON.stringify({ title }),
     }),
   updateSubtask: (id: string, data: { title?: string; done?: boolean }) =>
-    req<{ subtask: SubtaskItem }>(`/subtasks/${id}`, {
+    req(subtaskResultSchema, `/subtasks/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
-  deleteSubtask: (id: string) => req<void>(`/subtasks/${id}`, { method: "DELETE" }),
+  deleteSubtask: (id: string) => req(emptySchema, `/subtasks/${id}`, { method: "DELETE" }),
   // Full-list reorder: every id, in the order drawn.
   orderSubtasks: (taskId: string, ids: string[]) =>
-    req<void>(`/tasks/${taskId}/subtasks/order`, {
+    req(emptySchema, `/tasks/${taskId}/subtasks/order`, {
       method: "PUT",
       body: JSON.stringify({ ids }),
     }),
 
   // ---- Attachments (PRD-11 Phase 1.3) ----
-  listAttachments: (taskId: string) =>
-    req<{ attachments: Attachment[] }>(`/tasks/${taskId}/attachments`),
-  deleteAttachment: (id: string) => req<void>(`/attachments/${id}`, { method: "DELETE" }),
+  listAttachments: (taskId: string, signal?: AbortSignal) =>
+    req(attachmentsSchema, `/tasks/${taskId}/attachments`, { signal }),
+  deleteAttachment: (id: string) => req(emptySchema, `/attachments/${id}`, { method: "DELETE" }),
   uploadAttachment: (taskId: string, file: File, onProgress?: (fraction: number) => void) =>
     uploadViaXhr(`/tasks/${taskId}/attachments`, file, onProgress),
   /**
@@ -490,7 +522,7 @@ export const api = {
 
   // ---- Comment attachments (PRD-11) ----
   listCommentAttachments: (commentId: string) =>
-    req<{ attachments: Attachment[] }>(`/comments/${commentId}/attachments`),
+    req(attachmentsSchema, `/comments/${commentId}/attachments`),
   // Images and PDFs only — the route rejects anything else.
   uploadCommentAttachment: (
     commentId: string,
@@ -502,15 +534,16 @@ export const api = {
   setTeamLogo: (teamId: string, file: File) => {
     const form = new FormData();
     form.append("file", file);
-    return req<{ team: Team }>(`/teams/${teamId}/logo`, { method: "PUT", body: form });
+    return req(teamResultSchema, `/teams/${teamId}/logo`, { method: "PUT", body: form });
   },
   removeTeamLogo: (teamId: string) =>
-    req<{ team: Team }>(`/teams/${teamId}/logo`, { method: "DELETE" }),
+    req(teamResultSchema, `/teams/${teamId}/logo`, { method: "DELETE" }),
   /** Rendered by <img>; `private, no-cache` on the response keeps it fresh. */
   teamLogoUrl: (teamId: string) => `${BASE}/teams/${teamId}/logo`,
 
   // ---- Analytics ----
-  getAnalytics: (teamId: string, range: number) =>
-    req<Analytics>(`/teams/${teamId}/analytics?range=${range}`),
-  getProgress: (teamId: string) => req<Progress>(`/teams/${teamId}/progress`),
+  getAnalytics: (teamId: string, range: number, signal?: AbortSignal) =>
+    req(analyticsSchema, `/teams/${teamId}/analytics?range=${range}`, { signal }),
+  getProgress: (teamId: string, signal?: AbortSignal) =>
+    req(progressSchema, `/teams/${teamId}/progress`, { signal }),
 };

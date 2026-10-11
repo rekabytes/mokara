@@ -133,11 +133,13 @@ async function proxy(request: NextRequest): Promise<Response> {
       status: upstream.status,
       headers: copyResponseHeaders(upstream),
     });
-  } catch (err) {
+  } catch {
     // The browser needs a JSON error shaped like every other failure (the API's
     // own contract), not an HTML 502 page. `useAsyncError` maps network_error
     // from the thrown shape, but this is a *response*, so send that shape here.
-    console.error(`[proxy] ${request.method} ${target.pathname} → backend unreachable:`, err);
+    // Upstream exceptions can include URLs, credentials or provider bodies.
+    // Keep the operation and classification without dumping the exception.
+    console.error(`[proxy] ${request.method} ${target.pathname} → backend unreachable`);
     return Response.json(
       { error: "network_error", message: "Backend unavailable" },
       { status: 502 }

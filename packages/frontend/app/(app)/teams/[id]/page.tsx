@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, Fragment, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useMemo, useState, Fragment, type FormEvent } from "react";
 import { motion } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
 import { api, type TeamDetail } from "@/lib/api";
@@ -30,67 +30,125 @@ export default function TeamDetailPage() {
   const [detail, setDetail] = useState<TeamDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const { error, setError, run } = useAsyncError();
-  const { projects, kpis, progress, refresh: refreshMeta } = useContainerMeta(teamId);
+  const {
+    projects,
+    kpis,
+    progress,
+    refresh: refreshMeta,
+    error: metaError,
+  } = useContainerMeta(teamId);
 
   const [inviteUsername, setInviteUsername] = useState("");
+  const membershipPending = useRef(false);
+  const [membershipBusy, setMembershipBusy] = useState(false);
+  const context = useMemo(() => ({ teamId }), [teamId]);
+  const currentContext = useRef(context);
+  currentContext.current = context;
 
+  const read = useRef<AbortController | null>(null);
   const load = useCallback(async () => {
+    if (currentContext.current !== context) return;
+    read.current?.abort();
+    const controller = new AbortController();
+    read.current = controller;
     setLoading(true);
     setError(null);
-    const detail = await run(() => api.getTeam(teamId), { fallback: "Failed to load team" });
+    const detail = await run(() => api.getTeam(teamId, controller.signal), {
+      fallback: "Failed to load team",
+      signal: controller.signal,
+    });
+    if (controller.signal.aborted || currentContext.current !== context) return;
     setLoading(false);
     if (detail === null) return;
     setDetail(detail);
-  }, [teamId, run, setError]);
+  }, [teamId, context, run, setError]);
 
   useEffect(() => {
     // Server sync only. The `anonymous → /login` half that used to sit here is
     // gone: AppShell is this page's parent and already redirects during
     // render, so a signed-out visitor never reaches this effect.
-    if (session.status === "authed") load();
+    setDetail(null);
+    if (session.status === "authed") void load();
+    return () => read.current?.abort();
   }, [session.status, load]);
 
   async function invite(e: FormEvent) {
     e.preventDefault();
     const u = inviteUsername.trim().toLowerCase();
-    if (!u) return;
-    setError(null);
-    const res = await run(() => api.inviteToTeam(teamId, { username: u }), {
-      fallback: "Failed to invite",
-    });
-    if (!res) return;
-    setInviteUsername("");
-    await load();
+    if (!u || membershipPending.current) return;
+    membershipPending.current = true;
+    setMembershipBusy(true);
+    try {
+      setError(null);
+      const res = await run(() => api.inviteToTeam(teamId, { username: u }), {
+        fallback: "Failed to invite",
+      });
+      if (!res || currentContext.current !== context) return;
+      setInviteUsername("");
+      await load();
+    } finally {
+      membershipPending.current = false;
+      setMembershipBusy(false);
+    }
   }
 
   async function leave() {
-    if (!confirm("Leave this team?")) return;
-    const ok = await run(() => api.leaveTeam(teamId), { fallback: "Failed to leave team" });
-    if (ok === null) return;
-    router.push("/tasks");
-    router.refresh();
+    if (membershipPending.current || !confirm("Leave this team?")) return;
+    membershipPending.current = true;
+    setMembershipBusy(true);
+    try {
+      const ok = await run(() => api.leaveTeam(teamId), { fallback: "Failed to leave team" });
+      if (ok === null || currentContext.current !== context) return;
+      router.push("/tasks");
+      router.refresh();
+    } finally {
+      membershipPending.current = false;
+      setMembershipBusy(false);
+    }
   }
 
-  if (loading || !detail) {
+  if (!detail || detail.team.id !== teamId) {
     return (
-      <p className="py-8 text-center text-[var(--color-ink-faint)]">
-        {error ? error.message : "Loading…"}
-      </p>
+      <div className="py-8 text-center text-[var(--color-ink-faint)]">
+        {error ? (
+          <>
+            <ErrorBanner message={error.message} />
+            <button type="button" className="btn-base btn-ghost mt-2" onClick={() => void load()}>
+              Retry team
+            </button>
+          </>
+        ) : (
+          "Loading…"
+        )}
+      </div>
     );
   }
 
   const isWorkspace = detail.team.kind === "workspace";
 
   return (
-    <div className="flex flex-col gap-6">
+    <div aria-busy={loading} className="flex flex-col gap-6">
       {/* Top bar: breadcrumb + actions — copied from the Tasks page header */}
       <PageHeader>{detail.team.name}</PageHeader>
 
       <ErrorBanner className="mb-4" message={error?.message} />
+      {metaError && (
+        <div>
+          <ErrorBanner message={metaError.message} />
+          <button
+            type="button"
+            className="btn-base btn-ghost mt-2"
+            onClick={() => void refreshMeta()}
+          >
+            Retry projects &amp; KPIs
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-[1fr_300px] items-start gap-4 max-[800px]:grid-cols-1">
         <section className="flex flex-col">
           <LayersPanel
+            key={teamId}
             container={detail.team}
             role={detail.role}
             currentUsername={session.status === "authed" ? session.user.username : ""}
@@ -149,9 +207,14 @@ export default function TeamDetailPage() {
         <aside className="flex flex-col gap-4">
           {/* PRD-11: container identity (logo + leader controls) leads the rail. */}
           <LogoCard
+            key={teamId}
             team={detail.team}
             canManage={detail.role === "owner"}
-            onTeam={(updated) => setDetail((prev) => (prev ? { ...prev, team: updated } : prev))}
+            onTeam={(updated) =>
+              setDetail((prev) =>
+                prev?.team.id === updated.id ? { ...prev, team: updated } : prev
+              )
+            }
           />
           {isWorkspace ? (
             <>
@@ -170,6 +233,7 @@ export default function TeamDetailPage() {
                     className="field min-w-0 flex-1"
                     type="text"
                     placeholder="@username"
+                    disabled={membershipBusy}
                     value={inviteUsername}
                     onChange={(e) =>
                       setInviteUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))
@@ -180,7 +244,7 @@ export default function TeamDetailPage() {
                   <button
                     type="submit"
                     className="btn-base btn-primary"
-                    disabled={!inviteUsername.trim()}
+                    disabled={membershipBusy || !inviteUsername.trim()}
                   >
                     Invite
                   </button>
@@ -264,6 +328,7 @@ export default function TeamDetailPage() {
                       className="field min-w-0 flex-1"
                       type="text"
                       placeholder="@username"
+                      disabled={membershipBusy}
                       value={inviteUsername}
                       onChange={(e) =>
                         setInviteUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))
@@ -274,7 +339,7 @@ export default function TeamDetailPage() {
                     <button
                       type="submit"
                       className="btn-base btn-primary"
-                      disabled={!inviteUsername.trim()}
+                      disabled={membershipBusy || !inviteUsername.trim()}
                     >
                       Invite
                     </button>
@@ -294,6 +359,7 @@ export default function TeamDetailPage() {
               )}
               <button
                 type="button"
+                disabled={membershipBusy}
                 onClick={leave}
                 className="mt-3 cursor-pointer border-0 bg-transparent p-0 text-[0.72rem] text-[var(--color-ink-faint)] transition-colors duration-[120ms] hover:text-[var(--color-danger)]"
               >

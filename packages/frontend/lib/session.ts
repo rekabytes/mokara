@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo } from "react";
-import { atom, getDefaultStore, useAtom } from "jotai";
+import { atom, getDefaultStore, useAtomValue } from "jotai";
 import { api, type SessionUser, type TourState } from "./api";
+import { normalizeError, type NormalizedError } from "./errors";
 
 // PRD-06 §8: session is shared global state, so it lives in a module-level
 // Jotai atom — ONE value for every page. The /me probe runs once per app
@@ -14,10 +15,14 @@ import { api, type SessionUser, type TourState } from "./api";
 // getDefaultStore() below and useAtom() read/write the same state.
 
 type SessionState =
-  { status: "loading" } | { status: "anonymous" } | { status: "authed"; user: SessionUser };
+  | { status: "loading" }
+  | { status: "anonymous" }
+  | { status: "authed"; user: SessionUser }
+  | { status: "error"; error: NormalizedError };
 
 const sessionAtom = atom<SessionState>({ status: "loading" });
 let booted = false;
+let activeRead: AbortController | null = null;
 
 function store() {
   return getDefaultStore();
@@ -26,6 +31,7 @@ function store() {
 /** Call after a successful login/signup — no /me round-trip needed. */
 export function setSessionUser(user: SessionUser) {
   booted = true;
+  activeRead?.abort();
   store().set(sessionAtom, { status: "authed", user });
 }
 
@@ -37,10 +43,7 @@ export function setSessionUser(user: SessionUser) {
 export function setSessionTourState(state: TourState): void {
   const current = store().get(sessionAtom);
   if (current.status !== "authed") return;
-  store().set(sessionAtom, {
-    status: "authed",
-    user: { ...current.user, tour_state: state },
-  });
+  setSessionUser({ ...current.user, tour_state: state });
 }
 
 function markAnonymous() {
@@ -53,30 +56,38 @@ function markAnonymous() {
  * ("Rendered more hooks than during the previous render" — two navigators in
  * one transition, learned 2026-09-04). */
 export async function signOutServer(): Promise<void> {
+  // Let callers use the unified action handler. A failed transport cannot
+  // establish that the server received the request or cleared the cookie.
+  await api.logout();
+}
+
+export async function refreshSession(): Promise<void> {
+  booted = true;
+  activeRead?.abort();
+  const controller = new AbortController();
+  activeRead = controller;
+  if (store().get(sessionAtom).status !== "authed") {
+    store().set(sessionAtom, { status: "loading" });
+  }
   try {
-    await api.logout();
-  } catch {
-    /* the endpoint clears the cookie; nothing to recover */
+    const { user } = await api.me(controller.signal);
+    if (controller.signal.aborted) return;
+    setSessionUser(user);
+  } catch (cause) {
+    if (controller.signal.aborted) return;
+    const error = normalizeError(cause, "Couldn't load your account. Try again.");
+    if (error.action === "redirect") markAnonymous();
+    else store().set(sessionAtom, { status: "error", error });
+  } finally {
+    if (activeRead === controller) activeRead = null;
   }
 }
 
 export function useSession(): SessionState & {
   refresh: () => Promise<void>;
 } {
-  const [state] = useAtom(sessionAtom);
-
-  const refresh = useCallback(async () => {
-    try {
-      const { user } = await api.me();
-      setSessionUser(user);
-    } catch {
-      // The session probe never shows an error: 401, an expired cookie and an
-      // unreachable API all read as "not signed in", and the route guards
-      // decide what to render. lib/api.ts already logged the failed call, so
-      // the reason is still in the terminal.
-      markAnonymous();
-    }
-  }, []);
+  const state = useAtomValue(sessionAtom);
+  const refresh = useCallback(refreshSession, []);
 
   // Bootstrap probe — once per app lifetime, not once per page mount. This is
   // the canonical allowed effect: a one-time read of something outside React

@@ -63,6 +63,14 @@ jobs:
       - name: Prettier check
         run: pnpm format
 
+      # tsx is an existing backend dependency; run from that package while
+      # resolving frontend aliases from its own tsconfig. All transport is mocked.
+      - name: Frontend regression tests
+        working-directory: packages/backend
+        env:
+          TSX_TSCONFIG_PATH: ../frontend/tsconfig.json
+        run: node --import tsx --test ../frontend/test/*.test.mjs
+
       - name: Build frontend (standalone)
         run: pnpm build:frontend
 

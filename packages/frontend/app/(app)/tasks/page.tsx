@@ -1,32 +1,20 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { useAtom } from "jotai";
-import {
-  containerMembersAtom,
-  GROUPS,
-  GROUP_IDS,
-  PRIORITY_IDS,
-  PRIORITY_RANK,
-} from "./board-model";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useAtom, useSetAtom } from "jotai";
+import { containerMembersAtom, GROUPS, GROUP_IDS, PRIORITY_RANK } from "./board-model";
 import { asBoardTask, isThisWeek, isToday } from "./task-format";
-import {
-  api,
-  type Task,
-  type TaskStatus,
-  type TaskPatch,
-  type BindingDraft,
-  type GitHubRepository,
-} from "@/lib/api";
+import { api, type Task, type GitHubRepository } from "@/lib/api";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { useContainers } from "@/lib/containers";
+import { useTaskMutations } from "./use-task-mutations";
 import { useContainerMeta } from "@/lib/meta";
 import { useSession } from "@/lib/session";
 import { onSse } from "@/lib/sse";
 import { taskFilterAtom, taskSortAtom, useCollapsedGroups, type GroupId } from "@/lib/tasksView";
 import type { TourProgress } from "@/lib/onboarding";
-import { DUR, snap } from "@/lib/motion";
+import { DUR, snap, noMotion } from "@/lib/motion";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { TourOverlay } from "@/components/TourOverlay";
@@ -37,6 +25,7 @@ import { BoardToolbar, TaskBoard } from "./Board";
 import { useNewTaskDraft } from "./use-new-task-draft";
 
 export default function TasksPage() {
+  const reduced = useReducedMotion();
   const session = useSession();
   // Owner rule (2026-09-05): KPI binding is personal — the chip only offers the
   // signed-in user's own KPIs, on both the modal and the drawer.
@@ -46,7 +35,12 @@ export default function TasksPage() {
   // fetch/effect here anymore. Containers failing is a boot-level error.
   const { selected, error: bootError } = useContainers();
   const teamId = selected?.id ?? null;
-  const { projects, kpis: containerKpis } = useContainerMeta(selected?.id ?? null);
+  const {
+    projects,
+    kpis: containerKpis,
+    error: metaError,
+    refresh: refreshMeta,
+  } = useContainerMeta(selected?.id ?? null);
   const { error, setError, run } = useAsyncError();
   const [tasks, setTasks] = useState<Task[]>([]);
   // View preferences live in Jotai (lib/tasksView.ts), so they survive a trip
@@ -98,36 +92,47 @@ export default function TasksPage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [githubRepositories, setGitHubRepositories] = useState<GitHubRepository[]>([]);
 
-  // Personal integration state is independent of the selected container. Read
-  // it once for the create modal; GitHub failures never block the board.
+  const { error: githubError, run: runGitHub, clearError: clearGitHubError } = useAsyncError();
+  const githubRead = useRef<AbortController | null>(null);
+  const loadGitHub = useCallback(async () => {
+    githubRead.current?.abort();
+    const controller = new AbortController();
+    githubRead.current = controller;
+    clearGitHubError();
+    const result = await runGitHub(() => api.getGitHubIntegration(controller.signal), {
+      signal: controller.signal,
+      fallback: "Couldn't load repositories for task creation.",
+    });
+    if (result)
+      setGitHubRepositories(
+        !result.configured || result.connection?.reauthorization_required
+          ? []
+          : (result.connection?.repositories.filter(
+              (repository) => repository.enabled && repository.available
+            ) ?? [])
+      );
+  }, [runGitHub, clearGitHubError]);
+  // Personal integration is external server state, independent of workspace.
+  // Failure stays visible and retryable without blocking ordinary task work.
   useEffect(() => {
-    let alive = true;
-    void api
-      .getGitHubIntegration()
-      .then((result) => {
-        if (alive)
-          setGitHubRepositories(
-            !result.configured || result.connection?.reauthorization_required
-              ? []
-              : (result.connection?.repositories.filter(
-                  (repository) => repository.enabled && repository.available
-                ) ?? [])
-          );
-      })
-      .catch(() => {
-        if (alive) setGitHubRepositories([]);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+    void loadGitHub();
+    return () => githubRead.current?.abort();
+  }, [loadGitHub]);
 
+  const taskRead = useRef<AbortController | null>(null);
   const loadTasks = useCallback(async () => {
+    taskRead.current?.abort();
+    const controller = new AbortController();
+    taskRead.current = controller;
     if (!teamId) return;
     setLoading(true);
     setBoardReady(false);
     setError(null);
-    const list = await run(() => api.listTeamTasks(teamId), { fallback: "Failed to load tasks" });
+    const list = await run(() => api.listTeamTasks(teamId, undefined, controller.signal), {
+      fallback: "Failed to load tasks",
+      signal: controller.signal,
+    });
+    if (controller.signal.aborted) return;
     setLoading(false);
     if (list) {
       setTasks(list);
@@ -140,7 +145,12 @@ export default function TasksPage() {
   // this codebase allows). Shared *view* state deliberately lives in Jotai
   // instead — see lib/tasksView.ts.
   useEffect(() => {
-    if (teamId) loadTasks();
+    setTasks([]);
+    setSelectedTaskId(null);
+    setBoardReady(false);
+    if (teamId) void loadTasks();
+    else setLoading(false);
+    return () => taskRead.current?.abort();
   }, [teamId, loadTasks]);
 
   // SSE sync (2026-09-07): teammates' task mutations land on this board
@@ -176,104 +186,38 @@ export default function TasksPage() {
     };
   }, [teamId, loadTasks]);
 
-  // PRD-10/11: container members shared by the drawer's AssigneeChip (main row
-  // and "…" panel). Written into the Jotai atom so both locations see the same
-  // list without either managing their own fetch.
-  const [, setContainerMembers] = useAtom(containerMembersAtom);
+  const setContainerMembers = useSetAtom(containerMembersAtom);
+  const { error: membersError, run: runMembers, clearError: clearMembersError } = useAsyncError();
+  const membersRead = useRef<AbortController | null>(null);
+  const loadMembers = useCallback(async () => {
+    membersRead.current?.abort();
+    const controller = new AbortController();
+    membersRead.current = controller;
+    clearMembersError();
+    if (!teamId) return;
+    const detail = await runMembers(() => api.getTeam(teamId, controller.signal), {
+      signal: controller.signal,
+      fallback: "Couldn't load workspace members.",
+    });
+    if (detail) setContainerMembers(detail.members);
+  }, [teamId, setContainerMembers, runMembers, clearMembersError]);
+  // Assignees are external membership data shared by both drawer chips.
+  // Clear old workspace members immediately and cancel superseded reads.
   useEffect(() => {
-    if (!teamId) {
-      setContainerMembers([]);
-      return;
-    }
-    let alive = true;
-    void api
-      .getTeam(teamId)
-      .then((detail) => {
-        if (alive) setContainerMembers(detail.members);
-      })
-      .catch(() => {
-        if (alive) setContainerMembers([]);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [teamId, setContainerMembers]);
+    setContainerMembers([]);
+    void loadMembers();
+    return () => membersRead.current?.abort();
+  }, [loadMembers, setContainerMembers]);
 
-  async function toggleTask(t: Task) {
-    const next: TaskStatus = t.status === "done" ? "todo" : "done";
-    const updated = await run(() => api.updateTask(t.id, { status: next }), {
-      fallback: "Failed to update task",
-    });
-    if (!updated) return;
-    setTasks((prev) => prev.map((x) => (x.id === t.id ? updated : x)));
-  }
-
-  async function cyclePriority(t: Task) {
-    const next = PRIORITY_IDS[(PRIORITY_IDS.indexOf(t.priority) + 1) % PRIORITY_IDS.length];
-    const updated = await run(() => api.updateTask(t.id, { priority: next }), {
-      fallback: "Failed to update task",
-    });
-    if (!updated) return;
-    setTasks((prev) => prev.map((x) => (x.id === t.id ? updated : x)));
-  }
-
-  async function toggleFlag(t: Task) {
-    const updated = await run(() => api.flagTask(t.id), { fallback: "Failed to update task" });
-    if (!updated) return;
-    setTasks((prev) => prev.map((x) => (x.id === t.id ? updated : x)));
-  }
-
-  async function removeTask(id: string) {
-    // deleteTask resolves void → undefined, so test for null, not falsiness.
-    const ok = await run(() => api.deleteTask(id), { fallback: "Failed to delete task" });
-    if (ok === null) return;
-    setTasks((prev) => prev.filter((x) => x.id !== id));
-    // selectedTask is derived from `tasks`, so it goes null here — which is
-    // what triggers the drawer's exit. AnimatePresence keeps the last render
-    // (task and all) on screen while it slides out, so no unmount race.
-    if (selectedTaskId === id) setSelectedTaskId(null);
-  }
-
-  // Generic field updater for the TaskDetailDrawer. `TaskPatch` is the exact
-  // body PATCH /tasks/:id accepts, so the drawer's patch reaches api.updateTask
-  // with no cast. Flag toggling goes through api.flagTask directly because the
-  // PATCH schema is `.strict()` and would reject `flagged`.
-  async function updateTaskField(id: string, patch: TaskPatch) {
-    const updated = await run(() => api.updateTask(id, patch), {
-      fallback: "Failed to update task",
-    });
-    if (!updated) return;
-    setTasks((prev) => prev.map((x) => (x.id === id ? updated : x)));
-  }
-
-  async function setTaskKpis(id: string, bindings: BindingDraft[]) {
-    const updated = await run(() => api.setTaskKpis(id, bindings), {
-      fallback: "Failed to update KPI weights",
-    });
-    if (!updated) return;
-    setTasks((prev) => prev.map((x) => (x.id === id ? updated : x)));
-  }
-
-  async function retryGitHubIssue(task: Task) {
-    if (task.github_issue?.status === "linked") {
-      const updated = await run(() => api.retryGitHubSync(task.id), {
-        fallback: "Couldn't retry GitHub status sync.",
-      });
-      if (updated)
-        setTasks((previous) =>
-          previous.map((current) => (current.id === task.id ? updated : current))
-        );
-      return;
-    }
-    const repositoryId = task.github_issue?.repository_id;
-    if (!repositoryId) return;
-    const result = await run(() => api.publishGitHubIssue(task.id, repositoryId), {
-      fallback: "The GitHub issue could not be created.",
-    });
-    if (!result) return;
-    const fresh = await run(() => api.getTask(task.id), { fallback: "Failed to refresh the task" });
-    if (fresh) setTasks((prev) => prev.map((row) => (row.id === fresh.id ? fresh : row)));
-  }
+  const {
+    toggleTask,
+    cyclePriority,
+    toggleFlag,
+    removeTask,
+    updateTaskField,
+    setTaskKpis,
+    retryGitHubIssue,
+  } = useTaskMutations({ teamId, setTasks, setSelectedTaskId, run });
 
   function openTask(id: string) {
     setSelectedTaskId(id);
@@ -373,6 +317,42 @@ export default function TasksPage() {
       <BoardToolbar filter={filter} setFilter={setFilter} sort={sort} setSort={setSort} />
 
       <ErrorBanner className="mb-3" message={error?.message} />
+      {membersError && (
+        <div className="mb-3">
+          <ErrorBanner message={membersError.message} />
+          <button
+            type="button"
+            className="btn-base btn-ghost mt-2"
+            onClick={() => void loadMembers()}
+          >
+            Retry members
+          </button>
+        </div>
+      )}
+      {githubError && (
+        <div className="mb-3">
+          <ErrorBanner message={githubError.message} />
+          <button
+            type="button"
+            className="btn-base btn-ghost mt-2"
+            onClick={() => void loadGitHub()}
+          >
+            Retry repositories
+          </button>
+        </div>
+      )}
+      {metaError && (
+        <div className="mb-3">
+          <ErrorBanner message={metaError.message} />
+          <button
+            type="button"
+            className="btn-base btn-ghost mt-2"
+            onClick={() => void refreshMeta()}
+          >
+            Retry projects &amp; KPIs
+          </button>
+        </div>
+      )}
 
       {/* Tasks list + task-detail drawer share a horizontal row. The row is
           a size container (`@container`) so the drawer's `cqw` width
@@ -422,7 +402,7 @@ export default function TasksPage() {
                 closed: { width: "0%", marginLeft: 0 },
                 open: { width: "40%", marginLeft: 16 },
               }}
-              transition={snap(DUR.panel)}
+              transition={reduced ? noMotion : snap(DUR.panel)}
               className="card max-w-[640px] shrink-0 self-stretch overflow-hidden"
             >
               <TaskDetailDrawer

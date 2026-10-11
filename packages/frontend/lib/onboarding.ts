@@ -337,6 +337,22 @@ export function nextVisibleIndex(steps: TourStep[], from: number, p: TourProgres
   return -1;
 }
 
+/** Resolve automatic progress during render, without mirroring app state in
+ * an effect. Each iteration moves forward, so even all-satisfied steps finish
+ * in at most `steps.length` checks. Exhaustion holds the current step: future
+ * phases can become visible after the user opens a form or task. */
+export function resolvedTourIndex(steps: TourStep[], from: number, p: TourProgress): number {
+  let index = from;
+  while (index >= 0 && index < steps.length) {
+    const step = steps[index];
+    if (stepVisible(step, p) && !waitSatisfied(step, p)) break;
+    const next = nextVisibleIndex(steps, index, p);
+    if (next === -1) break;
+    index = next;
+  }
+  return index;
+}
+
 /** The previous applicable step, for Back. -1 means there is none. */
 export function prevVisibleIndex(steps: TourStep[], from: number, p: TourProgress): number {
   for (let i = from - 1; i >= 0; i -= 1) {

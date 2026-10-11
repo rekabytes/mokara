@@ -14,7 +14,11 @@ export function FatalError({
   useEffect(() => {
     // API failures are logged by lib/api.ts. This channel is specifically for
     // render/lifecycle failures that never pass through the API normalizer.
-    console.error("[ui] unhandled render error", error);
+    const digest =
+      typeof error.digest === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(error.digest)
+        ? error.digest
+        : "unavailable";
+    console.error(`[ui] unhandled render error · digest=${digest}`);
   }, [error]);
 
   return (

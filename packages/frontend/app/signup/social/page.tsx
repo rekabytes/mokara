@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, useRef, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
@@ -17,6 +17,7 @@ export default function SocialSignupPage() {
   const [verification, setVerification] = useState<SignupVerificationState>({ ready: false });
   const [attempt, setAttempt] = useState(0);
   const [loading, setLoading] = useState(false);
+  const pending = useRef(false);
   const onVerificationChange = useCallback(
     (next: SignupVerificationState) => {
       setVerification(next);
@@ -26,14 +27,16 @@ export default function SocialSignupPage() {
   );
   // Sync the temporary registration profile held by the backend's HttpOnly cookie.
   useEffect(() => {
-    let active = true;
-    void run(() => api.pendingSocial()).then((result) => {
-      if (active && result) {
-        setProfile(result);
+    const controller = new AbortController();
+    void run(() => api.pendingSocial(controller.signal), { signal: controller.signal }).then(
+      (result) => {
+        if (result) {
+          setProfile(result);
+        }
       }
-    });
+    );
     return () => {
-      active = false;
+      controller.abort();
     };
   }, [run]);
   const canSubmit = Boolean(profile) && verification.ready && !loading;
@@ -41,21 +44,27 @@ export default function SocialSignupPage() {
     event.preventDefault();
     if (!canSubmit) return;
     clearError();
-    setLoading(true);
-    const result = await run(() =>
-      api.completeSocial({
-        turnstile_token: verification.token,
-      })
-    );
-    setLoading(false);
-    if (!result) {
-      setVerification({ ready: false });
-      setAttempt((value) => value + 1);
-      return;
+    if (pending.current) return;
+    pending.current = true;
+    try {
+      setLoading(true);
+      const result = await run(() =>
+        api.completeSocial({
+          turnstile_token: verification.token,
+        })
+      );
+      if (!result) {
+        setVerification({ ready: false });
+        setAttempt((value) => value + 1);
+        return;
+      }
+      setSessionUser(result.user);
+      router.replace(result.redirect);
+      router.refresh();
+    } finally {
+      pending.current = false;
+      setLoading(false);
     }
-    setSessionUser(result.user);
-    router.replace(result.redirect);
-    router.refresh();
   }
   return (
     <AuthLayout

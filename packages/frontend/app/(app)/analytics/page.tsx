@@ -71,35 +71,55 @@ export default function AnalyticsPage() {
     new Set(["created", "in_progress", "completed", "canceled"])
   );
 
+  const reads = useRef<{
+    analytics?: AbortController;
+    progress?: AbortController;
+    kpis?: AbortController;
+  }>({});
   const load = useCallback(async () => {
+    reads.current.analytics?.abort();
+    const controller = new AbortController();
+    reads.current.analytics = controller;
     if (!teamId) return;
     setLoading(true);
     setError(null);
-    const a = await run(() => api.getAnalytics(teamId, WINDOW_DAYS), {
+    const a = await run(() => api.getAnalytics(teamId, WINDOW_DAYS, controller.signal), {
       fallback: "Couldn't load analytics",
+      signal: controller.signal,
     });
+    if (controller.signal.aborted) return;
     setLoading(false);
     if (a) setData(a);
   }, [teamId, run, setError]);
 
   const loadProgress = useCallback(async () => {
+    reads.current.progress?.abort();
+    const controller = new AbortController();
+    reads.current.progress = controller;
     if (!teamId) return;
     setProgressLoading(true);
     setProgressError(null);
-    const p = await runProgress(() => api.getProgress(teamId), {
+    const p = await runProgress(() => api.getProgress(teamId, controller.signal), {
       fallback: "Couldn't load progress",
+      signal: controller.signal,
     });
+    if (controller.signal.aborted) return;
     setProgressLoading(false);
     if (p) setProgress(p);
   }, [teamId, runProgress, setProgressError]);
 
   const loadKpiProgress = useCallback(async () => {
+    reads.current.kpis?.abort();
+    const controller = new AbortController();
+    reads.current.kpis = controller;
     if (!teamId) return;
     setKpiLoading(true);
     setKpiError(null);
-    const res = await runKpiProgress(() => api.getKpiProgress(teamId), {
+    const res = await runKpiProgress(() => api.getKpiProgress(teamId, controller.signal), {
       fallback: "Couldn't load KPI progress",
+      signal: controller.signal,
     });
+    if (controller.signal.aborted) return;
     setKpiLoading(false);
     if (res) setKpiProgress(res.kpis);
   }, [teamId, runKpiProgress, setKpiError]);
@@ -124,7 +144,16 @@ export default function AnalyticsPage() {
   }, [teamId, load, loadProgress, loadKpiProgress]);
 
   useEffect(() => {
+    setData(null);
+    setProgress(null);
+    setKpiProgress(null);
     void loadAll();
+    const activeReads = reads.current;
+    return () => {
+      activeReads.analytics?.abort();
+      activeReads.progress?.abort();
+      activeReads.kpis?.abort();
+    };
   }, [loadAll]);
 
   function toggle(k: SeriesKey) {

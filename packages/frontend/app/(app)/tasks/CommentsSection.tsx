@@ -1,22 +1,22 @@
 "use client";
 
+import { restoreRemovedItems } from "./optimistic-list";
 import { AttachmentLightbox } from "./AttachmentsSection";
 import { CommentRow } from "./CommentRow";
 import { CloseSmallIcon, PaperclipIcon } from "./icons";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { api, type Attachment, type Comment, type User } from "@/lib/api";
-import { bannerVariants, listItemVariants } from "@/lib/motion";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { listItemVariants } from "@/lib/motion";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 // The drawer's comment thread: `CommentsSection` (list, the 60-second `now`
 // clock, error notice) and `CommentComposer` (body + paperclip + pending chips).
 //
-// Rules that live here: the composer's submit handler calls
-// `e.preventDefault()` as its FIRST statement — without it the browser navigates
-// after the first `await` and the attachment upload never runs (the 2026-09-05
-// bug). Inserts are optimistic. The failure notice is a compact inline row that
-// clears itself after 4s and is deliberately NOT an `ErrorBanner`. A body is
-// still required alongside files. This list is the drawer's only scroll region.
+// Inserts are optimistic, and failed deletes restore only their own rows.
+// The composer keeps an unposted draft on failure and cannot submit the same
+// pending request twice. Confirmed posts remain saved when file uploads fail.
+// The shared error banner stays visible until the next action or retry.
 
 export function CommentsSection({
   taskId,
@@ -26,47 +26,59 @@ export function CommentsSection({
   currentUser: User | null;
 }) {
   const [comments, setComments] = useState<Comment[] | null>(null);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const { error: actionError, setError: setActionError, run } = useAsyncError();
+  const { error: loadError, run: runLoad, clearError: clearLoadError } = useAsyncError();
+  const read = useRef<AbortController | null>(null);
+  const { error: actionError, clearError: clearActionError, run } = useAsyncError();
   const [now, setNow] = useState(() => Date.now());
   const [replyTo, setReplyTo] = useState<Comment | null>(null);
   // PRD-11: a clicked comment image opens the shared large view.
   const [viewing, setViewing] = useState<Attachment | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const postingRef = useRef(false);
+  const [posting, setPosting] = useState(false);
+  const pendingRootsRef = useRef(new Set<string>());
+  const [pendingRoots, setPendingRoots] = useState<ReadonlySet<string>>(new Set());
+
+  function acquireRoot(id: string): string | null {
+    const comment = comments?.find((row) => row.id === id);
+    if (!comment || id.startsWith("temp-") || postingRef.current) return null;
+    const root = comment.parent_id ?? id;
+    if (pendingRootsRef.current.has(root)) return null;
+    pendingRootsRef.current.add(root);
+    setPendingRoots(new Set(pendingRootsRef.current));
+    read.current?.abort();
+    return root;
+  }
+
+  function releaseRoot(root: string) {
+    pendingRootsRef.current.delete(root);
+    setPendingRoots(new Set(pendingRootsRef.current));
+  }
 
   // Relative timestamps need a clock, so this is a real outside-React sync:
-  // one 60s tick keeps "3m ago" honest without refetching. Both timers in this
-  // component are of that kind — nothing here is a state-mirroring chain.
+  // one 60s tick keeps "3m ago" honest without refetching.
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(id);
   }, []);
 
-  // A failed comment action announces itself for 4s. Timer again, so it stays;
-  // it lives here rather than in ErrorBanner because this surface is the
-  // drawer's compact inline notice, not one of the full-width block banners.
-  useEffect(() => {
-    if (!actionError) return;
-    const id = setTimeout(() => setActionError(null), 4_000);
-    return () => clearTimeout(id);
-  }, [actionError, setActionError]);
-
   const load = useCallback(async () => {
-    try {
-      const res = await api.listComments(taskId);
-      setComments(res.comments);
-      setLoadFailed(false);
-    } catch {
-      setLoadFailed(true);
-    }
-  }, [taskId]);
+    read.current?.abort();
+    const controller = new AbortController();
+    read.current = controller;
+    clearLoadError();
+    const res = await runLoad(() => api.listComments(taskId, controller.signal), {
+      fallback: "Couldn't load comments.",
+      signal: controller.signal,
+    });
+    if (res) setComments(res.comments);
+  }, [taskId, runLoad, clearLoadError]);
 
-  // Server sync: (re)load the thread when the task changes. Clearing `comments`
-  // first is what makes the drawer show "Loading…" for the new task rather than
-  // the previous task's discussion.
+  // The thread is external server data. Abort on task change/unmount so an
+  // obsolete response cannot replace the current thread or redirect it.
   useEffect(() => {
-    setComments(null);
-    load();
+    void load();
+    return () => read.current?.abort();
   }, [load]);
 
   // Keep the newest comment in view as the list grows. Writing scrollHeight is
@@ -78,66 +90,99 @@ export function CommentsSection({
   }, [count]);
 
   async function submit(body: string, parentId?: string, files?: File[]) {
-    if (!currentUser) return;
-    setReplyTo(null);
-    const iso = new Date().toISOString();
-    // Optimistic insert — feels instant; reconciled (or rolled back) when the
-    // request settles.
-    const temp: Comment = {
-      id: `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      task_id: taskId,
-      author_id: currentUser.id,
-      author: currentUser,
-      parent_id: parentId ?? null,
-      body,
-      attachments: [],
-      created_at: iso,
-      updated_at: iso,
-    };
-    setComments((cs) => [...(cs ?? []), temp]);
-    const res = await run(() => api.createComment(taskId, body, parentId), {
-      fallback: "Failed to post comment",
-      // Undo the optimistic insert; the hook already surfaced the failure.
-      onError: () => setComments((cs) => (cs ?? []).filter((c) => c.id !== temp.id)),
-    });
-    if (!res) return;
-    setComments((cs) => (cs ?? []).map((c) => (c.id === temp.id ? res.comment : c)));
-
-    // PRD-11: the files upload AFTER the comment exists, one at a time, and
-    // each one folds into that comment's embedded list as it lands — so an
-    // image appears the moment its bytes are stored.
-    for (const file of files ?? []) {
-      const up = await run(() => api.uploadCommentAttachment(res.comment.id, file), {
-        fallback: "Failed to attach the file",
+    if (
+      !currentUser ||
+      comments === null ||
+      postingRef.current ||
+      (parentId && pendingRootsRef.current.has(parentId))
+    )
+      return false;
+    postingRef.current = true;
+    setPosting(true);
+    read.current?.abort();
+    clearActionError();
+    try {
+      const iso = new Date().toISOString();
+      // Optimistic insert — feels instant; reconciled (or rolled back) when the
+      // request settles.
+      const temp: Comment = {
+        id: `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        task_id: taskId,
+        author_id: currentUser.id,
+        author: currentUser,
+        parent_id: parentId ?? null,
+        body,
+        attachments: [],
+        created_at: iso,
+        updated_at: iso,
+      };
+      setComments((cs) => [...(cs ?? []), temp]);
+      const res = await run(() => api.createComment(taskId, body, parentId), {
+        fallback: "Failed to post comment",
+        // Undo the optimistic insert; the hook already surfaced the failure.
+        onError: () => setComments((cs) => (cs ?? []).filter((c) => c.id !== temp.id)),
       });
-      if (up)
-        setComments((cs) =>
-          (cs ?? []).map((c) =>
-            c.id === res.comment.id ? { ...c, attachments: [...c.attachments, up.attachment] } : c
-          )
-        );
+      if (!res) return false;
+      setComments((cs) => (cs ?? []).map((c) => (c.id === temp.id ? res.comment : c)));
+      setReplyTo(null);
+
+      // PRD-11: the files upload AFTER the comment exists, one at a time, and
+      // each one folds into that comment's embedded list as it lands — so an
+      // image appears the moment its bytes are stored.
+      for (const file of files ?? []) {
+        const up = await run(() => api.uploadCommentAttachment(res.comment.id, file), {
+          fallback: "Failed to attach the file",
+        });
+        if (up)
+          setComments((cs) =>
+            (cs ?? []).map((c) =>
+              c.id === res.comment.id ? { ...c, attachments: [...c.attachments, up.attachment] } : c
+            )
+          );
+      }
+      return true;
+    } finally {
+      postingRef.current = false;
+      setPosting(false);
     }
   }
 
   async function saveEdit(id: string, prevBody: string, body: string) {
-    setComments((cs) => (cs ?? []).map((c) => (c.id === id ? { ...c, body } : c)));
-    const res = await run(() => api.updateComment(id, body), {
-      fallback: "Failed to save comment",
-      onError: () =>
-        setComments((cs) => (cs ?? []).map((c) => (c.id === id ? { ...c, body: prevBody } : c))),
-    });
-    if (res) setComments((cs) => (cs ?? []).map((c) => (c.id === id ? res.comment : c)));
+    const root = acquireRoot(id);
+    if (!root) return;
+    try {
+      clearActionError();
+      setComments((cs) => (cs ?? []).map((c) => (c.id === id ? { ...c, body } : c)));
+      const res = await run(() => api.updateComment(id, body), {
+        fallback: "Failed to save comment",
+        onError: () =>
+          setComments((cs) => (cs ?? []).map((c) => (c.id === id ? { ...c, body: prevBody } : c))),
+      });
+      if (res) setComments((cs) => (cs ?? []).map((c) => (c.id === id ? res.comment : c)));
+    } finally {
+      releaseRoot(root);
+    }
   }
 
   async function remove(id: string) {
-    const prev = comments ?? [];
-    setReplyTo((r) => (r && (r.id === id || r.parent_id === id) ? null : r));
-    // Mirror the DB cascade locally: deleting a comment drops its replies.
-    setComments(prev.filter((c) => c.id !== id && c.parent_id !== id));
-    await run(() => api.deleteComment(id), {
-      fallback: "Failed to delete comment",
-      onError: () => setComments(prev),
-    });
+    const root = acquireRoot(id);
+    if (!root) return;
+    try {
+      clearActionError();
+      const prev = comments ?? [];
+      const removed = new Set(
+        prev.filter((c) => c.id === id || c.parent_id === id).map((c) => c.id)
+      );
+      setReplyTo((r) => (r && (r.id === id || r.parent_id === id) ? null : r));
+      // Mirror the DB cascade locally: deleting a comment drops its replies.
+      setComments((current) => (current ?? []).filter((c) => !removed.has(c.id)));
+      await run(() => api.deleteComment(id), {
+        fallback: "Failed to delete comment",
+        onError: () => setComments((current) => restoreRemovedItems(current ?? [], prev, removed)),
+      });
+    } finally {
+      releaseRoot(root);
+    }
   }
 
   // One level of threading: roots in arrival order, replies grouped under
@@ -173,9 +218,9 @@ export function CommentsSection({
           own capped scroller since PRD-11; this is still the only region that
           grows with content.) */}
       <div ref={listRef} className="mt-2 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-        {loadFailed && comments === null ? (
-          <p className="text-[0.8rem] text-[var(--color-ink-faint)]">
-            Couldn&apos;t load comments.{" "}
+        {loadError && (
+          <div className="text-[0.8rem] text-[var(--color-ink-faint)]">
+            <ErrorBanner message={loadError.message} />
             <button
               type="button"
               onClick={load}
@@ -183,8 +228,9 @@ export function CommentsSection({
             >
               Retry
             </button>
-          </p>
-        ) : comments !== null && comments.length === 0 ? (
+          </div>
+        )}
+        {comments !== null && comments.length === 0 ? (
           <p className="text-[0.8rem] text-[var(--color-ink-faint)]">
             No comments yet. Start the conversation.
           </p>
@@ -201,6 +247,7 @@ export function CommentsSection({
                   exit="exit"
                 >
                   <CommentRow
+                    disabled={posting || pendingRoots.has(c.id) || c.id.startsWith("temp-")}
                     comment={c}
                     now={now}
                     isOwn={currentUser?.id === c.author_id}
@@ -225,6 +272,7 @@ export function CommentsSection({
                         {replies.map((r) => (
                           <CommentRow
                             key={r.id}
+                            disabled={posting || pendingRoots.has(c.id) || r.id.startsWith("temp-")}
                             comment={r}
                             now={now}
                             isOwn={currentUser?.id === r.author_id}
@@ -245,23 +293,7 @@ export function CommentsSection({
         )}
       </div>
 
-      {/* Same failure the drawer used to print as a bare <p>, now with an exit:
-          AnimatePresence owns unmounting, so `setActionError(null)` (the 4s
-          timer above) fades it out instead of blanking it. */}
-      <AnimatePresence initial={false}>
-        {actionError && (
-          <motion.p
-            key="comment-error"
-            variants={bannerVariants}
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
-            className="mt-1.5 overflow-hidden text-[0.74rem] text-[var(--color-danger)]"
-          >
-            <span className="block">{actionError.message}</span>
-          </motion.p>
-        )}
-      </AnimatePresence>
+      <ErrorBanner className="mt-1.5" message={actionError?.message} />
 
       {currentUser && (
         // `key` is what makes the composer's prefill declarative: changing the
@@ -272,6 +304,11 @@ export function CommentsSection({
           replyTo={replyTo}
           onCancelReply={() => setReplyTo(null)}
           onSubmit={submit}
+          disabled={
+            comments === null ||
+            posting ||
+            (replyTo !== null && pendingRoots.has(replyTo.parent_id ?? replyTo.id))
+          }
         />
       )}
 
@@ -286,10 +323,12 @@ export function CommentComposer({
   replyTo,
   onCancelReply,
   onSubmit,
+  disabled = false,
 }: {
+  disabled?: boolean;
   replyTo: Comment | null;
   onCancelReply: () => void;
-  onSubmit: (body: string, parentId?: string, files?: File[]) => void;
+  onSubmit: (body: string, parentId?: string, files?: File[]) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState(() =>
     // The mention is the initial value, not a value copied in later. Combined
@@ -304,23 +343,38 @@ export function CommentComposer({
   const fileRef = useRef<HTMLInputElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
-  function submit() {
+  const pending = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit() {
+    if (disabled || pending.current) return;
     const body = draft.trim();
     if (!body) return;
     // Threading is one level deep — replying to a reply targets the root.
-    onSubmit(
-      body,
-      replyTo ? (replyTo.parent_id ?? replyTo.id) : undefined,
-      files.length > 0 ? files : undefined
-    );
-    setDraft("");
-    setFiles([]);
+    pending.current = true;
+    setSubmitting(true);
+    try {
+      const posted = await onSubmit(
+        body,
+        replyTo ? (replyTo.parent_id ?? replyTo.id) : undefined,
+        files.length > 0 ? files : undefined
+      );
+      if (posted) {
+        setDraft("");
+        setFiles([]);
+      }
+    } finally {
+      pending.current = false;
+      setSubmitting(false);
+    }
   }
 
   function cancelReply() {
     onCancelReply();
     setDraft("");
   }
+
+  const busy = disabled || submitting;
 
   return (
     // PRD-13: the walkthrough frames the composer as a whole on an ACT step, so
@@ -329,6 +383,7 @@ export function CommentComposer({
     <div
       className="mt-2.5 border-t border-[var(--color-border-soft)] pt-2.5"
       data-tour="drawer-composer"
+      aria-busy={busy}
     >
       {replyTo && (
         <div className="mb-1.5 flex items-center justify-between rounded-md bg-[var(--color-surface)] px-2.5 py-1.5">
@@ -341,6 +396,7 @@ export function CommentComposer({
           <button
             type="button"
             aria-label="Cancel reply"
+            disabled={busy}
             onClick={cancelReply}
             className="grid size-5 shrink-0 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
           >
@@ -349,6 +405,7 @@ export function CommentComposer({
         </div>
       )}
       <textarea
+        disabled={busy}
         ref={taRef}
         // Only when replying — otherwise opening a task drawer would yank
         // focus into the comment box. Caret lands at the end of the seeded
@@ -380,6 +437,7 @@ export function CommentComposer({
               <button
                 type="button"
                 aria-label={`Remove ${f.name}`}
+                disabled={busy}
                 onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
                 className="grid size-3.5 shrink-0 cursor-pointer place-items-center rounded-full text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-danger)]"
               >
@@ -398,6 +456,7 @@ export function CommentComposer({
             type="button"
             onClick={() => fileRef.current?.click()}
             aria-label="Attach an image or PDF"
+            disabled={busy}
             className="grid size-6 cursor-pointer place-items-center rounded-md text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
           >
             <PaperclipIcon />
@@ -412,6 +471,7 @@ export function CommentComposer({
         <input
           ref={fileRef}
           type="file"
+          disabled={busy}
           multiple
           accept="image/*,application/pdf"
           className="hidden"
@@ -426,7 +486,7 @@ export function CommentComposer({
         <button
           type="button"
           onClick={submit}
-          disabled={!draft.trim()}
+          disabled={busy || !draft.trim()}
           className="cursor-pointer rounded-full bg-[var(--color-accent)] px-3 py-1 text-[0.76rem] font-medium text-white disabled:cursor-default disabled:opacity-40"
         >
           Comment

@@ -158,6 +158,32 @@ export function Dropdown({
     open && pos ? (
       <motion.div
         key="dropdown-menu"
+        ref={(node) => {
+          const selected = node?.querySelector<HTMLButtonElement>('button[aria-selected="true"]');
+          (selected ?? node?.querySelector<HTMLButtonElement>("button:not(:disabled)"))?.focus();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen(false);
+            triggerRef.current?.focus();
+            return;
+          }
+          if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+          event.preventDefault();
+          const items = Array.from(
+            event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")
+          );
+          const current = items.findIndex((item) => item === document.activeElement);
+          const next =
+            event.key === "Home"
+              ? 0
+              : event.key === "End"
+                ? items.length - 1
+                : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+          items[next]?.focus();
+        }}
         data-dropdown-menu
         role="listbox"
         variants={popoverVariants}
@@ -179,6 +205,13 @@ export function Dropdown({
         onClick={() => {
           if (!open) placeBelow();
           setOpen((o) => !o);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            placeBelow();
+            setOpen(true);
+          }
         }}
         aria-haspopup="listbox"
         aria-expanded={open}

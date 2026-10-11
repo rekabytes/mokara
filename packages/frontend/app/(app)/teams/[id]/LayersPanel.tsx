@@ -10,9 +10,9 @@ import {
   type Team,
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { collapseVariants } from "@/lib/motion";
-import { AnimatePresence, motion } from "framer-motion";
-import { Fragment, useState } from "react";
+import { collapseVariants, reducedCollapseVariants } from "@/lib/motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { Fragment, useRef, useState } from "react";
 // The container's layers rail (PRD-06): the team layer of owner-created, shared
 // projects and KPIs, then each member's personal layer grouped by owner, plus
 // the create form, the `SWATCHES` colour picker, the `GroupLabel` divider and
@@ -64,10 +64,12 @@ export function LayersPanel({
   onArchive: (id: string, archived: boolean) => Promise<boolean>;
   onDelete: (kind: "project" | "kpi", id: string) => Promise<boolean>;
 }) {
+  const reduced = useReducedMotion();
   const [projName, setProjName] = useState("");
   const [kpiName, setKpiName] = useState("");
   const [projScope, setProjScope] = useState<ContainerScope>("personal");
   const [projColor, setProjColor] = useState<string | null>(null);
+  const pending = useRef(false);
   const [busy, setBusy] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
 
@@ -77,24 +79,29 @@ export function LayersPanel({
 
   async function submit(kind: "project" | "kpi", name: string, scope: ContainerScope) {
     const trimmed = name.trim();
-    if (!trimmed || busy) return false;
+    if (!trimmed || pending.current) return false;
+    pending.current = true;
     setBusy(true);
-    const ok = await onAdd(
-      kind,
-      trimmed,
-      canTeamScope ? scope : "personal",
-      kind === "project" ? (projColor ?? undefined) : undefined
-    ); // KPIs ignore scope — always personal
-    setBusy(false);
-    if (ok) {
-      if (kind === "project") {
-        setProjName("");
-        setProjColor(null);
-      } else {
-        setKpiName("");
+    try {
+      const ok = await onAdd(
+        kind,
+        trimmed,
+        canTeamScope ? scope : "personal",
+        kind === "project" ? (projColor ?? undefined) : undefined
+      ); // KPIs ignore scope — always personal
+      if (ok) {
+        if (kind === "project") {
+          setProjName((current) => (current === name ? "" : current));
+          setProjColor((current) => (current === projColor ? null : current));
+        } else {
+          setKpiName((current) => (current === name ? "" : current));
+        }
       }
+      return ok;
+    } finally {
+      pending.current = false;
+      setBusy(false);
     }
-    return ok;
   }
 
   // Team projects first, then personal items grouped per owner (the viewer's
@@ -195,7 +202,7 @@ export function LayersPanel({
             {showArchived && (
               <motion.ul
                 key="archived-projects"
-                variants={collapseVariants}
+                variants={reduced ? reducedCollapseVariants : collapseVariants}
                 initial="hidden"
                 animate="visible"
                 exit="hidden"

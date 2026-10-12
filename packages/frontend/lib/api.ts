@@ -1,4 +1,8 @@
 import {
+  mcpConsentSchema,
+  mcpConsentResultSchema,
+  mcpConnectionsSchema,
+  mcpCredentialSchema,
   analyticsSchema,
   attachmentsSchema,
   billingSchema,
@@ -58,6 +62,7 @@ import type {
 } from "./api-types";
 
 export type {
+  McpConnection,
   TaskStatus,
   TaskPriority,
   TaskPatch,
@@ -255,6 +260,17 @@ function uploadViaXhr(
 }
 
 export const api = {
+  mcpConsent: (request: string, signal?: AbortSignal) =>
+    req(mcpConsentSchema, `/mcp/oauth/consent?request=${encodeURIComponent(request)}`, { signal }),
+  approveMcp: (
+    data: { request: string; approve: boolean; workspace_ids: string[] },
+    signal?: AbortSignal
+  ) =>
+    req(mcpConsentResultSchema, "/mcp/oauth/consent", {
+      signal,
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   // ---- Auth ----
   socialProviders: (signal?: AbortSignal) =>
     req(socialProvidersSchema, "/auth/social/providers", { cache: "no-store", signal }),
@@ -342,6 +358,14 @@ export const api = {
   // it on mount so a checkout return lands the plan even where the webhook
   // cannot reach (local dev). Void → test `=== null`.
   syncBilling: () => req(emptySchema, "/me/billing/sync", { method: "POST" }),
+
+  // ---- Read-only AI agent connections ----
+  listMcpConnections: (signal?: AbortSignal) =>
+    req(mcpConnectionsSchema, "/me/mcp-connections", { signal }),
+  createMcpConnection: (data: { name: string; workspace_ids: string[]; expires_in_days: number }) =>
+    req(mcpCredentialSchema, "/me/mcp-connections", { method: "POST", body: JSON.stringify(data) }),
+  revokeMcpConnection: (id: string) =>
+    req(emptySchema, `/me/mcp-connections/${id}`, { method: "DELETE" }),
 
   // ---- GitHub App integration ----
   getGitHubIntegration: (signal?: AbortSignal) =>

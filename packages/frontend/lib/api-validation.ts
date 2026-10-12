@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type {
+  McpConnection,
   Analytics,
   BillingInfo,
   GitHubIntegration,
@@ -329,3 +330,43 @@ export function parseResponse<T>(schema: z.ZodType<T>, value: unknown): T {
   }
   return result.data;
 }
+
+const mcpConnectionSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  workspace_ids: z.array(z.string().uuid()),
+  created_at: z.iso.datetime(),
+  expires_at: z.iso.datetime(),
+  revoked_at: z.iso.datetime().nullable(),
+  access: z.literal("read"),
+}) satisfies z.ZodType<McpConnection>;
+export const mcpConnectionsSchema = z.object({ connections: z.array(mcpConnectionSchema) });
+export const mcpCredentialSchema = z.object({
+  connection: mcpConnectionSchema,
+  token: z.string().regex(/^mk_mcp_[A-Za-z0-9_-]{43}$/),
+});
+
+export const mcpConsentSchema = z.object({
+  client: z.object({ id: z.uuid(), name: z.string(), redirect_uri: z.url() }),
+  scope: z.literal("mokara:read"),
+  expires_in_days: z.literal(30),
+  workspaces: z.array(z.object({ id: z.uuid(), name: z.string() })),
+});
+// Consent alone may navigate to an approved agent callback, including native loopback.
+export const mcpConsentResultSchema = z.object({
+  url: z.string().refine((raw) => {
+    try {
+      const url = new URL(raw);
+      return (
+        !url.username &&
+        !url.password &&
+        !url.hash &&
+        !/[\\\r\n]/.test(raw) &&
+        (url.protocol === "https:" ||
+          (url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)))
+      );
+    } catch {
+      return false;
+    }
+  }),
+});

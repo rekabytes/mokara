@@ -1,0 +1,35 @@
+import type { Context } from "hono";
+import { mcpOAuthConfig } from "./oauth-config.ts";
+import { log } from "../lib/logger.ts";
+
+export class McpFailure extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly status: 401 | 403 | 404 | 429 | 503,
+    readonly retryAfter?: number
+  ) {
+    super(message);
+  }
+}
+
+// One HTTP error adapter for credential management and agent transport.
+// Unexpected database errors may contain credential values: never dump them.
+export function handleMcpHttpError(error: Error, c: Context) {
+  c.header("Cache-Control", "no-store");
+  if (error instanceof McpFailure) {
+    if (error.status === 401) {
+      const config = mcpOAuthConfig();
+      c.header(
+        "WWW-Authenticate",
+        config
+          ? `Bearer resource_metadata="${config.metadata}", scope="mokara:read"`
+          : 'Bearer realm="mokara-mcp"'
+      );
+    }
+    if (error.retryAfter) c.header("Retry-After", String(error.retryAfter));
+    return c.json({ error: error.code, message: error.message }, error.status);
+  }
+  log.error("mcp request failed");
+  return c.json({ error: "internal_error", message: "Agent access is unavailable." }, 500);
+}

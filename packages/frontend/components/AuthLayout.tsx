@@ -7,11 +7,13 @@ export function AuthLayout({
   description,
   mode = "login",
   children,
+  alternateHref,
 }: {
   title: string;
   description: string;
   mode?: "login" | "signup";
   children: ReactNode;
+  alternateHref?: string;
 }) {
   return (
     <main className="relative z-10 flex min-h-dvh flex-col px-5 py-6 sm:px-8 lg:px-12">
@@ -38,7 +40,7 @@ export function AuthLayout({
           <span className="text-lg font-semibold tracking-[-0.04em]">Mokara</span>
         </Link>
         <Link
-          href={mode === "signup" ? "/login" : "/signup"}
+          href={alternateHref ?? (mode === "signup" ? "/login" : "/signup")}
           className="rounded-[var(--radius-btn)] px-2 py-2 text-sm font-medium text-[var(--color-ink-muted)] no-underline hover:text-[var(--color-accent)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--color-accent)]"
         >
           {mode === "signup" ? "Sign in" : "Create an account"} <span aria-hidden="true">↗</span>

@@ -71,6 +71,11 @@ jobs:
           TSX_TSCONFIG_PATH: ../frontend/tsconfig.json
         run: node --import tsx --test ../frontend/test/*.test.mjs
 
+      - name: Auth and MCP authorization regression tests
+        run: |
+          pnpm --filter @mokara/backend test:auth
+          pnpm --filter @mokara/backend test:mcp
+
       - name: Build frontend (standalone)
         run: pnpm build:frontend
 

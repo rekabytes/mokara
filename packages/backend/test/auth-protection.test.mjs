@@ -9,7 +9,7 @@ import {
   signupProtection,
   verifySignupChallenge,
 } from "../src/lib/auth-protection.ts";
-import { setAuthProxyHeaders } from "../../frontend/lib/auth-proxy.ts";
+import { setAuthProxyHeaders } from "../../frontend/app/api/[...path]/auth-proxy.server.ts";
 
 const secret = "test-only-proxy-secret-at-least-32-characters";
 const settings = {

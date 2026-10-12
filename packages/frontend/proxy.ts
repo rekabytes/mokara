@@ -18,7 +18,7 @@ export function proxy(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (isAuthPath && hasCookie) {
+  if (isAuthPath && hasCookie && !req.nextUrl.searchParams.has("from")) {
     const url = req.nextUrl.clone();
     url.pathname = "/tasks";
     return NextResponse.redirect(url);

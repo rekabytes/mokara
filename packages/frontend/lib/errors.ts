@@ -363,6 +363,38 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
     action: "inline",
     message: "This GitHub issue is already being published.",
   },
+  invalid_request: {
+    kind: "input",
+    action: "inline",
+    message: "This connection request is invalid or expired. Start again from your agent.",
+    serverSays: true,
+  },
+  access_denied: {
+    kind: "permission",
+    action: "inline",
+    message: "Connection approval was denied.",
+    serverSays: true,
+  },
+  temporarily_unavailable: {
+    kind: "server",
+    action: "retry",
+    message: "Too many connection attempts. Try again later.",
+  },
+  server_error: {
+    kind: "server",
+    action: "retry",
+    message: "Authorization is temporarily unavailable. Try again.",
+  },
+  mcp_rate_limited: {
+    message: "Too many agent requests. Wait a moment and try again.",
+    kind: "server",
+    action: "retry",
+  },
+  mcp_workspace_forbidden: {
+    message: "You can only connect workspaces you currently belong to.",
+    kind: "permission",
+    action: "inline",
+  },
   github_rate_limited: {
     kind: "server",
     action: "retry",

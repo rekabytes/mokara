@@ -9,6 +9,7 @@ import { useSession } from "@/lib/session";
 import { useContainers } from "@/lib/containers";
 import { tileIn, tileStagger } from "@/lib/motion";
 import { BillingTile } from "./BillingTile";
+import { AIConnectionsTile } from "./AIConnectionsTile";
 import { GitHubTile } from "./GitHubTile";
 import { ProfileTile } from "./ProfileTile";
 import { PasswordTile } from "./PasswordTile";
@@ -93,6 +94,7 @@ export function SettingsView({ contactEmail }: { contactEmail: string | null }) 
 
         {/* ======== Personal integrations ======== */}
         <GitHubTile run={run} />
+        <AIConnectionsTile containers={containers} />
 
         {/* ======== Devices ======== */}
         <DevicesTile {...deviceState} />

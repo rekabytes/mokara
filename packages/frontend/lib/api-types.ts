@@ -349,3 +349,13 @@ export type ProgressTask = {
 export type Progress = {
   tasks: ProgressTask[];
 };
+
+export type McpConnection = {
+  id: string;
+  name: string;
+  workspace_ids: string[];
+  created_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  access: "read";
+};

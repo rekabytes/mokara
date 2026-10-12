@@ -112,7 +112,42 @@ const attachment = {
 };
 const subtask = { id: "s", title: "Step", done: false, position: 0 };
 const url = { url: "https://github.com/login/oauth/authorize?state=test" };
+const mcpConnection = {
+  id: "11111111-1111-4111-8111-111111111111",
+  name: "Agent",
+  workspace_ids: ["22222222-2222-4222-8222-222222222222"],
+  created_at: date.toISOString(),
+  expires_at: date.toISOString(),
+  revoked_at: null,
+  access: "read",
+};
 const cases = [
+  [
+    "mcpConsent",
+    ["request"],
+    {
+      client: {
+        id: mcpConnection.id,
+        name: "Agent",
+        redirect_uri: "https://agent.example/callback",
+      },
+      scope: "mokara:read",
+      expires_in_days: 30,
+      workspaces: [{ id: mcpConnection.workspace_ids[0], name: "Workspace" }],
+    },
+  ],
+  [
+    "approveMcp",
+    [{ request: "request", approve: true, workspace_ids: mcpConnection.workspace_ids }],
+    { url: "http://127.0.0.1:5000/callback?code=test" },
+  ],
+  ["listMcpConnections", [], { connections: [mcpConnection] }],
+  [
+    "createMcpConnection",
+    [{ name: "Agent", workspace_ids: mcpConnection.workspace_ids, expires_in_days: 30 }],
+    { connection: mcpConnection, token: `mk_mcp_${"a".repeat(43)}` },
+  ],
+  ["revokeMcpConnection", [mcpConnection.id], undefined],
   ["socialProviders", [], { providers: [{ provider: "google", enabled: true }] }],
   ["socialConnections", [], { connections: [] }],
   ["startSocial", ["google", { intent: "login" }], url],

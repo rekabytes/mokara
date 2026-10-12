@@ -226,3 +226,22 @@ test("browser logs omit raw provider details", async (t) => {
   await assert.rejects(api.listNotifications());
   assert.equal(JSON.stringify(logging.mock.calls).includes("SECRET"), false);
 });
+
+test("session expiry resumes a validated consent flow after sign-in", async () => {
+  const { value, redirects } = captureHook(useAsyncError);
+  const from = "/mcp/authorize?request=opaque";
+  await value.run(
+    async () => {
+      throw { error: "not_authenticated", message: "expired", status: 401 };
+    },
+    { loginFrom: from }
+  );
+  assert.deepEqual(redirects, [`/login?from=${encodeURIComponent(from)}`]);
+  await value.run(
+    async () => {
+      throw { error: "not_authenticated", message: "expired", status: 401 };
+    },
+    { loginFrom: "//external.example" }
+  );
+  assert.equal(redirects[1], "/login?from=%2Ftasks");
+});

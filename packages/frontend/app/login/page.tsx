@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useRef, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { authReturnPath } from "@/lib/auth-return-path";
 import { api } from "@/lib/api";
 import { setSessionUser } from "@/lib/session";
 import { useAsyncError } from "@/hooks/useAsyncError";
@@ -41,7 +42,7 @@ function LoginForm() {
       });
       if (!res) return;
       setSessionUser(res.user);
-      const from = search.get("from") || "/tasks";
+      const from = authReturnPath(search.get("from"));
       router.push(from);
       router.refresh();
     } finally {
@@ -51,7 +52,15 @@ function LoginForm() {
   }
 
   return (
-    <AuthLayout title="Welcome back" description="Sign in and pick up where you left off.">
+    <AuthLayout
+      title="Welcome back"
+      description="Sign in and pick up where you left off."
+      alternateHref={
+        search.has("from")
+          ? `/signup?from=${encodeURIComponent(authReturnPath(search.get("from")))}`
+          : undefined
+      }
+    >
       <SocialSignIn appearance="auth" />
       <div className="my-6 flex items-center gap-3 text-xs text-[var(--color-ink-muted)]">
         <span className="h-px flex-1 bg-[var(--color-border-strong)]" />

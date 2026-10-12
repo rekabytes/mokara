@@ -56,7 +56,8 @@ export function socialReturnPath(raw: string | undefined): string {
   const url = new URL(raw, "https://mokara.invalid");
   if (
     url.origin !== "https://mokara.invalid" ||
-    !/^\/(tasks|analytics|teams|settings|invitations)(\/|$)/.test(url.pathname)
+    (!/^\/(tasks|analytics|teams|settings|invitations)(\/|$)/.test(url.pathname) &&
+      url.pathname !== "/mcp/authorize")
   )
     return "/tasks";
   return `${url.pathname}${url.search}`;

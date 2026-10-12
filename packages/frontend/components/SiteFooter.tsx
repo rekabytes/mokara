@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { BrandMark } from "@/components/BrandMark";
 import { LEGAL_DOCS, LEGAL_LINKS } from "@/lib/legal-links";
 import { CONTACT, OPERATOR, siteHost } from "@/lib/legal.server";
+import { DOCUMENTATION_LINKS } from "@/lib/documentation-links";
 import { AUTH_COOKIE } from "@/lib/cookies";
 
 const PRODUCT_LINKS = [
@@ -45,6 +46,16 @@ export async function SiteFooter() {
               <Link href={hasSession ? "/tasks" : "/"}>{hasSession ? "Open app" : "Overview"}</Link>
             </li>
             {PRODUCT_LINKS.map((link) => (
+              <li key={link.href}>
+                <Link href={link.href}>{link.label}</Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        <nav aria-label="Documentation">
+          <h2>Documentation</h2>
+          <ul>
+            {DOCUMENTATION_LINKS.map((link) => (
               <li key={link.href}>
                 <Link href={link.href}>{link.label}</Link>
               </li>

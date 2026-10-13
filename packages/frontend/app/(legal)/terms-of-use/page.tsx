@@ -1,13 +1,13 @@
+import { getPublicMetadata } from "@/lib/seo.server";
 import type { Metadata } from "next";
 import { LegalDoc } from "@/components/LegalDoc";
 import { LEGAL_DOCS } from "@/lib/legal-links";
 
 import { SECTIONS } from "./sections";
 
-export const metadata: Metadata = {
-  title: "Terms of Use",
-  description: LEGAL_DOCS.terms.description,
-};
+export function generateMetadata(): Metadata {
+  return getPublicMetadata("/terms-of-use");
+}
 
 // Malaysian-framed terms: Contracts Act 1950 for formation, PDPA for the data
 // half (which lives in the privacy policy), Computer Crimes Act 1997 and

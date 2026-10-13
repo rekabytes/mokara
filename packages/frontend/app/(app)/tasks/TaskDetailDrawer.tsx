@@ -1,5 +1,6 @@
 "use client";
 
+import { useDialogFocus } from "@/hooks/use-dialog-focus";
 import { AttachmentsSection } from "./AttachmentsSection";
 import { PRIORITY_IDS, STATUS_IDS, STATUS_LABEL, containerMembersAtom } from "./board-model";
 import { AssigneeChip, KpiChip, ProjectChip } from "./chips";
@@ -39,7 +40,8 @@ import { useAtomValue } from "jotai";
 // Rules that live here: the drawer animates `width: "40%"` against the
 // `@container` row that STAYS in `page.tsx`, and its inner card is sized
 // `w-[min(40cqw,640px)]` against that same row — so the row must not move or
-// both numbers resolve against a different element.
+// both numbers resolve against a different element. At <=1100px the responsive
+// stylesheet removes that containment and expands the panel to the viewport.
 // Read-only by design where the modal is the builder: steps and files are
 // creation-time affordances in the UI (the API still accepts later uploads),
 // and sections hide when empty. Clearing a due date sends `null`, never
@@ -74,6 +76,7 @@ export function TaskDetailDrawer({
   // effect that used to copy `task.title` into `titleDraft` therefore only ever
   // ran while the draft was invisible — it was a useState->useState chain, not
   // a sync with anything outside React.
+  const detailFocus = useDialogFocus({ mediaQuery: "(max-width: 1100px)" });
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState(task.title);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -96,7 +99,11 @@ export function TaskDetailDrawer({
     function onKey(e: globalThis.KeyboardEvent) {
       if (e.key !== "Escape" || e.defaultPrevented) return;
       // A higher overlay/menu owns Escape; never close the task behind it.
-      if (document.querySelector("[data-focus-scope], [data-dropdown-menu], [data-date-menu]"))
+      if (
+        document.querySelector(
+          "[data-focus-scope]:not([data-task-detail]), [data-dropdown-menu], [data-date-menu]"
+        )
+      )
         return;
       const active = document.activeElement;
       if (
@@ -147,6 +154,10 @@ export function TaskDetailDrawer({
 
   return (
     <aside
+      ref={detailFocus}
+      data-focus-scope
+      data-task-detail
+      tabIndex={-1}
       role="complementary"
       aria-label="Task detail"
       // Fixed width in container units (resolves against the row, not the
@@ -154,12 +165,12 @@ export function TaskDetailDrawer({
       // edge, so as the wrapper's width animates 0 → full the card slides
       // in from the right instead of squishing. Body is flex-1 +
       // overflow-hidden + line-clamped title/description — the drawer
-      // never scrolls, regardless of task count. Visual card look (bg,
+      // keeps its own scrollable body. Visual card look (bg,
       // border, radius, shadow) comes from the wrapper.
-      className="ml-auto flex h-full w-[min(40cqw,640px)] shrink-0 flex-col overflow-hidden"
+      className="task-detail ml-auto flex h-full w-[min(40cqw,640px)] shrink-0 flex-col overflow-hidden"
     >
       {/* Top bar */}
-      <div className="flex items-center justify-between border-b border-[var(--color-border-soft)] px-4 py-2.5">
+      <div className="flex shrink-0 items-center justify-between border-b border-[var(--color-border-soft)] px-4 py-2.5">
         <div className="flex items-center gap-2 text-[0.85rem]">
           <span className="block size-2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_4px_var(--color-accent-soft)]" />
           <span className="text-[var(--color-ink-muted)]">Task</span>
@@ -171,7 +182,7 @@ export function TaskDetailDrawer({
           type="button"
           aria-label="Close"
           onClick={onClose}
-          className="grid size-6 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+          className="grid size-6 shrink-0 cursor-pointer max-[800px]:size-10 place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
         >
           <CloseSmallIcon />
         </button>
@@ -181,7 +192,7 @@ export function TaskDetailDrawer({
           comments take the remaining height (shrink-0 on the checklist keeps
           that true however many steps exist). Title/description stay
           line-clamped. */}
-      <div className="flex flex-1 flex-col overflow-hidden px-5 py-4">
+      <div className="task-detail-body flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">
         {/* Title — double-click to rename inline */}
         {titleEditing ? (
           <input
@@ -309,7 +320,7 @@ export function TaskDetailDrawer({
         {/* Chip row — ONE line (owner): status / priority / due date / assignee
             stay inline; project, KPIs and flag fold into the "…" panel, which
             keeps them fully editable (each chip still opens its own menu). */}
-        <div className="mt-5 flex items-center gap-1.5" data-tour="drawer-chips">
+        <div className="mt-5 flex flex-wrap items-center gap-1.5" data-tour="drawer-chips">
           <Dropdown
             trigger={(open) => (
               <ChipShell open={open}>
@@ -438,7 +449,7 @@ export function TaskDetailDrawer({
       {/* Footer — the walkthrough frames this on a LOOK step on purpose: the
           Delete button has no confirmation, so it must stay out of reach. */}
       <div
-        className="flex items-center justify-between border-t border-[var(--color-border-soft)] px-5 py-3"
+        className="flex shrink-0 items-center justify-between border-t border-[var(--color-border-soft)] px-5 py-3"
         data-tour="drawer-footer"
       >
         <span className="text-[0.74rem] text-[var(--color-ink-faint)]">

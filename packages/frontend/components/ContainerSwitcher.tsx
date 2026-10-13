@@ -189,7 +189,7 @@ export function ContainerSwitcher() {
                 e.preventDefault();
                 void submit();
               }}
-              className="relative z-10 w-full max-w-[420px] rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] p-5 shadow-[var(--shadow-lift)]"
+              className="relative z-10 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain w-full max-w-[420px] rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] p-5 shadow-[var(--shadow-lift)]"
             >
               <h2 className="m-0 mb-1 text-[1rem] font-bold tracking-[-0.01em]">
                 Create a container

@@ -218,7 +218,7 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
     action: "inline",
     // The number is the plan's, so the server states it.
     serverSays: true,
-    message: "This workspace is out of storage.",
+    message: "The workspace owner’s account is out of storage.",
   },
   file_too_large: {
     kind: "input",

@@ -168,3 +168,33 @@ test("reduced-motion geometry has no height/width transition duration", () => {
     assert.equal(variants.visible.transition.duration, 0);
   }
 });
+
+test("responsive focus containment follows the viewport without trapping the desktop pane", (t) => {
+  const d = dom(t);
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "window");
+  let matches = false;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { matchMedia: () => ({ matches }) },
+  });
+  t.after(() => {
+    if (previous) Object.defineProperty(globalThis, "window", previous);
+    else delete globalThis.window;
+  });
+  const opener = new d.Element();
+  opener.focus();
+  const panel = new d.Element();
+  const first = new d.Element();
+  panel.children = [first];
+  d.scopes.push(panel);
+  const cleanup = capture({ mediaQuery: "(max-width: 800px)" })(panel);
+  assert.equal(d.document.activeElement, opener);
+  assert.equal(d.tab(), false);
+  matches = true;
+  assert.equal(d.tab(), true);
+  assert.equal(d.document.activeElement, first);
+  matches = false;
+  assert.equal(d.tab(), false);
+  cleanup();
+  assert.equal(d.document.activeElement, opener);
+});

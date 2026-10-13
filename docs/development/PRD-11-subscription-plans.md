@@ -22,7 +22,7 @@ no license enforcement, no phone-home. Subscriptions sell the hosted instance:
 we run it, back it up, keep it updated. This is the honest fit for what Mokara
 is today and the fastest to ship (zero license machinery needed).
 
-Pricing is **flat per workspace** (not per seat). Member caps pair naturally
+Pricing is **flat per account** (not per seat). Member caps pair naturally
 with flat tiers; per-seat pricing would have no reason to cap.
 
 ## 2. Tier ladder (Starter minted; Pro/Ultra PROPOSED)
@@ -109,14 +109,14 @@ for Starter (2026-09-05): guests/read-only members, saved filters/views.
 
 Agreed in the 2026-09-05 brainstorm: attachments ship on **every** tier — the
 feature is table stakes and must never be the paywall; **capacity** is the
-upsell. Quotas are per workspace (the owner's plan pays for the team).
+upsell. Quotas are **per owner account**, shared across every personal and team workspace that account owns (updated 2026-10-14). All members’ uploads charge the workspace owner’s pool, never the uploader’s own plan. Creating a workspace does not increase storage. Existing files remain accessible when an account is over its new shared cap; only new uploads are blocked.
 
-| Tier    | Total quota | Per-file cap |
-| ------- | ----------- | ------------ |
-| Basic   | 1 GB        | 25 MB        |
-| Starter | 10 GB       | 100 MB       |
-| Pro     | 50 GB       | 250 MB       |
-| Ultra   | 200 GB      | 1 GB         |
+| Tier    | Account-wide quota | Per-file cap |
+| ------- | ------------------ | ------------ |
+| Basic   | 1 GB               | 25 MB        |
+| Starter | 10 GB              | 100 MB       |
+| Pro     | 50 GB              | 250 MB       |
+| Ultra   | 200 GB             | 1 GB         |
 
 - Market check: Trello 10 MB/file, Asana 100 MB total, ClickUp 100 MB total,
   Notion 5 MB/file — 1 GB free is already among the most generous. The owner's
@@ -294,7 +294,7 @@ Output: a "Phase 0 decisions" block appended to this PRD — value + date each.
 - BUILT: `teams.logo_key` / `logo_bytes` / `logo_type` (three columns, not an
   attachments row: a logo has no uploader-visible history, exactly one object
   per workspace, and hangs off the container not a task). `logo_bytes` exists
-  so `lib/quota.ts` can honestly count it against the workspace's storage.
+  so `lib/quota.ts` can honestly count it against the owner's shared account storage.
   `has_logo: boolean` on team responses (not a URL — the client builds
   `/api/teams/:id/logo`), leader-only PUT/DELETE, served `no-cache` so a
   replaced logo shows on the next load.

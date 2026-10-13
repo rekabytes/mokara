@@ -41,21 +41,26 @@ export function KpiProgressCard({ kpiProgress, kpiLoading, kpiError, loadKpiProg
                 vertical scrollbar — same cap as the heatmap above. */}
           <ul className="m-0 flex max-h-[252px] list-none flex-col gap-0.5 overflow-y-auto p-0">
             {(kpiProgress ?? []).map((k) => (
-              <li key={k.id} className="flex items-center gap-3 py-1.5">
-                <span className="w-[180px] shrink-0 truncate text-[0.8rem] font-medium text-[var(--color-ink)]">
+              <li
+                key={k.id}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 py-2 min-[1100px]:flex"
+              >
+                <span className="min-w-0 min-[1100px]:w-[180px] shrink-0 truncate text-[0.8rem] font-medium text-[var(--color-ink)]">
                   {k.name}
                 </span>
-                <span className="pill shrink-0">{k.owner_username}</span>
-                <span className="flex h-2 flex-1 overflow-hidden rounded-[999px] bg-[rgba(148,163,184,0.18)]">
+                <span className="pill row-start-2 max-w-[140px] truncate justify-self-start shrink-0">
+                  {k.owner_username}
+                </span>
+                <span className="col-span-full row-start-3 flex h-2 min-w-0 flex-1 overflow-hidden rounded-[999px] bg-[rgba(148,163,184,0.18)]">
                   <span
                     className="h-full rounded-[999px] bg-[var(--color-accent)] transition-[width] duration-300"
                     style={{ width: `${k.progress}%` }}
                   />
                 </span>
-                <span className="w-[42px] shrink-0 text-right font-mono text-[0.76rem] text-[var(--color-ink)]">
+                <span className="col-start-2 row-start-1 w-[42px] shrink-0 text-right font-mono text-[0.76rem] text-[var(--color-ink)]">
                   {k.progress}%
                 </span>
-                <span className="w-[92px] shrink-0 text-right text-[0.72rem] text-[var(--color-ink-faint)]">
+                <span className="col-start-2 row-start-2 min-[1100px]:w-[92px] shrink-0 text-right text-[0.72rem] text-[var(--color-ink-faint)]">
                   {k.task_count} tied · Σ{k.weight_sum}
                 </span>
               </li>

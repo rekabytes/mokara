@@ -64,9 +64,10 @@ export function storageKey(input: {
   return `teams/${input.teamId}/${input.scope}/${input.scopeId}/${input.attachmentId}`;
 }
 
-/** One object per workspace, overwritten in place (PRD-11 Phase 1.4). */
+/** Immutable replacement keys let a failed quota check leave the old logo intact.
+ * Existing stored logo keys remain readable through Team.logoKey. */
 export function teamLogoKey(teamId: string): string {
-  return `teams/${teamId}/logo`;
+  return `teams/${teamId}/logos/${crypto.randomUUID()}`;
 }
 
 export async function putObject(input: {

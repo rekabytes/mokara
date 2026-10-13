@@ -30,18 +30,24 @@ function topScope(): HTMLElement | undefined {
  * no state mirror, timer, animation effect or separate focus store is needed.
  * Non-modal/ACT tours may move focus freely; only the top modal contains Tab.
  */
-export function useDialogFocus({ modal = true }: { modal?: boolean } = {}) {
+export function useDialogFocus({
+  modal = true,
+  mediaQuery,
+}: { modal?: boolean; mediaQuery?: string } = {}) {
+  const queryRef = useRef(mediaQuery);
+  queryRef.current = mediaQuery;
   const modalRef = useRef(modal);
   modalRef.current = modal;
   return useCallback((node: HTMLElement | null) => {
     if (!node) return;
     const opener = document.activeElement;
-    if (topScope() === node) {
+    const isActive = () => !queryRef.current || window.matchMedia(queryRef.current).matches;
+    if (isActive() && topScope() === node) {
       const initial = node.querySelector<HTMLElement>("[data-autofocus]");
       (initial ?? visibleElements(node)[0] ?? node).focus({ preventScroll: true });
     }
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Tab" || !modalRef.current || topScope() !== node) return;
+      if (event.key !== "Tab" || !modalRef.current || !isActive() || topScope() !== node) return;
       // Chip/date menus are portals above this modal. They remain in the same
       // keyboard scope instead of being pushed behind the focus boundary.
       const portals = Array.from(

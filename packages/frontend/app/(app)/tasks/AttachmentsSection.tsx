@@ -134,7 +134,7 @@ export function AttachmentsSection({
                 type="button"
                 onClick={() => remove(f)}
                 aria-label={`Delete ${f.filename}`}
-                className="absolute -right-1.5 -top-1.5 grid size-[18px] cursor-pointer place-items-center rounded-full border border-[var(--color-border-soft)] bg-white text-[var(--color-ink-faint)] opacity-0 transition-opacity duration-150 hover:text-[var(--color-danger)] group-hover:opacity-100 group-focus-within:opacity-100"
+                className="touch-action absolute -right-1.5 -top-1.5 grid size-[18px] cursor-pointer place-items-center rounded-full border border-[var(--color-border-soft)] bg-white text-[var(--color-ink-faint)] opacity-0 transition-opacity duration-150 hover:text-[var(--color-danger)] group-hover:opacity-100 group-focus-within:opacity-100"
               >
                 <CloseSmallIcon />
               </button>

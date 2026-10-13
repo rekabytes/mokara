@@ -66,7 +66,7 @@ export function ProfileTile({ run, clearError, deviceCount, containerCount }: Pr
             <b className="truncate text-[1.2rem] font-extrabold tracking-[-0.01em]">
               {user?.display_name || user?.username || ""}
             </b>
-            <span className="flex-none rounded-[var(--radius-pill)] border border-[var(--color-border-soft)] bg-[rgba(148,163,184,0.1)] px-2 py-0.5 font-mono text-[0.76rem] text-[var(--color-ink-muted)]">
+            <span className="max-w-full break-all rounded-[var(--radius-pill)] border border-[var(--color-border-soft)] bg-[rgba(148,163,184,0.1)] px-2 py-0.5 font-mono text-[0.76rem] text-[var(--color-ink-muted)]">
               @{user?.username ?? ""}
             </span>
           </div>
@@ -104,7 +104,7 @@ export function ProfileTile({ run, clearError, deviceCount, containerCount }: Pr
           Profile saved.
         </p>
       )}
-      <div className="mt-4 grid grid-cols-3 gap-2.5 border-t border-[var(--color-border-soft)] pt-3.5">
+      <div className="mt-4 grid grid-cols-1 min-[400px]:grid-cols-3 gap-2.5 border-t border-[var(--color-border-soft)] pt-3.5">
         <Stat value={deviceCount ?? "—"} label="signed-in devices" />
         <Stat value="7d" label="session length" />
         <Stat value={containerCount || "—"} label="containers" />

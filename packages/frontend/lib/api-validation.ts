@@ -168,6 +168,7 @@ export const sessionsSchema = z.object({
 });
 const capsSchema = z.object({ members: cap, teams: cap, storage_bytes: cap, file_bytes: cap });
 export const billingSchema = z.object({
+  storage: z.object({ scope: z.literal("account"), used_bytes: count }).optional(),
   plan: z.string(),
   billing_configured: z.boolean(),
   checkout_configured: z.boolean(),

@@ -55,7 +55,7 @@ export function DevicesTile({
               className="flex items-center justify-between gap-3 border-t border-[var(--color-border-soft)] py-2 first:border-t-0"
             >
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="truncate text-[0.9rem] font-semibold">{d.device}</span>
                   {d.current && (
                     <span className="flex-none rounded-[var(--radius-pill)] border border-[var(--color-accent)] px-2 py-0.5 text-[0.7rem] font-semibold text-[var(--color-accent)]">

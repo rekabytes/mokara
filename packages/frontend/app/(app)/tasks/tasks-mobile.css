@@ -1,0 +1,186 @@
+@media (max-width: 1100px) {
+  /* Container containment would otherwise anchor the fixed panel to the board. */
+  body:has(.task-drawer-panel) {
+    overflow: hidden;
+  }
+
+  .task-workspace {
+    container-type: normal;
+  }
+
+  /* The desktop split would leave both panes too narrow on tablets/phones. */
+  .task-drawer-panel {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    width: 100% !important;
+    max-width: none;
+    margin: 0 !important;
+    border-radius: 0;
+    background: var(--color-surface-solid);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .task-detail {
+    width: 100%;
+    height: 100%;
+  }
+
+  .task-detail-body {
+    overscroll-behavior: contain;
+  }
+
+  .task-detail-body > * {
+    flex-shrink: 0;
+  }
+
+  .task-comments {
+    flex: none;
+    min-height: 240px;
+  }
+
+  .task-comments > div:nth-child(2) {
+    max-height: 45dvh;
+    flex: none;
+  }
+
+  /* Keep covered controls out of keyboard navigation as well as touch. */
+  .app-shell:has(.task-drawer-panel) .app-navigation,
+  .app-shell:has(.task-drawer-panel) .app-nav-toggle,
+  .tasks-page:has(.task-drawer-panel) > .page-header,
+  .tasks-page:has(.task-drawer-panel) > .board-toolbar,
+  .tasks-page:has(.task-drawer-panel) .task-board {
+    visibility: hidden;
+  }
+}
+
+@media (max-width: 800px) {
+  .tasks-page {
+    height: calc(100dvh - 5rem - env(safe-area-inset-bottom));
+  }
+
+  .board-toolbar {
+    flex-shrink: 0;
+    gap: 8px;
+  }
+
+  .board-toolbar > div {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .board-toolbar button,
+  .board-toolbar select {
+    min-height: 40px;
+  }
+
+  .task-board {
+    max-height: 100%;
+  }
+
+  .board-toolbar > div:first-child {
+    display: contents;
+  }
+
+  .board-toolbar [data-tour="board-controls"] {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .task-row {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) 14px 20px auto 32px 32px;
+    gap: 4px;
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--color-border-soft);
+  }
+
+  .task-row-toggle {
+    grid-area: 1 / 1;
+    width: 24px;
+    height: 40px;
+    align-self: start;
+  }
+
+  .task-row-check {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+  }
+
+  .task-row-title {
+    grid-column: 2 / -1;
+    grid-row: 1;
+  }
+
+  .task-row-title > button {
+    white-space: normal;
+    text-align: left;
+    overflow-wrap: anywhere;
+    min-height: 36px;
+  }
+
+  .task-row > button:nth-child(2) {
+    grid-area: 2 / 1;
+    display: grid;
+    place-items: center;
+    min-height: 36px;
+    margin: 0;
+  }
+
+  .task-row-id {
+    grid-area: 2 / 2;
+    width: auto;
+  }
+
+  .task-row > svg {
+    grid-area: 2 / 3;
+  }
+
+  .task-row-assignee {
+    grid-area: 2 / 4;
+  }
+
+  .task-row-date {
+    grid-area: 2 / 5;
+  }
+
+  .task-row-action {
+    grid-area: 2 / 6;
+    opacity: 1;
+  }
+
+  .task-row-action:last-child {
+    grid-column: 7;
+  }
+
+  .task-row-action button {
+    width: 32px;
+    min-height: 36px;
+  }
+
+  .new-task-overlay {
+    padding: 8px;
+  }
+
+  .new-task-panel {
+    scrollbar-width: thin;
+    max-height: calc(100dvh - 16px);
+  }
+
+  .new-task-panel input:not([type="checkbox"]),
+  .new-task-panel textarea,
+  .new-task-panel select {
+    font-size: 16px;
+  }
+
+  .new-task-panel button,
+  .task-detail button {
+    min-height: 40px;
+  }
+
+  .task-detail-body {
+    padding: 16px;
+  }
+}

@@ -16,7 +16,7 @@ export type PlanLimits = {
   members: number;
   /** Team-kind workspaces one account may lead (personal containers are free). */
   teams: number;
-  /** Total stored bytes per workspace. */
+  /** Total stored bytes across all personal/team workspaces owned by one account. */
   storageBytes: number;
   /** Bytes accepted for a single upload. */
   maxFileBytes: number;

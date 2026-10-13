@@ -1,12 +1,11 @@
+import { getPublicMetadata } from "@/lib/seo.server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DocPage } from "./DocPage";
 
-export const metadata: Metadata = {
-  title: "Documentation",
-  description:
-    "Connect your AI agent to Mokara, choose workspace permissions and manage or revoke its access.",
-};
+export function generateMetadata(): Metadata {
+  return getPublicMetadata("/docs");
+}
 export default function DocumentationPage() {
   return (
     <DocPage

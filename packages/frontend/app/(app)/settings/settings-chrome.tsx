@@ -124,7 +124,7 @@ export function TileHeader({
   right?: React.ReactNode;
 }) {
   return (
-    <header className="flex items-center justify-between gap-3">
+    <header className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex min-w-0 items-center gap-3">
         <span
           className={`grid size-8 flex-none place-items-center rounded-[var(--radius-icon)] ${

@@ -1,0 +1,109 @@
+/* Authenticated client only. Public pages retain their own responsive system. */
+@media (max-width: 800px) {
+  body:has(.app-navigation[data-open="true"]) {
+    overflow: hidden;
+  }
+
+  .app-main {
+    padding: 4rem 1rem max(1.5rem, env(safe-area-inset-bottom));
+  }
+
+  .app-navigation {
+    max-width: calc(100vw - 2rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+    visibility: hidden;
+  }
+
+  .app-navigation[data-open="true"] {
+    visibility: visible;
+    background: var(--color-surface-solid);
+    padding-top: 3.5rem;
+  }
+
+  .app-shell:has(.app-navigation[data-open="true"]) .app-main {
+    pointer-events: none;
+  }
+
+  .page-header > div > span:first-child {
+    flex-shrink: 0;
+  }
+
+  .app-main input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+  .app-main textarea,
+  .app-main select {
+    font-size: 16px;
+  }
+
+  .app-main .field,
+  .app-main .btn-base,
+  .app-navigation a,
+  .app-navigation button {
+    min-height: 44px;
+  }
+
+  .app-main .panel-card {
+    min-width: 0;
+  }
+
+  /* Menu portals belong to the app but sit outside the shell. A bottom sheet
+     keeps all options reachable even when their trigger is near an edge. */
+  [data-dropdown-menu],
+  [data-date-menu] {
+    left: 12px !important;
+    right: 12px;
+    top: auto !important;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: auto;
+    max-width: none;
+    max-height: min(70dvh, 520px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    white-space: normal;
+  }
+
+  [data-dropdown-menu] button,
+  [data-date-menu] button {
+    min-height: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-navigation {
+    transition: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .team-layer-row {
+    flex-wrap: wrap;
+  }
+
+  .team-layer-row .layer-name {
+    flex-basis: calc(100% - 24px);
+  }
+
+  .team-layer-row .touch-action {
+    margin-left: auto;
+  }
+
+  .team-layer-row form {
+    flex-wrap: wrap;
+  }
+
+  .team-layer-row form input {
+    flex-basis: 100%;
+  }
+}
+
+@media (hover: none) {
+  .touch-action {
+    opacity: 1;
+  }
+
+  .touch-action button {
+    min-width: 36px;
+    min-height: 36px;
+  }
+}

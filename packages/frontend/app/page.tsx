@@ -1,3 +1,4 @@
+import { getPublicMetadata, getWebsiteStructuredData } from "@/lib/seo.server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
@@ -12,16 +13,9 @@ import { HomeWorkflow } from "./HomeWorkflow";
 import { HomeProduct } from "./HomeProduct";
 import "./homepage.css";
 
-export const metadata: Metadata = {
-  title: "Mokara — good work, less busywork",
-  description:
-    "A shared workspace for your team and your AI agent. Organize tasks, keep conversations in context and turn requests into progress with Mokara MCP.",
-  openGraph: {
-    title: "Mokara — good work, less busywork",
-    description: "Tasks, people and your AI agent. One shared workspace to move work forward.",
-    images: ["/landing/og.jpg"],
-  },
-};
+export function generateMetadata(): Metadata {
+  return getPublicMetadata("/");
+}
 const questions = [
   {
     question: "Can I start on my own?",
@@ -46,11 +40,20 @@ const questions = [
 ];
 
 export default async function LandingPage() {
+  const structuredData = getWebsiteStructuredData();
   const hasSession = (await cookies()).has(AUTH_COOKIE);
   const startHref = hasSession ? "/tasks" : "/signup";
   const startLabel = hasSession ? "Open your workspace" : "Start your workspace";
   return (
     <div className="public-site homepage">
+      {structuredData && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(structuredData).replaceAll("<", "\\u003c"),
+          }}
+        />
+      )}
       <a className="homepage-skip" href="#main">
         Skip to content
       </a>

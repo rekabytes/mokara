@@ -73,7 +73,7 @@ export function pitchRows(billing: BillingInfo): string[] {
   if (starter) {
     rows.push(`${capNum(starter.members)} members per team`);
     rows.push(`${capNum(starter.teams)} team workspaces`);
-    rows.push(`${capGb(starter.storage_bytes)} storage`);
+    rows.push(`${capGb(starter.storage_bytes)} account storage`);
     rows.push(`${capMb(starter.file_bytes)} per file`);
   } else {
     rows.push("More members, workspaces, and storage");
@@ -81,4 +81,11 @@ export function pitchRows(billing: BillingInfo): string[] {
   rows.push("Priority support");
   rows.push("Custom workspace logo");
   return rows;
+}
+
+export function storageUsage(bytes: number | undefined): string {
+  if (bytes === undefined) return "—";
+  if (bytes === 0) return "0 B";
+  const unit = Math.min(3, Math.floor(Math.log(bytes) / Math.log(1024)));
+  return `${new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(bytes / 1024 ** unit)} ${["B", "KB", "MB", "GB"][unit]}`;
 }

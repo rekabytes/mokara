@@ -13,15 +13,15 @@ import { StarIcon } from "./Icons";
 
 export function PageHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between border-b border-[var(--color-border-soft)] py-1">
-      <div className="flex items-center gap-[0.4rem] text-[0.92rem] font-semibold">
+    <div className="page-header flex min-w-0 items-center justify-between gap-2 border-b border-[var(--color-border-soft)] py-1">
+      <div className="flex min-w-0 items-center gap-[0.4rem] text-[0.92rem] font-semibold">
         <span className="text-[var(--color-ink-muted)]">Mokara</span>
         <span className="text-[var(--color-ink-faint)]">›</span>
-        <span>{children}</span>
+        <span className="min-w-0 truncate">{children}</span>
         <button
           type="button"
           aria-label="Star"
-          className="ml-1 grid size-6 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink-muted)]"
+          className="ml-1 grid size-6 shrink-0 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink-muted)]"
         >
           <StarIcon />
         </button>

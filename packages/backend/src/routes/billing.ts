@@ -10,6 +10,7 @@ import {
   stripeClient,
   syncBillingForUser,
 } from "../lib/billing.ts";
+import { usedBytesOfOwner } from "../lib/quota.ts";
 import { limitsOfUser } from "../lib/entitlements.ts";
 import { effectivePlan, limitsFor, PLAN_IDS, publicCap } from "../lib/plans.ts";
 import { getTeamRole } from "../lib/team-membership.ts";
@@ -55,6 +56,7 @@ billingRoutes.get("/me/billing", async (c) => {
     return c.json({ error: "not_found", message: "user not found" }, 404);
   }
   const limits = await limitsOfUser(userId);
+  const storageUsed = await usedBytesOfOwner(userId);
   return c.json({
     // The tier the account actually gets: an operator grant wins over Stripe's
     // column (effectivePlan). The frontend renders this word and the caps below,
@@ -65,6 +67,7 @@ billingRoutes.get("/me/billing", async (c) => {
     has_subscription: user.stripeCustomerId !== null,
     period_end: user.periodEnd ? user.periodEnd.toISOString() : null,
     grace_until: user.graceUntil ? user.graceUntil.toISOString() : null,
+    storage: { scope: "account", used_bytes: storageUsed },
     caps: {
       members: publicCap(limits.members),
       teams: publicCap(limits.teams),

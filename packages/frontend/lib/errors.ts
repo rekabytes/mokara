@@ -385,6 +385,18 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
     action: "retry",
     message: "Authorization is temporarily unavailable. Try again.",
   },
+  mcp_scope_forbidden: {
+    kind: "permission",
+    action: "inline",
+    message:
+      "This agent connection does not have the required permission. Reconnect and approve the needed access.",
+  },
+  mcp_repository_forbidden: {
+    kind: "permission",
+    action: "inline",
+    message:
+      "Choose enabled GitHub repositories you can access. Reconnect GitHub if verification expired.",
+  },
   mcp_rate_limited: {
     message: "Too many agent requests. Wait a moment and try again.",
     kind: "server",

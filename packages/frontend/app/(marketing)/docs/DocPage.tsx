@@ -44,7 +44,7 @@ export function DocPage({
           </nav>
           <div className="docs-sidebar-note">
             <span className="docs-label">MCP access</span>
-            <p>Read-only. Selected workspaces. Always yours to revoke.</p>
+            <p>Selected permissions and workspaces. Always yours to revoke.</p>
           </div>
         </aside>
         <article className="docs-article">

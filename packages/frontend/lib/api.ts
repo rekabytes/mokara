@@ -1,4 +1,6 @@
 import {
+  mcpRepositoriesSchema,
+  mcpActivitySchema,
   mcpConsentSchema,
   mcpConsentResultSchema,
   mcpConnectionsSchema,
@@ -263,7 +265,13 @@ export const api = {
   mcpConsent: (request: string, signal?: AbortSignal) =>
     req(mcpConsentSchema, `/mcp/oauth/consent?request=${encodeURIComponent(request)}`, { signal }),
   approveMcp: (
-    data: { request: string; approve: boolean; workspace_ids: string[] },
+    data: {
+      request: string;
+      approve: boolean;
+      workspace_ids: string[];
+      scopes?: string[];
+      repository_ids?: string[];
+    },
     signal?: AbortSignal
   ) =>
     req(mcpConsentResultSchema, "/mcp/oauth/consent", {
@@ -360,9 +368,19 @@ export const api = {
   syncBilling: () => req(emptySchema, "/me/billing/sync", { method: "POST" }),
 
   // ---- Read-only AI agent connections ----
+  listMcpRepositories: (signal?: AbortSignal) =>
+    req(mcpRepositoriesSchema, "/me/mcp-connections/repositories", { signal }),
+  listMcpActivity: (signal?: AbortSignal) =>
+    req(mcpActivitySchema, "/me/mcp-connections/activity", { signal }),
   listMcpConnections: (signal?: AbortSignal) =>
     req(mcpConnectionsSchema, "/me/mcp-connections", { signal }),
-  createMcpConnection: (data: { name: string; workspace_ids: string[]; expires_in_days: number }) =>
+  createMcpConnection: (data: {
+    name: string;
+    workspace_ids: string[];
+    expires_in_days: number;
+    scopes?: string[];
+    repository_ids?: string[];
+  }) =>
     req(mcpCredentialSchema, "/me/mcp-connections", { method: "POST", body: JSON.stringify(data) }),
   revokeMcpConnection: (id: string) =>
     req(emptySchema, `/me/mcp-connections/${id}`, { method: "DELETE" }),

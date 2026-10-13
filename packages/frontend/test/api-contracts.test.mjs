@@ -120,8 +120,12 @@ const mcpConnection = {
   expires_at: date.toISOString(),
   revoked_at: null,
   access: "read",
+  scopes: ["mokara:read"],
+  repository_ids: [],
 };
 const cases = [
+  ["listMcpRepositories", [], { repositories: [] }],
+  ["listMcpActivity", [], { activity: [] }],
   [
     "mcpConsent",
     ["request"],
@@ -132,6 +136,8 @@ const cases = [
         redirect_uri: "https://agent.example/callback",
       },
       scope: "mokara:read",
+      requested_scopes: ["mokara:read"],
+      repositories: [],
       expires_in_days: 30,
       workspaces: [{ id: mcpConnection.workspace_ids[0], name: "Workspace" }],
     },

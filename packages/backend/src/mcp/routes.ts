@@ -27,7 +27,7 @@ mcpRoutes.all("/", async (c) => {
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
-    maxRequestBodySize: 64 * 1024,
+    maxRequestBodySize: 2 * 1024 * 1024,
   });
   try {
     await server.connect(transport);

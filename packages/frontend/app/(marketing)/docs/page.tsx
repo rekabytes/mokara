@@ -18,7 +18,8 @@ export default function DocumentationPage() {
         <h2 id="start">Start with your agent</h2>
         <p>
           Mokara’s Model Context Protocol (MCP) connection lets a compatible AI agent read your
-          tasks, projects, members and comments. You choose which workspaces it can access.
+          tasks, projects, members and comments, then create or update work when you grant write
+          access. You choose the permissions and workspaces.
         </p>
         <div className="docs-guide-list">
           <Link href="/docs/mcp" className="docs-guide">
@@ -48,8 +49,10 @@ export default function DocumentationPage() {
       <section aria-labelledby="control">
         <h2 id="control">Your workspace, your access</h2>
         <p>
-          Connections are read-only and expire. Agents cannot create, update or delete tasks through
-          this version of MCP. Access remains limited to the workspaces you approve and belong to.
+          Connections expire and start with read access. You can explicitly enable task writes,
+          deletions and access to selected GitHub repositories. Existing read-only connections do
+          not gain new permissions automatically. Normal workspace membership and ownership rules
+          still apply.
         </p>
         <p>
           Review or revoke an existing connection in{" "}

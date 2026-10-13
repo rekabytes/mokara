@@ -4,7 +4,7 @@ import {
   OAuthProtectedResourceMetadataSchema,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { requireOAuthConfig } from "./oauth-config.ts";
-import { MCP_SCOPE } from "./oauth-config.ts";
+import { MCP_SCOPES } from "./permissions.ts";
 import { handleMcpOAuthError } from "./oauth-errors.ts";
 export const mcpOAuthMetadata = new Hono();
 mcpOAuthMetadata.onError(handleMcpOAuthError);
@@ -22,7 +22,7 @@ mcpOAuthMetadata.get("/oauth-authorization-server", (c) => {
       token_endpoint_auth_methods_supported: ["none"],
       revocation_endpoint_auth_methods_supported: ["none"],
       code_challenge_methods_supported: ["S256"],
-      scopes_supported: [MCP_SCOPE],
+      scopes_supported: [...MCP_SCOPES],
     })
   );
 });
@@ -33,7 +33,7 @@ for (const path of ["/oauth-protected-resource", "/oauth-protected-resource/api/
       OAuthProtectedResourceMetadataSchema.parse({
         resource,
         authorization_servers: [origin],
-        scopes_supported: [MCP_SCOPE],
+        scopes_supported: [...MCP_SCOPES],
         bearer_methods_supported: ["header"],
         resource_name: "Mokara MCP",
       })

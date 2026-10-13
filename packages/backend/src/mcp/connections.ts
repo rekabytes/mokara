@@ -1,4 +1,5 @@
 import { handleMcpHttpError } from "./errors.ts";
+import { eligibleRepositories, validateRepositoryGrant } from "./repositories.ts";
 import { Hono } from "hono";
 import { prisma } from "../db.ts";
 import { createMcpConnectionSchema } from "../lib/validation.ts";
@@ -20,6 +21,8 @@ const metadataSelect = {
   createdAt: true,
   expiresAt: true,
   revokedAt: true,
+  scopes: true,
+  repositoryIds: true,
 } as const;
 
 function connectionResponse(row: {
@@ -29,6 +32,8 @@ function connectionResponse(row: {
   createdAt: Date;
   expiresAt: Date;
   revokedAt: Date | null;
+  scopes: string[];
+  repositoryIds: string[];
 }) {
   return {
     id: row.id,
@@ -37,9 +42,51 @@ function connectionResponse(row: {
     created_at: row.createdAt.toISOString(),
     expires_at: row.expiresAt.toISOString(),
     revoked_at: row.revokedAt?.toISOString() ?? null,
-    access: "read" as const,
+    access: (row.scopes ?? ["mokara:read"]).some((scope) => scope !== "mokara:read")
+      ? ("write" as const)
+      : ("read" as const),
+    scopes: row.scopes ?? ["mokara:read"],
+    repository_ids: row.repositoryIds ?? [],
   };
 }
+mcpConnectionRoutes.get("/activity", async (c) => {
+  const rows = await prisma.mcpOperation.findMany({
+    where: { userId: c.get("userId") },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    select: {
+      id: true,
+      connectionId: true,
+      workspaceId: true,
+      requestId: true,
+      operation: true,
+      status: true,
+      createdAt: true,
+      finishedAt: true,
+    },
+  });
+  return c.json({
+    activity: rows.map((row) => ({
+      id: row.id,
+      connection_id: row.connectionId,
+      workspace_id: row.workspaceId,
+      request_id: row.requestId,
+      operation: row.operation,
+      status: row.status,
+      created_at: row.createdAt.toISOString(),
+      finished_at: row.finishedAt?.toISOString() ?? null,
+    })),
+  });
+});
+mcpConnectionRoutes.get("/repositories", async (c) =>
+  c.json({
+    repositories: (await eligibleRepositories(c.get("userId"))).map((repo) => ({
+      id: repo.id,
+      name: repo.fullName,
+      private: repo.private,
+    })),
+  })
+);
 mcpConnectionRoutes.get("/", async (c) => {
   const rows = await prisma.mcpConnection.findMany({
     where: { userId: c.get("userId"), revokedAt: null, expiresAt: { gt: new Date() } },
@@ -61,6 +108,7 @@ mcpConnectionRoutes.post("/", validate("json", createMcpConnectionSchema), async
       { error: "mcp_workspace_forbidden", message: "Choose workspaces you belong to." },
       403
     );
+  await validateRepositoryGrant(userId, input.scopes, input.repository_ids);
   const { token, tokenHash } = newCredential();
   const row = await prisma.mcpConnection.create({
     data: {
@@ -68,6 +116,8 @@ mcpConnectionRoutes.post("/", validate("json", createMcpConnectionSchema), async
       name: input.name,
       workspaceIds: input.workspace_ids,
       tokenHash,
+      scopes: input.scopes,
+      repositoryIds: input.repository_ids,
       expiresAt: new Date(Date.now() + input.expires_in_days * 86_400_000),
     },
     select: metadataSelect,

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { McpPermissions } from "@/components/McpPermissions";
+import { MCP_PERMISSIONS, type McpScope, type McpRepository } from "@/lib/mcp-permissions";
 import { api, type McpConnection, type TeamWithRole } from "@/lib/api";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -13,6 +15,12 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
   const [connections, setConnections] = useState<McpConnection[] | null>(null);
   const [name, setName] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
+  const [scopes, setScopes] = useState<McpScope[]>(["mokara:read"]);
+  const [repositories, setRepositories] = useState<McpRepository[]>([]);
+  const [repositoryIds, setRepositoryIds] = useState<string[]>([]);
+  const [activity, setActivity] = useState<
+    Awaited<ReturnType<typeof api.listMcpActivity>>["activity"]
+  >([]);
   const [days, setDays] = useState(30);
   const [issued, setIssued] = useState<{ id: string; token: string; endpoint: string } | null>(
     null
@@ -25,10 +33,24 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
     const controller = new AbortController();
     read.current = controller;
     clearError();
-    const data = await run(() => api.listMcpConnections(controller.signal), {
-      signal: controller.signal,
-    });
-    if (data) setConnections(data.connections);
+    const data = await run(
+      async () => {
+        const [connections, repositories, activity] = await Promise.all([
+          api.listMcpConnections(controller.signal),
+          api.listMcpRepositories(controller.signal),
+          api.listMcpActivity(controller.signal),
+        ]);
+        return { ...connections, ...repositories, ...activity };
+      },
+      {
+        signal: controller.signal,
+      }
+    );
+    if (data) {
+      setConnections(data.connections);
+      setRepositories(data.repositories);
+      setActivity(data.activity);
+    }
   }, [run, clearError]);
 
   // Settings must synchronize its initial connection snapshot with the server.
@@ -53,6 +75,8 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
             name: name.trim(),
             workspace_ids: allowedIds,
             expires_in_days: days,
+            scopes,
+            repository_ids: scopes.includes("mokara:github") ? repositoryIds : [],
           }),
         {
           fallback: "Couldn't create the connection. Reload the list before trying again.",
@@ -68,6 +92,8 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
         setConnections((current) => [data.connection, ...(current ?? [])]);
         setName("");
         setSelected([]);
+        setScopes(["mokara:read"]);
+        setRepositoryIds([]);
       }
     } finally {
       pending.current = false;
@@ -111,7 +137,8 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
       />
       <p className="mt-3 text-sm text-[var(--color-ink-muted)]">
         Connect an MCP-compatible agent to read tasks, projects, members and comments. Connections
-        cannot change your data. In your agent, add this site’s /api/mcp URL and choose Sign in with
+        can only use the permissions and workspaces you approve. Existing connections stay read-only
+        until you reconnect. In your agent, add this site’s /api/mcp URL and choose Sign in with
         Mokara. Review and approve its workspace access in the browser.
       </p>
       <ErrorBanner message={error?.message} />
@@ -144,8 +171,19 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
                 <p className="m-0 break-words text-sm font-medium">{connection.name}</p>
                 <p className="m-0 text-xs text-[var(--color-ink-muted)]">
                   {connection.workspace_ids.length} workspace
-                  {connection.workspace_ids.length === 1 ? "" : "s"} · Read only · Expires{" "}
+                  {connection.workspace_ids.length === 1 ? "" : "s"} ·{" "}
+                  {connection.access === "write" ? "Selected write access" : "Read only"} · Expires{" "}
                   {new Date(connection.expires_at).toLocaleDateString()}
+                </p>
+                <p className="m-0 mt-1 text-xs text-[var(--color-ink-muted)]">
+                  {MCP_PERMISSIONS.filter((permission) =>
+                    connection.scopes.includes(permission.scope)
+                  )
+                    .map((permission) => permission.title)
+                    .join(" · ")}
+                  {connection.repository_ids.length
+                    ? ` · ${connection.repository_ids.length} approved repositories`
+                    : ""}
                 </p>
                 <p className="m-0 mt-1 break-words text-xs text-[var(--color-ink-muted)]">
                   {connection.workspace_ids
@@ -234,6 +272,14 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
               </select>
             </label>
           </div>
+          <McpPermissions
+            scopes={scopes}
+            onScopesChange={setScopes}
+            repositories={repositories}
+            selectedRepositories={repositoryIds}
+            onRepositoriesChange={setRepositoryIds}
+            disabled={busy}
+          />
           <fieldset className="m-0 mt-4 min-w-0 border-0 p-0">
             <legend className="text-xs">Workspaces · choose up to 20</legend>
             <div className="mt-2 grid max-h-48 gap-2 overflow-y-auto sm:grid-cols-2">
@@ -260,12 +306,46 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
           <button
             type="submit"
             className="btn-base btn-primary mt-4"
-            disabled={!name.trim() || allowedIds.length === 0}
+            disabled={
+              !name.trim() ||
+              allowedIds.length === 0 ||
+              (scopes.includes("mokara:github") && !repositoryIds.length)
+            }
           >
-            {busy ? "Working…" : "Create read-only connection"}
+            {busy ? "Working…" : "Create connection"}
           </button>
         </fieldset>
       </form>
+      <div className="mt-6 border-t border-[var(--color-border-soft)] pt-4">
+        <h3 className="m-0 text-sm font-medium">Recent agent writes · latest 50</h3>
+        <p className="mt-1 text-xs leading-5 text-[var(--color-ink-muted)]">
+          Pending can mean an uncertain result. Inspect the affected work before retrying. Refresh
+          to update activity.
+        </p>
+        {!activity.length ? (
+          <p className="text-xs text-[var(--color-ink-muted)]">No recorded writes.</p>
+        ) : (
+          <ul className="m-0 list-none divide-y divide-[var(--color-border-soft)] p-0">
+            {activity.map((row) => (
+              <li key={row.id} className="flex flex-wrap justify-between gap-2 py-3 text-xs">
+                <div className="min-w-0">
+                  <p className="m-0 font-medium">
+                    {row.operation} · {row.status}
+                  </p>
+                  <p className="m-0 mt-1 break-all text-[var(--color-ink-muted)]">
+                    {connections?.find((connection) => connection.id === row.connection_id)?.name ??
+                      row.connection_id}{" "}
+                    · Request {row.request_id}
+                  </p>
+                </div>
+                <time dateTime={row.created_at} className="text-[var(--color-ink-muted)]">
+                  {new Date(row.created_at).toLocaleString()}
+                </time>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </motion.section>
   );
 }

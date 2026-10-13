@@ -12,12 +12,14 @@ import {
   listUserInstallations,
   revokeGitHubUserToken,
   createGitHubIssue,
+  getGitHubIssue,
   findIssueByMarker,
   type GitHubInstallationInfo,
   type GitHubIssueInfo,
   type GitHubRepositoryInfo,
 } from "../lib/github.ts";
 import { consumeGitHubState, createGitHubState } from "../lib/github-state.ts";
+import { isUniqueViolation } from "../lib/db-error.ts";
 import { log } from "../lib/logger.ts";
 import { getTeamRole } from "../lib/team-membership.ts";
 import { validate } from "../lib/validate.ts";
@@ -401,7 +403,12 @@ function issueBody(task: {
 
 function githubStatus(error: GitHubError): 403 | 409 | 429 | 503 {
   if (error.code === "github_access_denied") return 403;
-  if (error.code === "github_repository_unavailable") return 409;
+  if (
+    error.code === "github_repository_unavailable" ||
+    error.code === "github_issue_already_linked" ||
+    error.code === "github_invalid_issue"
+  )
+    return 409;
   if (error.code === "github_rate_limited") return 429;
   return 503;
 }
@@ -519,44 +526,62 @@ githubRoutes.post("/tasks/:id/github-issue", validate("json", githubIssueSchema)
     );
   }
 
-  const link = await prisma.gitHubIssueLink.upsert({
-    where: { taskId },
-    create: {
-      taskId,
-      repositoryId: repository.id,
-      createdByUserId: userId,
-      connectionId: connection.id,
-      repositoryFullName: repository.fullName,
-      status: "creating",
-    },
-    update: {
-      repositoryId: repository.id,
-      createdByUserId: userId,
-      connectionId: connection.id,
-      repositoryFullName: repository.fullName,
-      status: "creating",
-      lastErrorCode: null,
-      lastAttemptAt: new Date(),
-      attemptCount: { increment: 1 },
-    },
+  const reservation = await prisma.$transaction(async (tx) => {
+    // Claim before touching the link. A competing publisher must not replace
+    // its repository while the first request is making an external API call.
+    await tx.$queryRaw`SELECT id FROM tasks WHERE id = ${taskId}::uuid FOR UPDATE`;
+    const current = await tx.gitHubIssueLink.findUnique({ where: { taskId } });
+    if (current?.status === "linked")
+      return {
+        error: "github_issue_already_linked",
+        message: "This task already has a GitHub issue.",
+      };
+    if (current?.status === "creating" && Date.now() - current.lastAttemptAt.getTime() < 120_000)
+      return {
+        error: "github_publish_in_progress",
+        message: "GitHub issue publishing is in progress. Inspect the task before retrying.",
+      };
+    const link = await tx.gitHubIssueLink.upsert({
+      where: { taskId },
+      create: {
+        taskId,
+        repositoryId: repository.id,
+        createdByUserId: userId,
+        connectionId: connection.id,
+        repositoryFullName: repository.fullName,
+        status: "creating",
+      },
+      update: {
+        repositoryId: repository.id,
+        createdByUserId: userId,
+        connectionId: connection.id,
+        repositoryFullName: repository.fullName,
+        status: "creating",
+        lastErrorCode: null,
+        lastAttemptAt: new Date(),
+        attemptCount: { increment: 1 },
+      },
+    });
+    return { link };
   });
-
-  const previousAttemptIsLive =
-    link.attemptCount > 1 &&
-    (!task.githubIssueLink ||
-      (task.githubIssueLink.status === "creating" &&
-        Date.now() - task.githubIssueLink.lastAttemptAt.getTime() < 30_000));
-  if (previousAttemptIsLive) {
-    return c.json(
-      { error: "github_publish_in_progress", message: "GitHub issue publishing is in progress" },
-      409
-    );
-  }
-
+  if (!reservation.link)
+    return c.json({ error: reservation.error, message: reservation.message }, 409);
+  const link = reservation.link;
   const marker = `<!-- mokara-task:${task.id} -->`;
   try {
-    let issue: GitHubIssueInfo | null = null;
-    if (link.attemptCount > 1) {
+    const requestedNumber = c.req.valid("json").issue_number;
+    let issue: GitHubIssueInfo | null = requestedNumber
+      ? await getGitHubIssue(
+          {
+            installationId: repository.installation.githubInstallationId,
+            repositoryId: repository.githubRepositoryId,
+            owner: repository.ownerLogin,
+            name: repository.name,
+          },
+          requestedNumber
+        )
+      : null;
+    if (!issue && link.attemptCount > 1) {
       issue = await findIssueByMarker(
         repository.installation.githubInstallationId,
         repository.ownerLogin,
@@ -577,7 +602,13 @@ githubRoutes.post("/tasks/:id/github-issue", validate("json", githubIssueSchema)
     const githubError =
       error instanceof GitHubError
         ? error
-        : new GitHubError(0, "github_publish_failed", "GitHub issue creation failed");
+        : isUniqueViolation(error, "github_issue_links_repository_issue_linked_key")
+          ? new GitHubError(
+              409,
+              "github_issue_already_linked",
+              "This GitHub issue is already linked to another task"
+            )
+          : new GitHubError(0, "github_publish_failed", "GitHub issue creation failed");
     await prisma.gitHubIssueLink.update({
       where: { id: link.id },
       data: { status: "failed", lastErrorCode: githubError.code },

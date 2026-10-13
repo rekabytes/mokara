@@ -7,9 +7,24 @@ import { consumeAuthLimit } from "../lib/auth-protection.ts";
 import { getTeamRole } from "../lib/team-membership.ts";
 
 import { mcpOAuthConfig } from "./oauth-config.ts";
+import type { McpScope } from "./permissions.ts";
 import { McpFailure } from "./errors.ts";
 
-export type McpPrincipal = { connectionId: string; userId: string; workspaceIds: string[] };
+export type McpPrincipal = {
+  connectionId: string;
+  userId: string;
+  workspaceIds: string[];
+  scopes?: string[];
+  repositoryIds?: string[];
+};
+export function requireScope(principal: McpPrincipal, scope: McpScope) {
+  if (!(principal.scopes ?? ["mokara:read"]).includes(scope))
+    throw new McpFailure(
+      "mcp_scope_forbidden",
+      "This connection does not have that permission. Reconnect and approve the required access.",
+      403
+    );
+}
 export const uuid = z.string().uuid();
 export function newCredential() {
   const token = `mk_mcp_${randomBytes(32).toString("base64url")}`;
@@ -19,7 +34,7 @@ export function hashCredential(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 export async function checkLimit(
-  scope: "mcp" | "mcpIssue" | "mcpOAuthPeer" | "mcpOAuthGlobal" | "mcpRegister",
+  scope: "mcp" | "mcpWrite" | "mcpIssue" | "mcpOAuthPeer" | "mcpOAuthGlobal" | "mcpRegister",
   identity: string
 ) {
   let retry: number;
@@ -43,6 +58,7 @@ export async function authenticateAgent(authorization: string | undefined): Prom
     throw new McpFailure("mcp_not_authenticated", "A valid agent credential is required.", 401);
   const raw = match[1];
   let connection;
+  let tokenScopes: string[] | undefined;
   if (raw.startsWith("mk_oat_")) {
     const config = mcpOAuthConfig();
     const token = config
@@ -51,6 +67,7 @@ export async function authenticateAgent(authorization: string | undefined): Prom
           include: { connection: true },
         })
       : null;
+    tokenScopes = token?.scopes ?? ["mokara:read"];
     connection =
       token &&
       token.accessExpiresAt > new Date() &&
@@ -70,6 +87,10 @@ export async function authenticateAgent(authorization: string | undefined): Prom
     connectionId: connection.id,
     userId: connection.userId,
     workspaceIds: connection.workspaceIds,
+    scopes: (connection.scopes ?? ["mokara:read"]).filter(
+      (scope) => !tokenScopes || tokenScopes.includes(scope)
+    ),
+    repositoryIds: connection.repositoryIds ?? [],
   };
 }
 

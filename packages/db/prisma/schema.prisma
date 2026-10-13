@@ -567,6 +567,8 @@ model McpConnection {
   clientId     String?   @map("client_id") @db.Uuid
   resource     String?
   workspaceIds String[]  @map("workspace_ids") @db.Uuid
+  scopes String[] @default(["mokara:read"])
+  repositoryIds String[] @default([]) @map("repository_ids") @db.Uuid
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   expiresAt    DateTime  @map("expires_at") @db.Timestamptz(3)
   revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(3)
@@ -576,6 +578,8 @@ model McpConnection {
   client McpOAuthClient? @relation(fields: [clientId], references: [id], onDelete: Restrict)
   codes  McpOAuthCode[]
   tokens McpOAuthToken[]
+
+  operations McpOperation[]
 
   @@index([userId, createdAt])
   @@map("mcp_connections")
@@ -611,9 +615,28 @@ model McpOAuthToken {
   refreshHash      String        @unique @map("refresh_hash")
   accessExpiresAt  DateTime      @map("access_expires_at") @db.Timestamptz(3)
   refreshExpiresAt DateTime      @map("refresh_expires_at") @db.Timestamptz(3)
+  scopes String[] @default(["mokara:read"])
   refreshUsedAt    DateTime?     @map("refresh_used_at") @db.Timestamptz(3)
   connection       McpConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
   @@index([connectionId])
   @@map("mcp_oauth_tokens")
+}
+
+model McpOperation {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  connectionId String @map("connection_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  workspaceId String @map("workspace_id") @db.Uuid
+  requestId String @map("request_id") @db.Uuid
+  operation String
+  requestHash String @map("request_hash")
+  status String @default("pending")
+  result Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  finishedAt DateTime? @map("finished_at") @db.Timestamptz(3)
+  connection McpConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  @@unique([connectionId, requestId])
+  @@index([userId, createdAt])
+  @@map("mcp_operations")
 }

@@ -97,6 +97,48 @@ export async function getObjectBytes(
   return { body: bytes, contentType: res.ContentType ?? "application/octet-stream" };
 }
 
+/** Bounded byte ranges for MCP: never buffer an entire large attachment. */
+export async function getObjectChunk(
+  key: string,
+  offset: number,
+  length: number
+): Promise<Uint8Array> {
+  if (!storageReady()) throw new Error("Storage unavailable");
+  const response = await s3().send(
+    new GetObjectCommand({
+      Bucket: env.S3_BUCKET,
+      Key: key,
+      Range: `bytes=${offset}-${offset + length - 1}`,
+    }),
+    { abortSignal: AbortSignal.timeout(12_000) }
+  );
+  if (!response.Body) throw new Error("Object body unavailable");
+  const reader = response.Body.transformToWebStream().getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    if (offset > 0 && !response.ContentRange)
+      throw new Error("Storage did not honor the requested range");
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+      size += next.value.length;
+      if (size > length) throw new Error("Storage range exceeded limit");
+      chunks.push(next.value);
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let position = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, position);
+    position += chunk.length;
+  }
+  return bytes;
+}
+
 /**
  * Best-effort removal: the row is already gone, and a leftover object is a
  * billing leak, not a correctness bug — so a failure logs and moves on rather

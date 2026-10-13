@@ -1,4 +1,18 @@
 import { z } from "zod";
+import { validScopes, parseScopes, MCP_SCOPES } from "../mcp/permissions.ts";
+
+export const mcpScopesSchema = z
+  .array(z.enum(MCP_SCOPES))
+  .refine(validScopes, "Choose valid permissions including read access.");
+const mcpScopeString = z
+  .string()
+  .max(200)
+  .refine((raw) => validScopes(parseScopes(raw)), "Invalid MCP scope.");
+const mcpRepositoriesSchema = z
+  .array(z.uuid())
+  .max(20)
+  .refine((ids) => new Set(ids).size === ids.length)
+  .default([]);
 import { PLAN_IDS } from "./plans.ts";
 
 // Username: 3-20 chars, lowercase letters / digits / underscore, case-insensitive
@@ -125,7 +139,12 @@ export const createTaskSchema = z.object({
   kpis: taskKpiBindings.optional(),
 });
 
-export const githubIssueSchema = z.object({ repository_id: z.uuid() }).strict();
+export const githubIssueSchema = z
+  .object({
+    repository_id: z.uuid(),
+    issue_number: z.number().int().min(1).max(2147483647).optional(),
+  })
+  .strict();
 export const githubRepositoriesSchema = z
   .object({
     repository_ids: z
@@ -302,6 +321,8 @@ export const createMcpConnectionSchema = z
       .max(20)
       .refine((ids) => new Set(ids).size === ids.length),
     expires_in_days: z.number().int().min(1).max(90).default(30),
+    scopes: mcpScopesSchema.default(["mokara:read"]),
+    repository_ids: mcpRepositoriesSchema,
   })
   .strict();
 
@@ -328,13 +349,15 @@ export const mcpOAuthRegisterSchema = z
       )
       .default(["authorization_code", "refresh_token"]),
     response_types: z.array(z.literal("code")).length(1).default(["code"]),
-    scope: z.literal("mokara:read").optional(),
+    scope: mcpScopeString.optional(),
   })
   .strict();
 export const mcpOAuthConsentSchema = z
   .object({
     request: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
     approve: z.boolean(),
+    scopes: mcpScopesSchema.default(["mokara:read"]),
+    repository_ids: mcpRepositoriesSchema,
     workspace_ids: z
       .array(z.uuid())
       .max(20)
@@ -351,7 +374,7 @@ export const mcpOAuthAuthorizeSchema = z
     code_challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
     code_challenge_method: z.literal("S256"),
     resource: z.string().max(2048),
-    scope: z.literal("mokara:read").default("mokara:read"),
+    scope: mcpScopeString.default("mokara:read"),
     state: z.string().max(2048).optional(),
   })
   .strict();
@@ -365,7 +388,7 @@ export const mcpOAuthTokenSchema = z.discriminatedUnion("grant_type", [
       code: z.string().regex(/^mk_code_[A-Za-z0-9_-]{43}$/),
       redirect_uri: z.string().max(2048),
       code_verifier: z.string().regex(/^[A-Za-z0-9._~-]{43,128}$/),
-      scope: z.literal("mokara:read").optional(),
+      scope: mcpScopeString.optional(),
     })
     .strict(),
   z
@@ -374,7 +397,7 @@ export const mcpOAuthTokenSchema = z.discriminatedUnion("grant_type", [
       client_id: z.uuid(),
       resource: z.string().max(2048),
       refresh_token: z.string().regex(/^mk_ort_[A-Za-z0-9_-]{43}$/),
-      scope: z.literal("mokara:read").optional(),
+      scope: mcpScopeString.optional(),
     })
     .strict(),
 ]);

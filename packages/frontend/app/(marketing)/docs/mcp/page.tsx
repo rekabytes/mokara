@@ -55,6 +55,41 @@ export default async function McpGuidePage() {
           add the connection to your agent. No server installation or environment file is needed.
         </p>
       </section>
+      <section aria-labelledby="skill">
+        <h2 id="skill">Teach your agent Mokara workflows</h2>
+        <p>
+          The optional Mokara skill explains repository selection, task creation with GitHub issues,
+          existing-task publishing and safe recovery from partial failures. Basic MCP tools work
+          without installing it.
+        </p>
+        <p>
+          <a href="/skills/mokara/SKILL.md" download="SKILL.md">
+            Download Mokara skill · v1.0.0
+          </a>
+        </p>
+        <p>
+          For clients that support SKILL.md skills, save the file inside a folder named
+          <code> mokara</code> in your client’s documented skills directory, then enable or reload
+          skills as that client requires. Connecting MCP does not automatically install the skill.
+          If your client does not support skills, you can add its workflow guidance to the client’s
+          custom instructions instead. The file contains no credentials or fixed server URL.
+        </p>
+        <h3>Ready-made MCP prompts</h3>
+        <p>
+          Clients that support MCP prompts can offer <code>create_task_with_github_issue</code>
+          (write and GitHub permissions) and <code>publish_existing_task_to_github</code>
+          (GitHub permission). Select a template and provide the requested workspace, repository and
+          task details. Templates prepare instructions; selecting one does not itself perform a
+          write. Availability and menu placement depend on your client.
+        </p>
+        <h3>Ask naturally</h3>
+        <p>
+          “Create a testing task and publish a GitHub issue in my chosen repository” is enough. Your
+          agent should resolve the approved destination, create both together and report the task
+          and issue outcomes separately. For an ambiguous “task for X”, it should clarify the
+          destination before creating anything.
+        </p>
+      </section>
       <section aria-labelledby="install">
         <h2 id="install">Install in your client</h2>
         <h3>Cursor</h3>

@@ -8,18 +8,14 @@ import "@fontsource-variable/instrument-sans";
 import "@fontsource/ibm-plex-mono/500.css";
 import type { Metadata, Viewport } from "next";
 import { MotionProvider } from "@/components/MotionProvider";
-import { siteOrigin } from "@/lib/legal.server";
+import { connection } from "next/server";
+import { getRootMetadata } from "@/lib/seo.server";
 
-const origin = siteOrigin();
-
-export const metadata: Metadata = {
-  // Absolute base for og:image and og:url. Omitted when no origin is configured
-  // rather than guessed — a relative og:image is simply not published then.
-  ...(origin ? { metadataBase: new URL(origin) } : null),
-  title: "Mokara",
-  description: "Team tasks, calmly.",
-  icons: { icon: { url: "/mokara-mark.svg", type: "image/svg+xml" } },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  // Runtime deployment settings must not be frozen into a reusable Docker image.
+  await connection();
+  return getRootMetadata();
+}
 
 export const viewport: Viewport = {
   themeColor: "#f6f7fb",

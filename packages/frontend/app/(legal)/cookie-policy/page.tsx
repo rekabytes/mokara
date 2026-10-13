@@ -1,13 +1,13 @@
+import { getPublicMetadata } from "@/lib/seo.server";
 import type { Metadata } from "next";
 import { LegalDoc } from "@/components/LegalDoc";
 import { LEGAL_DOCS } from "@/lib/legal-links";
 
 import { SECTIONS } from "./sections";
 
-export const metadata: Metadata = {
-  title: "Cookie Policy",
-  description: LEGAL_DOCS.cookies.description,
-};
+export function generateMetadata(): Metadata {
+  return getPublicMetadata("/cookie-policy");
+}
 
 // The whole policy is verifiable from the code: packages/backend/src/lib/cookies.ts
 // sets one cookie with these exact attributes, and the frontend contains no

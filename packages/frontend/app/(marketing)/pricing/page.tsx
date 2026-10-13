@@ -1,3 +1,4 @@
+import { getPublicMetadata } from "@/lib/seo.server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
@@ -6,16 +7,9 @@ import { FAQ, IN_EVERY_PLAN, LATER_TIERS, TIERS, type Tier } from "./pricing-dat
 
 import "./pricing.css";
 
-export const metadata: Metadata = {
-  title: "Pricing",
-  description:
-    "Free for a trio, four dollars a month for a team. Mokara sells capacity, never features — and self-hosting stays free forever.",
-  openGraph: {
-    title: "Mokara — pricing",
-    description:
-      "Pay for capacity, never for features. Free for three people, $4 a month for a team.",
-  },
-};
+export function generateMetadata(): Metadata {
+  return getPublicMetadata("/pricing");
+}
 
 function Tick() {
   return (

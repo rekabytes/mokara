@@ -1,14 +1,13 @@
+import { getPublicMetadata } from "@/lib/seo.server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DocPage } from "../DocPage";
 import { ToolCatalog } from "./ToolCatalog";
 import { getMcpConnectionUrl } from "./connection-config.server";
 
-export const metadata: Metadata = {
-  title: "Connect an AI agent",
-  description:
-    "Connect a remote MCP client to Mokara with secure sign-in, selected workspace permissions and revocable permissions for reading, writing and selected GitHub repositories.",
-};
+export function generateMetadata(): Metadata {
+  return getPublicMetadata("/docs/mcp");
+}
 export default async function McpGuidePage() {
   const endpoint = await getMcpConnectionUrl();
   const skillUrl = endpoint ? new URL("/skills/mokara/SKILL.md", endpoint).href : null;

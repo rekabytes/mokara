@@ -139,7 +139,7 @@ export function NewTaskModal({
       animate="visible"
       exit="exit"
       onKeyDown={onKeyDown}
-      className="fixed inset-0 z-50 grid place-items-center px-4"
+      className="new-task-overlay fixed inset-0 z-50 grid place-items-center p-4"
     >
       <button
         type="button"
@@ -152,7 +152,7 @@ export function NewTaskModal({
           close from one presence check. */}
       <motion.div
         variants={sheetVariants}
-        className="relative z-10 w-full max-w-[640px] overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-white shadow-[var(--shadow-card)]"
+        className="new-task-panel relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-[640px] overflow-y-auto overscroll-contain rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-white shadow-[var(--shadow-card)]"
       >
         {/* Top bar: breadcrumb + actions */}
         <div className="flex items-center justify-between border-b border-[var(--color-border-soft)] px-4 py-2.5">
@@ -166,7 +166,7 @@ export function NewTaskModal({
             <button
               type="button"
               aria-label="Expand"
-              className="grid size-6 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+              className="grid size-6 max-[800px]:size-10 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
             >
               <ExpandIcon />
             </button>
@@ -174,7 +174,7 @@ export function NewTaskModal({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="grid size-6 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
+              className="grid size-6 max-[800px]:size-10 cursor-pointer place-items-center rounded text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
             >
               <CloseSmallIcon />
             </button>

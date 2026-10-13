@@ -104,7 +104,7 @@ export function LayerRow({
       layout="position"
       transition={snap(DUR.base)}
       className={cn(
-        "group flex items-center gap-2 rounded-[9px] border border-[var(--color-border-soft)] bg-[var(--color-surface-2)] px-2.5 py-1.5 text-[0.84rem] transition-opacity duration-[140ms]",
+        "team-layer-row group flex items-center gap-2 rounded-[9px] border border-[var(--color-border-soft)] bg-[var(--color-surface-2)] px-2.5 py-1.5 text-[0.84rem] transition-opacity duration-[140ms]",
         archived && "opacity-60"
       )}
     >
@@ -152,11 +152,11 @@ export function LayerRow({
         </form>
       ) : (
         <>
-          <span className="min-w-0 flex-1 truncate">{name}</span>
+          <span className="layer-name min-w-0 flex-1 truncate">{name}</span>
           <span className="pill shrink-0">{badge}</span>
           {progressPct !== undefined && (
             <>
-              <span className="h-1 w-[110px] shrink-0 overflow-hidden rounded-[999px] bg-[rgba(148,163,184,0.22)]">
+              <span className="h-1 w-[110px] max-[600px]:w-12 shrink-0 overflow-hidden rounded-[999px] bg-[rgba(148,163,184,0.22)]">
                 <span
                   className={cn(
                     // Same width transition the analytics scorecard uses, so a
@@ -178,7 +178,7 @@ export function LayerRow({
           {canManage && (
             <div
               className={cn(
-                "flex shrink-0 items-center gap-0.5 transition-opacity duration-[140ms]",
+                "touch-action flex shrink-0 items-center gap-0.5 transition-opacity duration-[140ms]",
                 "opacity-0 group-hover:opacity-100 focus-within:opacity-100"
               )}
             >

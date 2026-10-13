@@ -12,6 +12,7 @@ import type { TourTargetId } from "@/lib/onboarding";
 import { DUR, snap } from "@/lib/motion";
 import { cn } from "@/lib/cn";
 import { useAsyncError } from "@/hooks/useAsyncError";
+import { useDialogFocus } from "@/hooks/use-dialog-focus";
 import { ErrorBanner } from "./ErrorBanner";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -28,6 +29,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Declared above the redirect below so every render calls the same hooks.
   const [navOpenAt, setNavOpenAt] = useState<string | null>(null);
   const mobileNavOpen = navOpenAt === pathname;
+  const navFocus = useDialogFocus({ mediaQuery: "(max-width: 800px)" });
 
   // Signed out (expired cookie, or /me answered 401). Redirect during render
   // rather than in an effect: the proxy guards every protected route on the
@@ -85,7 +87,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div
       className={cn(
-        "relative z-10 grid min-h-screen grid-cols-[260px_1fr]",
+        "app-shell relative z-10 grid min-h-dvh grid-cols-[260px_minmax(0,1fr)]",
         "max-[800px]:grid-cols-1"
       )}
     >
@@ -93,19 +95,51 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         type="button"
         aria-label="Toggle navigation"
         aria-expanded={mobileNavOpen}
+        aria-controls="app-navigation"
         onClick={() => setNavOpenAt(mobileNavOpen ? null : pathname)}
-        className="fixed top-3 left-3 z-20 hidden size-10 items-center justify-center rounded-[10px] border border-[var(--color-border-soft)] bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)] backdrop-blur-[22px] cursor-pointer max-[800px]:inline-flex"
+        className="app-nav-toggle fixed top-3 left-3 z-20 hidden size-10 items-center justify-center rounded-[10px] border border-[var(--color-border-soft)] bg-[var(--color-surface)] text-[var(--color-ink)] shadow-[var(--shadow-card)] backdrop-blur-[22px] cursor-pointer max-[800px]:inline-flex"
       >
         <MenuIcon />
       </button>
 
       <aside
+        id="app-navigation"
+        ref={mobileNavOpen ? navFocus : undefined}
+        data-focus-scope={mobileNavOpen ? "" : undefined}
+        tabIndex={-1}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            setNavOpenAt(null);
+          }
+        }}
+        onClick={(event) => {
+          if (event.target instanceof Element && event.target.closest("a[href]")) {
+            setNavOpenAt(null);
+          }
+        }}
+        data-open={mobileNavOpen}
         className={cn(
-          "sticky top-0 self-start h-screen z-10 flex flex-col pt-5 pr-4 pb-5 pl-5 border-r border-[var(--color-border-soft)] glass-blur",
-          "max-[800px]:fixed max-[800px]:top-0 max-[800px]:left-0 max-[800px]:w-[280px] max-[800px]:h-screen max-[800px]:-translate-x-full max-[800px]:transition-transform max-[800px]:duration-[250ms] max-[800px]:shadow-[var(--shadow-lift)]",
+          "app-navigation sticky top-0 self-start h-dvh z-10 flex flex-col pt-5 pr-4 pb-5 pl-5 border-r border-[var(--color-border-soft)] glass-blur",
+          "max-[800px]:fixed max-[800px]:top-0 max-[800px]:left-0 max-[800px]:w-[280px] max-[800px]:h-dvh max-[800px]:-translate-x-full max-[800px]:transition-transform max-[800px]:duration-[250ms] max-[800px]:shadow-[var(--shadow-lift)]",
           mobileNavOpen && "max-[800px]:translate-x-0"
         )}
       >
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setNavOpenAt(null)}
+          className="absolute top-3 right-3 hidden size-10 items-center justify-center rounded-lg max-[800px]:inline-flex"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="m6 6 12 12M18 6 6 18"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
         <div className="mb-3">
           <Link
             href="/tasks"
@@ -194,7 +228,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
       </AnimatePresence>
 
-      <main className="w-full min-w-0 px-[clamp(1.5rem,4vw,3rem)] pt-4 pb-16 max-[800px]:pt-[4rem]">
+      <main className="app-main w-full min-w-0 px-[clamp(1.5rem,4vw,3rem)] pt-4 pb-16 max-[800px]:pt-[4rem]">
         {children}
       </main>
 

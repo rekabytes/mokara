@@ -235,10 +235,10 @@ export function LayersPanel({
             e.preventDefault();
             void submit("project", projName, projScope);
           }}
-          className="grid grid-cols-[1fr_auto] gap-2"
+          className="grid grid-cols-[minmax(0,1fr)_auto] gap-2"
         >
           <input
-            className="field"
+            className="field min-w-0 w-full"
             type="text"
             placeholder="New project…"
             value={projName}
@@ -253,7 +253,7 @@ export function LayersPanel({
           >
             Add
           </button>
-          <div className="col-span-full flex items-center gap-1.5 pt-1">
+          <div className="col-span-full flex flex-wrap items-center gap-1.5 pt-1">
             {SWATCHES.map((c) => (
               <button
                 key={c}
@@ -329,10 +329,10 @@ export function LayersPanel({
             e.preventDefault();
             void submit("kpi", kpiName, "personal");
           }}
-          className="grid grid-cols-[1fr_auto] gap-2"
+          className="grid grid-cols-[minmax(0,1fr)_auto] gap-2"
         >
           <input
-            className="field"
+            className="field min-w-0 w-full"
             type="text"
             placeholder="New KPI…"
             value={kpiName}

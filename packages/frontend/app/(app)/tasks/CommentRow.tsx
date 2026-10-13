@@ -77,7 +77,7 @@ export function CommentRow({
           {/* Row actions — revealed on hover, no fade (decisive). Reply is
               for everyone; edit/delete only on own comments. */}
           {!editing && (
-            <span className="ml-auto flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
+            <span className="touch-action ml-auto flex shrink-0 items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
               {confirming ? (
                 <span className="flex items-center gap-1 text-[0.7rem] text-[var(--color-danger)]">
                   Delete?

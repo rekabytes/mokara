@@ -47,11 +47,11 @@ export function BoardToolbar({
   setSort: (next: TaskSort) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-3">
+    <div className="board-toolbar flex flex-wrap items-center justify-between gap-3 py-3">
       <div className="flex items-center gap-2">
         <div
           data-tour="board-controls"
-          className="inline-flex items-center gap-[2px] rounded-full border border-[var(--color-border-soft)] bg-[var(--color-surface)] p-[3px] shadow-[var(--shadow-xs)] backdrop-blur-[22px]"
+          className="inline-flex flex-wrap items-center gap-[2px] rounded-full border border-[var(--color-border-soft)] bg-[var(--color-surface)] p-[3px] shadow-[var(--shadow-xs)] backdrop-blur-[22px]"
         >
           {FILTERS.map((f) => (
             <button
@@ -161,7 +161,7 @@ export function TaskBoard({
 }) {
   const reduced = useReducedMotion();
   return (
-    <div className="card flex min-h-0 max-h-[calc(100dvh-12rem)] max-[800px]:max-h-[calc(100dvh-15rem)] flex-1 min-w-0 flex-col overflow-hidden">
+    <div className="task-board card flex min-h-0 max-h-[calc(100dvh-12rem)] max-[800px]:max-h-[calc(100dvh-15rem)] flex-1 min-w-0 flex-col overflow-hidden">
       {/* Inner scrollable surface — only the task area scrolls. */}
       <div className="flex-1 overflow-y-auto p-1.5">
         {totalTasks === 0 ? (
@@ -256,7 +256,7 @@ export function TaskBoard({
                         onClick={openModal}
                         aria-label="New task"
                         data-tour="create-task"
-                        className="grid size-5 cursor-pointer place-items-center text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]"
+                        className="grid size-5 max-[800px]:size-10 cursor-pointer place-items-center text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]"
                       >
                         <PlusSmallIcon />
                       </button>

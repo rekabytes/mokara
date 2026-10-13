@@ -58,7 +58,7 @@ export function CommentsSection({
   }, [count]);
 
   return (
-    <section className="mt-5 flex min-h-0 flex-1 flex-col" aria-label="Comments">
+    <section className="task-comments mt-5 flex min-h-0 flex-1 flex-col" aria-label="Comments">
       <div className="flex items-center gap-2">
         <h3 className="text-[0.74rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-muted)]">
           Comments

@@ -1,5 +1,7 @@
 "use client";
 
+import "./tasks-mobile.css";
+
 import { useState, useMemo } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useAtom } from "jotai";
@@ -16,7 +18,7 @@ import { useContainerMeta } from "@/lib/meta";
 import { useSession } from "@/lib/session";
 import { taskFilterAtom, taskSortAtom, useCollapsedGroups, type GroupId } from "./task-view";
 import type { TourProgress } from "@/lib/onboarding";
-import { DUR, snap, noMotion } from "@/lib/motion";
+import { DUR, snap, noMotion, taskDrawerVariants } from "@/lib/motion";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { PageHeader } from "@/components/PageHeader";
 import { TourOverlay } from "./TourOverlay";
@@ -191,7 +193,7 @@ export default function TasksPage() {
     // padding instead of raw h-screen, otherwise the body scrolls and
     // the drawer's bottom lands below the fold. Scroll lives inside the
     // task list (when many tasks) — not in the drawer, not on the page.
-    <div className="flex h-[calc(100dvh-5rem)] max-[800px]:h-[calc(100dvh-8rem)] flex-col overflow-hidden">
+    <div className="tasks-page flex h-[calc(100dvh-5rem)] max-[800px]:h-[calc(100dvh-8rem)] flex-col overflow-hidden">
       {/* Top bar: breadcrumb + actions */}
       <PageHeader>Tasks</PageHeader>
 
@@ -245,7 +247,7 @@ export default function TasksPage() {
           remaining height with flex-1 + min-h-0. The task card has a
           bounded max-h and scrolls internally. No page-level scroll, no
           drawer scroll. */}
-      <div className="@container flex min-h-0 flex-1 items-start overflow-hidden">
+      <div className="task-workspace @container flex min-h-0 flex-1 items-start overflow-hidden">
         <TaskBoard
           totalTasks={totalTasks}
           totalVisible={totalVisible}
@@ -280,12 +282,9 @@ export default function TasksPage() {
               initial="closed"
               animate="open"
               exit="closed"
-              variants={{
-                closed: { width: "0%", marginLeft: 0 },
-                open: { width: "40%", marginLeft: 16 },
-              }}
+              variants={taskDrawerVariants}
               transition={reduced ? noMotion : snap(DUR.panel)}
-              className="card max-w-[640px] shrink-0 self-stretch overflow-hidden"
+              className="task-drawer-panel card max-w-[640px] shrink-0 self-stretch overflow-hidden"
             >
               <TaskDetailDrawer
                 task={selectedTask}

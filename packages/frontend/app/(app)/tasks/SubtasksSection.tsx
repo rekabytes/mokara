@@ -213,7 +213,7 @@ export function SubtasksSection({ task }: { task: Task }) {
                 onCommit={(next) => rename(item, next)}
               />
 
-              <span className="flex shrink-0 items-center opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+              <span className="touch-action flex shrink-0 items-center opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
                 {index > 0 && (
                   <button
                     type="button"

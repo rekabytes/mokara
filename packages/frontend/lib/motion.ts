@@ -190,3 +190,9 @@ export const reducedCollapseVariants: Variants = {
   visible: { height: "auto", opacity: 1, transition: noMotion },
 };
 export const reducedBannerVariants: Variants = reducedCollapseVariants;
+
+/** Desktop split panel; mobile CSS expands the same mounted panel to the viewport. */
+export const taskDrawerVariants: Variants = {
+  closed: { width: "0%", marginLeft: 0, opacity: 0 },
+  open: { width: "40%", marginLeft: 16, opacity: 1 },
+};

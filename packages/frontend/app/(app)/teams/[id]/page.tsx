@@ -145,7 +145,7 @@ export default function TeamDetailPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-[1fr_300px] items-start gap-4 max-[800px]:grid-cols-1">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_300px] items-start gap-4 max-[1100px]:grid-cols-1">
         <section className="flex flex-col">
           <LayersPanel
             key={teamId}

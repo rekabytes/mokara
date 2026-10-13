@@ -8,6 +8,9 @@ import { motion } from "framer-motion";
 import { TILE, TileHeader } from "./settings-chrome";
 import { ErrorBanner } from "@/components/ErrorBanner";
 
+import { ConnectionFilters } from "./ConnectionFilters";
+import { filterRepositories, repositoryStatus, type RepositoryFilter } from "./connection-filters";
+
 type Run = ReturnType<typeof useAsyncError>["run"];
 
 function GitHubIcon() {
@@ -29,6 +32,8 @@ export function GitHubTile({ run }: { run: Run }) {
   const [integration, setIntegration] = useState<GitHubIntegration | null>(null);
   const pending = useRef(false);
   const [busy, setBusy] = useState(false);
+  const [filter, setFilter] = useState<RepositoryFilter>("active");
+  const [search, setSearch] = useState("");
   const [managing, setManaging] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [callbackMessage, setCallbackMessage] = useState<string | null>(null);
@@ -50,7 +55,10 @@ export function GitHubTile({ run }: { run: Run }) {
           .filter((repository) => repository.enabled && repository.available)
           .map((repository) => repository.id) ?? [];
       setSelected(active);
-      if (data.connection && active.length === 0) setManaging(true);
+      if (data.connection && active.length === 0) {
+        setManaging(true);
+        setFilter("all");
+      }
     }
   }, [runLoad, clearLoadError]);
 
@@ -144,6 +152,8 @@ export function GitHubTile({ run }: { run: Run }) {
         read.current?.abort();
         setIntegration(data);
         setManaging(false);
+        setFilter("active");
+        setSearch("");
         setCallbackMessage("Active repositories saved.");
       }
     } finally {
@@ -151,6 +161,12 @@ export function GitHubTile({ run }: { run: Run }) {
       setBusy(false);
     }
   };
+
+  const repositories = integration?.connection?.repositories ?? [];
+  const visibleRepositories = filterRepositories(repositories, filter, search);
+  const activeCount = repositories.filter(
+    (repository) => repositoryStatus(repository) === "active"
+  ).length;
 
   return (
     <motion.section variants={tileIn} className={`${TILE} col-span-12`}>
@@ -206,14 +222,15 @@ export function GitHubTile({ run }: { run: Run }) {
         </div>
       ) : (
         <>
-          <p className="mb-0 mt-4 text-[0.85rem] text-[var(--color-ink-muted)]">
-            {managing
-              ? selected.length
-              : integration.connection.repositories.filter(
-                  (repository) => repository.enabled && repository.available
-                ).length}
-            {` / ${integration.repository_limit} ${managing ? "selected" : "active"} repositories. GitHub access and Mokara activation are separate.`}
-          </p>
+          <div className="connection-summary">
+            <p>
+              <strong>
+                {managing ? selected.length : activeCount} / {integration.repository_limit}
+              </strong>{" "}
+              {managing ? "selected" : "active"} repositories
+            </p>
+            <p>{repositories.length} repositories from GitHub</p>
+          </div>
           {integration.connection.reauthorization_required && (
             <p role="status" className="mb-0 mt-2 text-[0.82rem] text-[var(--color-ink-muted)]">
               Reconnect to verify access and resume sync.
@@ -225,56 +242,113 @@ export function GitHubTile({ run }: { run: Run }) {
               operator.
             </p>
           )}
-          <ul className="m-0 mt-4 flex max-h-[190px] list-none flex-col overflow-y-auto p-0">
-            {integration.connection.repositories.length === 0 ? (
-              <li className="py-2 text-[0.85rem] text-[var(--color-ink-faint)]">
-                {integration.connection.reauthorization_required
-                  ? "Reconnect GitHub to verify your repository access."
-                  : "No repositories are available yet. Install the app or grant it repository access."}
-              </li>
-            ) : (
-              integration.connection.repositories.map((repository) => (
-                <li
-                  key={repository.id}
-                  className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-border-soft)] py-2 first:border-t-0"
+          <ConnectionFilters
+            label="Filter GitHub repositories"
+            value={filter}
+            onChange={setFilter}
+            search={search}
+            onSearch={setSearch}
+            placeholder="Search repositories…"
+            options={[
+              { value: "active", label: "Active", count: activeCount },
+              { value: "all", label: "All", count: repositories.length },
+              {
+                value: "inactive",
+                label: "Inactive",
+                count: repositories.filter(
+                  (repository) => repositoryStatus(repository) === "inactive"
+                ).length,
+              },
+              {
+                value: "unavailable",
+                label: "Unavailable",
+                count: repositories.filter(
+                  (repository) => repositoryStatus(repository) === "unavailable"
+                ).length,
+              },
+            ]}
+          />
+          {managing && (
+            <p className="connection-row-meta">
+              Choose up to {integration.repository_limit} repositories. Selections are kept when you
+              search or switch filters. Save to apply.
+            </p>
+          )}
+          {!visibleRepositories.length ? (
+            <div className="connection-empty">
+              <p>
+                {repositories.length
+                  ? "No repositories match this view."
+                  : "No repositories are available. Grant repository access on GitHub to get started."}
+              </p>
+              {repositories.length > 0 && (
+                <button
+                  type="button"
+                  className="btn-base btn-ghost btn-small"
+                  onClick={() => {
+                    setFilter("all");
+                    setSearch("");
+                  }}
                 >
-                  <label className="flex min-w-0 items-center gap-2 text-[0.88rem] font-semibold">
-                    {managing && (
-                      <input
-                        type="checkbox"
-                        checked={selected.includes(repository.id)}
-                        disabled={
-                          busy ||
-                          integration.connection?.reauthorization_required ||
-                          !repository.available ||
-                          (!selected.includes(repository.id) &&
-                            selected.length >= integration.repository_limit)
-                        }
-                        onChange={(event) =>
-                          setSelected((previous) =>
-                            event.target.checked
-                              ? [...previous, repository.id]
-                              : previous.filter((id) => id !== repository.id)
-                          )
-                        }
-                        className="accent-[var(--color-accent)]"
-                      />
-                    )}
-                    <span className="truncate">{repository.full_name}</span>
-                  </label>
-                  <span className="min-w-0 max-w-full truncate text-[0.74rem] text-[var(--color-ink-faint)] sm:shrink-0">
-                    {repository.private ? "Private" : "Public"} · {repository.installation_account}{" "}
-                    ·{" "}
-                    {repository.available
-                      ? repository.enabled
-                        ? "Active"
-                        : "Inactive"
-                      : "Unavailable"}
-                  </span>
-                </li>
-              ))
-            )}
-          </ul>
+                  Show all repositories
+                </button>
+              )}
+            </div>
+          ) : (
+            <div
+              className="connection-scroll"
+              role="region"
+              aria-label="GitHub repositories"
+              tabIndex={0}
+            >
+              <ul className="connection-list">
+                {visibleRepositories.map((repository) => (
+                  <li key={repository.id} className="connection-row">
+                    <label className="connection-row-main">
+                      {managing ? (
+                        <input
+                          type="checkbox"
+                          checked={selected.includes(repository.id)}
+                          disabled={
+                            busy ||
+                            integration.connection?.reauthorization_required ||
+                            !repository.available ||
+                            (!selected.includes(repository.id) &&
+                              selected.length >= integration.repository_limit)
+                          }
+                          onChange={(event) => {
+                            const checked = event.currentTarget.checked;
+                            setSelected((previous) =>
+                              checked
+                                ? [...previous, repository.id]
+                                : previous.filter((id) => id !== repository.id)
+                            );
+                          }}
+                          className="accent-[var(--color-accent)]"
+                        />
+                      ) : (
+                        <span className="connection-row-icon">
+                          <GitHubIcon />
+                        </span>
+                      )}
+                      <span className="min-w-0">
+                        <span className="connection-row-title">{repository.full_name}</span>
+                        <span className="connection-row-meta block">
+                          {repository.private ? "Private" : "Public"} ·{" "}
+                          {repository.installation_account}
+                        </span>
+                      </span>
+                    </label>
+                    <span className="connection-status" data-status={repositoryStatus(repository)}>
+                      {managing && selected.includes(repository.id)
+                        ? "Selected"
+                        : repositoryStatus(repository)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="mt-3 flex flex-wrap gap-2">
             {managing ? (
               <>
@@ -289,7 +363,11 @@ export function GitHubTile({ run }: { run: Run }) {
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => setManaging(false)}
+                  onClick={() => {
+                    setManaging(false);
+                    setFilter("active");
+                    setSearch("");
+                  }}
                   className="btn-base btn-ghost btn-small"
                 >
                   Cancel
@@ -306,6 +384,8 @@ export function GitHubTile({ run }: { run: Run }) {
                       .map((repository) => repository.id) ?? []
                   );
                   setManaging(true);
+                  setFilter("all");
+                  setSearch("");
                 }}
                 className="btn-base btn-primary btn-small"
               >

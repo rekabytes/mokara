@@ -1,3 +1,4 @@
+import "./connections.css";
 import { CONTACT } from "@/lib/legal.server";
 import { SettingsView } from "./settings-view";
 

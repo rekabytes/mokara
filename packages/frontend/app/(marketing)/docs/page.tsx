@@ -5,7 +5,7 @@ import { DocPage } from "./DocPage";
 export const metadata: Metadata = {
   title: "Documentation",
   description:
-    "Connect an AI agent to Mokara, choose its workspace access and configure MCP for your deployment.",
+    "Connect your AI agent to Mokara, choose workspace permissions and manage or revoke its access.",
 };
 export default function DocumentationPage() {
   return (
@@ -32,16 +32,16 @@ export default function DocumentationPage() {
             </p>
             <span className="docs-guide-action">Read the connection guide →</span>
           </Link>
-          <Link href="/docs/mcp/configuration" className="docs-guide">
-            <span className="docs-label">02 · For instance operators</span>
+          <Link href="/docs/mcp#revoke" className="docs-guide">
+            <span className="docs-label">02 · Stay in control</span>
             <h3>
-              Configure MCP <span aria-hidden="true">↗</span>
+              Manage agent access <span aria-hidden="true">↗</span>
             </h3>
             <p>
-              Set the public URL, check environment variables and prepare routing for agent
-              connections.
+              Understand connection expiry and remove an agent’s workspace access whenever you need
+              to.
             </p>
-            <span className="docs-guide-action">Read the configuration guide →</span>
+            <span className="docs-guide-action">Learn about expiry and revocation →</span>
           </Link>
         </div>
       </section>

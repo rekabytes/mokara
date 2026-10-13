@@ -25,6 +25,8 @@ How to work in this repository. Project **facts, decisions and traps** live in
 4. **TypeScript: no `as any`, no cast where a type will do.** Name the real type, narrow with `instanceof`, or derive constants. Zero `@ts-ignore` / `@ts-expect-error` / non-null assertions.
 5. **Effects: `useEffect` only to sync with something outside React**, each with a comment saying what it syncs; animation is presence-driven (`<AnimatePresence>` owns unmount timing — no timer rigs).
 
+6. **Runtime URLs:** Follow the global persistent instruction to never hardcode service URLs or invent hostname fallbacks. Mokara’s backend `AUTH_PUBLIC_URL` owns the public MCP endpoint; frontend docs and installation snippets must read its discovery metadata at runtime, never duplicate the domain or require a second public-URL setting.
+
 ## Code conventions
 
 - Engineering behavior: use `.agents/skills/mokara-engineering/SKILL.md` for Jotai state, effects, Framer Motion, typed errors and relevant production concerns. Use official Jotai utilities instead of recreating them; effects are a last choice for necessary external synchronization and never drive animations. Extend the existing unified error path instead of adding private handlers.

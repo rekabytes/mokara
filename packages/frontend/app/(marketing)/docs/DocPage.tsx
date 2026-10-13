@@ -24,9 +24,7 @@ export function DocPage({
           <>
             <Link href="/docs">Documentation</Link>
             <span aria-hidden="true">/</span>
-            <span aria-current="page">
-              {current.endsWith("configuration") ? "Configuration" : "AI agents"}
-            </span>
+            <span aria-current="page">AI agents</span>
           </>
         )}
       </nav>

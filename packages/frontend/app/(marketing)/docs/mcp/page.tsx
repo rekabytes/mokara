@@ -1,19 +1,108 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DocPage } from "../DocPage";
+import { getMcpConnectionUrl } from "./connection-config.server";
 
 export const metadata: Metadata = {
   title: "Connect an AI agent",
   description:
     "Connect a remote MCP client to Mokara with secure sign-in, selected workspace permissions and revocable read-only access.",
 };
-export default function McpGuidePage() {
+export default async function McpGuidePage() {
+  const endpoint = await getMcpConnectionUrl();
   return (
     <DocPage
       current="/docs/mcp"
       title="Your agent, connected."
       description="Give your AI agent a clear view of your work, with access you choose and control."
     >
+      <section aria-labelledby="server">
+        <h2 id="server">Add Mokara to your AI agent</h2>
+        <p>Use this remote MCP server URL in your agent’s connector settings:</p>
+        {endpoint ? (
+          <pre>
+            <code>{endpoint}</code>
+          </pre>
+        ) : (
+          <div className="docs-note" role="alert">
+            <p>
+              Connection details are temporarily unavailable. Reload this page before setting up
+              your agent.
+            </p>
+          </div>
+        )}
+        <div className="docs-table-wrap">
+          <table>
+            <caption>Mokara connection settings</caption>
+            <tbody>
+              <tr>
+                <th scope="row">Server name</th>
+                <td>Mokara</td>
+              </tr>
+              <tr>
+                <th scope="row">Transport</th>
+                <td>Streamable HTTP</td>
+              </tr>
+              <tr>
+                <th scope="row">Authentication</th>
+                <td>OAuth · Sign in with Mokara</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Connect the server, sign in and approve your workspaces. Mokara runs the service; you only
+          add the connection to your agent. No server installation or environment file is needed.
+        </p>
+      </section>
+      <section aria-labelledby="install">
+        <h2 id="install">Install in your client</h2>
+        <h3>Cursor</h3>
+        <p>
+          Open <code>~/.cursor/mcp.json</code> for a connection available across your projects. Add
+          the Mokara entry to its <code>mcpServers</code> object, preserving existing servers:
+        </p>
+        {endpoint ? (
+          <pre>
+            <code>{JSON.stringify({ mcpServers: { mokara: { url: endpoint } } }, null, 2)}</code>
+          </pre>
+        ) : (
+          <p>The installation configuration will appear when connection details are available.</p>
+        )}
+        <p>
+          Enable Mokara in Cursor’s MCP settings and follow its sign-in prompt, then approve
+          workspace access in Mokara. See{" "}
+          <a href="https://cursor.com/docs/mcp">Cursor’s MCP instructions</a> for client-specific
+          controls.
+        </p>
+        <h3>VS Code</h3>
+        <p>
+          Run <code>MCP: Open User Configuration</code> from the Command Palette. Add Mokara to the{" "}
+          <code>servers</code> object in that file, preserving existing entries:
+        </p>
+        {endpoint ? (
+          <pre>
+            <code>
+              {JSON.stringify({ servers: { mokara: { type: "http", url: endpoint } } }, null, 2)}
+            </code>
+          </pre>
+        ) : (
+          <p>The installation configuration will appear when connection details are available.</p>
+        )}
+        <p>
+          Run <code>MCP: List Servers</code>, select Mokara and start the connection. Complete
+          authentication when prompted. See{" "}
+          <a href="https://code.visualstudio.com/docs/agent-customization/mcp-servers">
+            VS Code’s MCP instructions
+          </a>{" "}
+          for client-specific controls.
+        </p>
+        <h3>Other AI agents</h3>
+        <p>
+          Add a remote MCP server using the URL and connection settings above. Configuration formats
+          vary by client; use its remote HTTP connector rather than a local command.
+        </p>
+      </section>
       <section aria-labelledby="before">
         <h2 id="before">Before you connect</h2>
         <p>
@@ -29,11 +118,7 @@ export default function McpGuidePage() {
         <h2 id="sign-in">Connect with Mokara sign-in</h2>
         <ol>
           <li>Open your agent’s MCP or connector settings and add a remote server.</li>
-          <li>
-            Use your Mokara site address followed by <code>/api/mcp</code>. For example, an instance
-            at <code>https://mokara.example</code> uses <code>https://mokara.example/api/mcp</code>.
-            Replace the example domain with the site you use.
-          </li>
+          <li>Enter the Mokara server URL shown in the connection settings above.</li>
           <li>
             Choose the client’s connect or sign-in action. In the browser, sign in to Mokara with
             your username and password, Google or GitHub.
@@ -173,8 +258,9 @@ export default function McpGuidePage() {
           </dd>
           <dt>The client reports an origin or discovery error</dt>
           <dd>
-            Ask your instance operator to check the{" "}
-            <Link href="/docs/mcp/configuration">MCP configuration guide</Link>.
+            Check that the server URL matches the connection settings above and that your client
+            supports the connection methods listed above. Contact Mokara support if the error
+            persists.
           </dd>
         </dl>
       </section>

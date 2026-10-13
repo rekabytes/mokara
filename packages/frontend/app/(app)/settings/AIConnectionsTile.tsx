@@ -8,11 +8,19 @@ import { api, type McpConnection, type TeamWithRole } from "@/lib/api";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { tileIn } from "@/lib/motion";
+import Link from "next/link";
+import { ConnectionFilters } from "./ConnectionFilters";
+import { filterAgentConnections, type AgentFilter } from "./connection-filters";
 import { TILE, TileHeader } from "./settings-chrome";
 
 export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }) {
   const { error, run, clearError } = useAsyncError();
   const [connections, setConnections] = useState<McpConnection[] | null>(null);
+  const [filter, setFilter] = useState<AgentFilter>("all");
+  const [search, setSearch] = useState("");
+  const [activityFilter, setActivityFilter] = useState<"all" | "pending" | "failed" | "succeeded">(
+    "all"
+  );
   const [name, setName] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [scopes, setScopes] = useState<McpScope[]>(["mokara:read"]);
@@ -90,6 +98,8 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
           endpoint: new URL("/api/mcp", window.location.href).href,
         });
         setConnections((current) => [data.connection, ...(current ?? [])]);
+        setFilter("all");
+        setSearch("");
         setName("");
         setSelected([]);
         setScopes(["mokara:read"]);
@@ -118,6 +128,18 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
     }
   };
 
+  const workspaceNames = new Map(containers.map((container) => [container.id, container.name]));
+  const visibleConnections = filterAgentConnections(
+    connections ?? [],
+    filter,
+    search,
+    workspaceNames
+  );
+  const visibleActivity = activity.filter(
+    (row) => activityFilter === "all" || row.status === activityFilter
+  );
+  const writeCount = connections?.filter((connection) => connection.access === "write").length ?? 0;
+
   return (
     <motion.section variants={tileIn} className={`${TILE} col-span-12 min-w-0`}>
       <TileHeader
@@ -135,12 +157,14 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
           </button>
         }
       />
-      <p className="mt-3 text-sm text-[var(--color-ink-muted)]">
-        Connect an MCP-compatible agent to read tasks, projects, members and comments. Connections
-        can only use the permissions and workspaces you approve. Existing connections stay read-only
-        until you reconnect. In your agent, add this site’s /api/mcp URL and choose Sign in with
-        Mokara. Review and approve its workspace access in the browser.
-      </p>
+      <div className="connection-summary">
+        <p>
+          Choose what your agents can access. Review permissions and revoke a connection anytime.
+        </p>
+        <Link href="/docs/mcp" className="text-xs text-[var(--color-accent)]">
+          Connection guide ↗
+        </Link>
+      </div>
       <ErrorBanner message={error?.message} />
       {error && (
         <button
@@ -154,55 +178,101 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
       )}
       {connections === null ? (
         !error && (
-          <p role="status" className="text-sm text-[var(--color-ink-muted)]">
+          <p role="status" className="connection-row-meta mt-4">
             Loading connections…
           </p>
         )
-      ) : connections.length === 0 ? (
-        <p className="text-sm text-[var(--color-ink-muted)]">No active connections.</p>
       ) : (
-        <ul className="my-4 list-none divide-y divide-[var(--color-border-soft)] p-0">
-          {connections.map((connection) => (
-            <li
-              key={connection.id}
-              className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-3"
+        <>
+          <ConnectionFilters
+            label="Filter active AI connections"
+            value={filter}
+            onChange={setFilter}
+            search={search}
+            onSearch={setSearch}
+            placeholder="Search agents or workspaces…"
+            options={[
+              { value: "all", label: "Active", count: connections.length },
+              { value: "write", label: "Can write", count: writeCount },
+              { value: "read", label: "Read only", count: connections.length - writeCount },
+            ]}
+          />
+          {!visibleConnections.length ? (
+            <div className="connection-empty">
+              <p>
+                {connections.length
+                  ? "No connections match this view."
+                  : "No active agents yet. Connect from your agent or create a manual token below."}
+              </p>
+              {connections.length > 0 && (
+                <button
+                  type="button"
+                  className="btn-base btn-ghost btn-small"
+                  onClick={() => {
+                    setFilter("all");
+                    setSearch("");
+                  }}
+                >
+                  Show all active connections
+                </button>
+              )}
+            </div>
+          ) : (
+            <div
+              className="connection-scroll"
+              role="region"
+              aria-label="Active AI connections"
+              tabIndex={0}
             >
-              <div className="min-w-0">
-                <p className="m-0 break-words text-sm font-medium">{connection.name}</p>
-                <p className="m-0 text-xs text-[var(--color-ink-muted)]">
-                  {connection.workspace_ids.length} workspace
-                  {connection.workspace_ids.length === 1 ? "" : "s"} ·{" "}
-                  {connection.access === "write" ? "Selected write access" : "Read only"} · Expires{" "}
-                  {new Date(connection.expires_at).toLocaleDateString()}
-                </p>
-                <p className="m-0 mt-1 text-xs text-[var(--color-ink-muted)]">
-                  {MCP_PERMISSIONS.filter((permission) =>
-                    connection.scopes.includes(permission.scope)
-                  )
-                    .map((permission) => permission.title)
-                    .join(" · ")}
-                  {connection.repository_ids.length
-                    ? ` · ${connection.repository_ids.length} approved repositories`
-                    : ""}
-                </p>
-                <p className="m-0 mt-1 break-words text-xs text-[var(--color-ink-muted)]">
-                  {connection.workspace_ids
-                    .map((id) => containers.find((container) => container.id === id)?.name ?? id)
-                    .join(", ")}
-                </p>
-              </div>
-              <button
-                type="button"
-                className="btn-base btn-ghost btn-small text-[var(--color-danger-ink)]"
-                disabled={busy}
-                onClick={() => void revoke(connection.id)}
-                aria-label={`Revoke ${connection.name}`}
-              >
-                Revoke
-              </button>
-            </li>
-          ))}
-        </ul>
+              <ul className="connection-list">
+                {visibleConnections.map((connection) => (
+                  <li key={connection.id} className="connection-row">
+                    <div className="connection-row-main">
+                      <span className="connection-row-icon">
+                        <AgentIcon />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="connection-row-title">{connection.name}</p>
+                        <p className="connection-row-meta">
+                          {connection.workspace_ids
+                            .map((id) => workspaceNames.get(id) ?? id)
+                            .join(", ")}{" "}
+                          · Expires {new Date(connection.expires_at).toLocaleDateString()}
+                        </p>
+                        <p className="connection-row-meta">
+                          {MCP_PERMISSIONS.filter((permission) =>
+                            connection.scopes.includes(permission.scope)
+                          )
+                            .map((permission) => permission.title)
+                            .join(" · ")}
+                          {connection.repository_ids.length
+                            ? ` · ${connection.repository_ids.length} approved repositories`
+                            : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="connection-status" data-status="active">
+                      {connection.access === "write" ? "Can write" : "Read only"}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-base btn-ghost btn-small text-[var(--color-danger-ink)]"
+                      disabled={busy}
+                      onClick={() => void revoke(connection.id)}
+                      aria-label={`Revoke ${connection.name}`}
+                    >
+                      Revoke
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <p className="connection-row-meta mt-2">
+            Only active connections are listed. Expired and revoked connections no longer have
+            access.
+          </p>
+        </>
       )}
       {issued && (
         <div className="my-4 rounded-[var(--radius-btn)] border border-[var(--color-border-soft)] bg-[var(--color-surface)] p-4">
@@ -211,7 +281,8 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
           </p>
           <p className="text-sm text-[var(--color-ink-muted)]">
             It is shown once. Store it in your agent’s secret settings and use the Authorization
-            header below. Anyone with this token can read the workspaces you selected.
+            header below. Anyone with this token can use the permissions you granted in the selected
+            workspaces.
           </p>
           <label className="block text-xs">
             MCP endpoint
@@ -241,96 +312,141 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
           </button>
         </div>
       )}
-      <form onSubmit={(event) => void create(event)} className="mt-4">
-        <fieldset
-          disabled={busy || issued !== null || connections === null}
-          className="m-0 min-w-0 border-0 p-0 disabled:opacity-60"
-        >
-          <legend className="mb-3 text-sm font-medium">Manual token connection</legend>
-          <div className="grid gap-3 sm:grid-cols-[1fr_160px]">
-            <label className="text-xs">
-              Connection name
-              <input
-                className="field mt-1 w-full"
-                placeholder="My coding agent"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                maxLength={80}
-                required
-              />
-            </label>
-            <label className="text-xs">
-              Expires after
-              <select
-                className="field mt-1 w-full"
-                value={days}
-                onChange={(event) => setDays(Number(event.target.value))}
-              >
-                <option value={7}>7 days</option>
-                <option value={30}>30 days</option>
-                <option value={90}>90 days</option>
-              </select>
-            </label>
-          </div>
-          <McpPermissions
-            scopes={scopes}
-            onScopesChange={setScopes}
-            repositories={repositories}
-            selectedRepositories={repositoryIds}
-            onRepositoriesChange={setRepositoryIds}
-            disabled={busy}
-          />
-          <fieldset className="m-0 mt-4 min-w-0 border-0 p-0">
-            <legend className="text-xs">Workspaces · choose up to 20</legend>
-            <div className="mt-2 grid max-h-48 gap-2 overflow-y-auto sm:grid-cols-2">
-              {containers.map((container) => (
-                <label key={container.id} className="flex min-w-0 items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={allowedIds.includes(container.id)}
-                    disabled={!allowedIds.includes(container.id) && allowedIds.length >= 20}
-                    onChange={(event) => {
-                      const checked = event.currentTarget.checked;
-                      setSelected((current) =>
-                        checked
-                          ? [...current, container.id]
-                          : current.filter((id) => id !== container.id)
-                      );
-                    }}
-                  />
-                  <span className="truncate">{container.name}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          <button
-            type="submit"
-            className="btn-base btn-primary mt-4"
-            disabled={
-              !name.trim() ||
-              allowedIds.length === 0 ||
-              (scopes.includes("mokara:github") && !repositoryIds.length)
-            }
+      <details className="connection-disclosure">
+        <summary>
+          <span>
+            Create a manual connection<small>For agents that accept a bearer token</small>
+          </span>
+        </summary>
+        <form onSubmit={(event) => void create(event)} className="mt-4">
+          <fieldset
+            disabled={busy || issued !== null || connections === null}
+            className="m-0 min-w-0 border-0 p-0 disabled:opacity-60"
           >
-            {busy ? "Working…" : "Create connection"}
-          </button>
-        </fieldset>
-      </form>
-      <div className="mt-6 border-t border-[var(--color-border-soft)] pt-4">
-        <h3 className="m-0 text-sm font-medium">Recent agent writes · latest 50</h3>
+            <legend className="mb-3 text-sm font-medium">Manual token connection</legend>
+            <div className="grid gap-3 sm:grid-cols-[1fr_160px]">
+              <label className="text-xs">
+                Connection name
+                <input
+                  className="field mt-1 w-full"
+                  placeholder="My coding agent"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  maxLength={80}
+                  required
+                />
+              </label>
+              <label className="text-xs">
+                Expires after
+                <select
+                  className="field mt-1 w-full"
+                  value={days}
+                  onChange={(event) => setDays(Number(event.target.value))}
+                >
+                  <option value={7}>7 days</option>
+                  <option value={30}>30 days</option>
+                  <option value={90}>90 days</option>
+                </select>
+              </label>
+            </div>
+            <McpPermissions
+              scopes={scopes}
+              onScopesChange={setScopes}
+              repositories={repositories}
+              selectedRepositories={repositoryIds}
+              onRepositoriesChange={setRepositoryIds}
+              disabled={busy}
+            />
+            <fieldset className="m-0 mt-4 min-w-0 border-0 p-0">
+              <legend className="text-xs">Workspaces · choose up to 20</legend>
+              <div className="connection-scroll mt-2 grid max-h-48 gap-2 sm:grid-cols-2">
+                {containers.map((container) => (
+                  <label key={container.id} className="flex min-w-0 items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={allowedIds.includes(container.id)}
+                      disabled={!allowedIds.includes(container.id) && allowedIds.length >= 20}
+                      onChange={(event) => {
+                        const checked = event.currentTarget.checked;
+                        setSelected((current) =>
+                          checked
+                            ? [...current, container.id]
+                            : current.filter((id) => id !== container.id)
+                        );
+                      }}
+                    />
+                    <span className="truncate">{container.name}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <button
+              type="submit"
+              className="btn-base btn-primary mt-4"
+              disabled={
+                !name.trim() ||
+                allowedIds.length === 0 ||
+                (scopes.includes("mokara:github") && !repositoryIds.length)
+              }
+            >
+              {busy ? "Working…" : "Create connection"}
+            </button>
+          </fieldset>
+        </form>
+      </details>
+      <details className="connection-disclosure">
+        <summary>
+          <span>
+            Recent agent activity
+            <small>
+              Latest {activity.length} writes ·{" "}
+              {activity.filter((row) => row.status === "pending").length} pending or uncertain
+            </small>
+          </span>
+        </summary>
+        <ConnectionFilters
+          label="Filter agent activity"
+          value={activityFilter}
+          onChange={setActivityFilter}
+          options={[
+            { value: "all", label: "All", count: activity.length },
+            {
+              value: "pending",
+              label: "Pending",
+              count: activity.filter((row) => row.status === "pending").length,
+            },
+            {
+              value: "failed",
+              label: "Failed",
+              count: activity.filter((row) => row.status === "failed").length,
+            },
+            {
+              value: "succeeded",
+              label: "Completed",
+              count: activity.filter((row) => row.status === "succeeded").length,
+            },
+          ]}
+        />
         <p className="mt-1 text-xs leading-5 text-[var(--color-ink-muted)]">
           Pending can mean an uncertain result. Inspect the affected work before retrying. Refresh
           to update activity.
         </p>
-        {!activity.length ? (
-          <p className="text-xs text-[var(--color-ink-muted)]">No recorded writes.</p>
+        {!visibleActivity.length ? (
+          <p className="text-xs text-[var(--color-ink-muted)]">No writes in this view.</p>
         ) : (
-          <ul className="m-0 list-none divide-y divide-[var(--color-border-soft)] p-0">
-            {activity.map((row) => (
+          <ul
+            className="connection-scroll m-0 list-none divide-y divide-[var(--color-border-soft)] p-0"
+            tabIndex={0}
+            aria-label="Recent agent writes"
+          >
+            {visibleActivity.map((row) => (
               <li key={row.id} className="flex flex-wrap justify-between gap-2 py-3 text-xs">
                 <div className="min-w-0">
                   <p className="m-0 font-medium">
-                    {row.operation} · {row.status}
+                    {row.operation.replaceAll("_", " ")}{" "}
+                    <span className="connection-status" data-status={row.status}>
+                      {row.status === "succeeded" ? "Completed" : row.status}
+                    </span>
                   </p>
                   <p className="m-0 mt-1 break-all text-[var(--color-ink-muted)]">
                     {connections?.find((connection) => connection.id === row.connection_id)?.name ??
@@ -345,7 +461,7 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
             ))}
           </ul>
         )}
-      </div>
+      </details>
     </motion.section>
   );
 }

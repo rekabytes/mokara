@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
+import { McpPermissions } from "@/components/McpPermissions";
+import type { McpScope } from "@/lib/mcp-permissions";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { useAsyncError } from "@/hooks/useAsyncError";
@@ -20,6 +22,8 @@ export function ConsentScreen() {
     consent: Consent;
   } | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
+  const [scopes, setScopes] = useState<McpScope[]>(["mokara:read"]);
+  const [repositories, setRepositories] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const mutation = useRef<AbortController | null>(null);
@@ -40,6 +44,8 @@ export function ConsentScreen() {
       if (result && !controller.signal.aborted) {
         setSnapshot({ request, userId, consent: result });
         setSelected([]);
+        setScopes(["mokara:read"]);
+        setRepositories([]);
       }
     });
     return () => {
@@ -61,7 +67,13 @@ export function ConsentScreen() {
       const result = await run(
         () =>
           api.approveMcp(
-            { request, approve, workspace_ids: approve ? allowed : [] },
+            {
+              request,
+              approve,
+              workspace_ids: approve ? allowed : [],
+              scopes: approve ? scopes : ["mokara:read"],
+              repository_ids: approve && scopes.includes("mokara:github") ? repositories : [],
+            },
             controller.signal
           ),
         { loginFrom: from, signal: controller.signal }
@@ -140,11 +152,26 @@ export function ConsentScreen() {
                     </div>
                   </dl>
                 </div>
-                <p className="mb-1 mt-5 text-sm font-medium">Read-only access · 30 days</p>
+                <p className="mb-1 mt-5 text-sm font-medium">Selected permissions · 30 days</p>
                 <p className="mt-1 text-sm leading-6 text-[var(--color-ink-muted)]">
-                  Read tasks, projects, members and comments in the workspaces you select. This
-                  connection cannot change or delete your work.
+                  Read access is included. Writing, deleting and GitHub access require your explicit
+                  selection below.
                 </p>
+                <McpPermissions
+                  scopes={scopes}
+                  onScopesChange={setScopes}
+                  repositories={data.repositories}
+                  selectedRepositories={repositories}
+                  onRepositoriesChange={setRepositories}
+                  availableScopes={data.requested_scopes}
+                  disabled={busy}
+                />
+                {data.requested_scopes.length === 1 && (
+                  <p className="text-xs leading-5 text-[var(--color-ink-muted)]">
+                    This client requested read-only access. To enable writes, reconnect from the
+                    client with the write permissions requested.
+                  </p>
+                )}
                 <fieldset disabled={busy} className="my-5 min-w-0">
                   <legend className="mb-3 text-sm font-medium">Allow access to</legend>
                   <div className="grid max-h-64 gap-2 overflow-auto">
@@ -189,11 +216,15 @@ export function ConsentScreen() {
                     Deny
                   </button>
                   <button
-                    disabled={busy || !allowed.length}
+                    disabled={
+                      busy ||
+                      !allowed.length ||
+                      (scopes.includes("mokara:github") && !repositories.length)
+                    }
                     className="btn-base btn-primary min-h-11 flex-1"
                     onClick={() => void decide(true)}
                   >
-                    {busy ? "Connecting…" : "Allow read access"}
+                    {busy ? "Connecting…" : "Allow selected access"}
                   </button>
                 </div>
               </>

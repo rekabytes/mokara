@@ -10,7 +10,13 @@ let clients, grants, codes, tokens, cache, member, redisDown, databaseDown, quot
 const logs = [],
   hash = (raw) => createHash("sha256").update(raw).digest("hex");
 const active = (row) => row && !row.revokedAt && row.expiresAt > new Date();
+const repoId = randomUUID();
+let repositoryAccess = false;
 const db = {
+  gitHubRepository: {
+    findMany: async () =>
+      repositoryAccess ? [{ id: repoId, fullName: "team/repository", private: true }] : [],
+  },
   mcpOAuthClient: {
     create: async ({ data }) => {
       const row = { ...data, id: randomUUID(), createdAt: new Date() };
@@ -191,6 +197,7 @@ beforeEach(() => {
   tokens = new Map();
   cache = new Map();
   member = true;
+  repositoryAccess = false;
   redisDown = false;
   databaseDown = false;
   quota = 1;
@@ -526,4 +533,68 @@ test("expired consent, authorization codes, grants and refresh tokens deny issua
   const grant = [...grants.values()].find((row) => row.id === [...tokens.values()][0].connectionId);
   grant.expiresAt = new Date(0);
   await assert.rejects(() => authenticateAgent(`Bearer ${token.access_token}`));
+});
+
+test("write grants require explicit requested consent and existing read grants never expand", async () => {
+  const readonly = await start();
+  assert.equal((await consent(readonly, { scopes: ["mokara:read", "mokara:write"] })).status, 400);
+  assert.equal(grants.size, 0);
+  const flow = await start({ scope: "mokara:read mokara:write mokara:delete mokara:github" });
+  const response = await consent(flow, { scopes: ["mokara:read", "mokara:write"] });
+  assert.equal(response.status, 200);
+  const code = new URL((await response.json()).url).searchParams.get("code");
+  const tokenResponse = await exchange({ ...flow, code });
+  assert.equal(tokenResponse.status, 200);
+  const token = await tokenResponse.json();
+  assert.equal(token.scope, "mokara:read mokara:write");
+  const principal = await authenticateAgent(`Bearer ${token.access_token}`);
+  assert.deepEqual(principal.scopes, ["mokara:read", "mokara:write"]);
+  const narrowed = await app.request("/api/mcp/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: flow.client.client_id,
+      resource,
+      refresh_token: token.refresh_token,
+      scope: "mokara:read",
+    }),
+  });
+  assert.equal(narrowed.status, 200);
+  const readToken = await narrowed.json();
+  assert.equal(readToken.scope, "mokara:read");
+  assert.deepEqual((await authenticateAgent(`Bearer ${readToken.access_token}`)).scopes, [
+    "mokara:read",
+  ]);
+  const escalation = await app.request("/api/mcp/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: flow.client.client_id,
+      resource,
+      refresh_token: readToken.refresh_token,
+      scope: "mokara:read mokara:write",
+    }),
+  });
+  assert.equal(escalation.status, 400);
+});
+test("GitHub grants bind only explicitly selected currently eligible repositories", async () => {
+  const flow = await start({ scope: "mokara:read mokara:github" });
+  assert.equal(
+    (await consent(flow, { scopes: ["mokara:read", "mokara:github"], repository_ids: [repoId] }))
+      .status,
+    400
+  );
+  repositoryAccess = true;
+  assert.equal(
+    (await consent(flow, { scopes: ["mokara:read"], repository_ids: [repoId] })).status,
+    400
+  );
+  const response = await consent(flow, {
+    scopes: ["mokara:read", "mokara:github"],
+    repository_ids: [repoId],
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual([...grants.values()][0].repositoryIds, [repoId]);
 });

@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { MCP_SCOPES } from "./permissions.ts";
 import { mcpOAuthConfig } from "./oauth-config.ts";
 import { log } from "../lib/logger.ts";
 
@@ -6,7 +7,7 @@ export class McpFailure extends Error {
   constructor(
     readonly code: string,
     message: string,
-    readonly status: 401 | 403 | 404 | 429 | 503,
+    readonly status: 400 | 401 | 403 | 404 | 409 | 413 | 429 | 503,
     readonly retryAfter?: number
   ) {
     super(message);
@@ -23,7 +24,7 @@ export function handleMcpHttpError(error: Error, c: Context) {
       c.header(
         "WWW-Authenticate",
         config
-          ? `Bearer resource_metadata="${config.metadata}", scope="mokara:read"`
+          ? `Bearer resource_metadata="${config.metadata}", scope="${MCP_SCOPES.join(" ")}"`
           : 'Bearer realm="mokara-mcp"'
       );
     }

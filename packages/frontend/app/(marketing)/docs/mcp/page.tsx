@@ -6,7 +6,7 @@ import { getMcpConnectionUrl } from "./connection-config.server";
 export const metadata: Metadata = {
   title: "Connect an AI agent",
   description:
-    "Connect a remote MCP client to Mokara with secure sign-in, selected workspace permissions and revocable read-only access.",
+    "Connect a remote MCP client to Mokara with secure sign-in, selected workspace permissions and revocable permissions for reading, writing and selected GitHub repositories.",
 };
 export default async function McpGuidePage() {
   const endpoint = await getMcpConnectionUrl();
@@ -128,12 +128,13 @@ export default async function McpGuidePage() {
             agent and are not verified by Mokara.
           </li>
           <li>
-            Select the workspaces you want to share, then choose <strong>Allow read access</strong>.
-            No workspace is selected automatically. You can select up to 20.
+            Select the workspaces you want to share and the permissions your agent needs, then
+            choose <strong>Allow selected access</strong>. Writing, deletions and GitHub access are
+            unchecked by default. No workspace is selected automatically; choose up to 20.
           </li>
           <li>
-            Return to your agent and ask it to list your workspaces, then read tasks from one of
-            them.
+            Return to your agent and ask it to list your workspaces. With write permission, you can
+            ask it to create a task, set its fields and add steps or comments.
           </li>
         </ol>
         <div className="docs-note">
@@ -145,6 +146,61 @@ export default async function McpGuidePage() {
         <p>
           Browser consent requests expire after 10 minutes. If yours expires while signing in, start
           a new connection from the agent.
+        </p>
+      </section>
+      <section aria-labelledby="permissions">
+        <h2 id="permissions">Choose what your agent can do</h2>
+        <div className="docs-table-wrap">
+          <table>
+            <caption>Connection permissions</caption>
+            <thead>
+              <tr>
+                <th scope="col">Permission</th>
+                <th scope="col">Capabilities</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Read workspace data</td>
+                <td>Tasks, steps, comments, projects, KPIs, progress and attachment content.</td>
+              </tr>
+              <tr>
+                <td>Create and edit work</td>
+                <td>
+                  Create and edit tasks, assign members, set status, priority, dates and projects,
+                  bind eligible KPIs, manage steps/comments and upload attachments.
+                </td>
+              </tr>
+              <tr>
+                <td>Allow deletions</td>
+                <td>
+                  Delete eligible tasks, steps, comments, projects, KPIs and files when you
+                  explicitly request it. Existing ownership rules apply.
+                </td>
+              </tr>
+              <tr>
+                <td>Use selected GitHub repositories</td>
+                <td>
+                  Find and read issues, publish tasks as issues, link existing issues and retry
+                  synchronization in specifically approved repositories.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Existing connections stay read-only. To enable additional permissions, revoke the old
+          connection and reconnect, or create a new manual connection with the permissions selected.
+          Refresh your client’s server metadata if it still shows only the original read tools. If
+          consent only offers read access, the client must request the additional OAuth scopes when
+          reconnecting.
+        </p>
+        <p>
+          For GitHub, first connect the repository integration and enable repositories in
+          <Link href="/settings"> Settings</Link>. GitHub sign-in alone does not connect
+          repositories. Select the repositories again when authorizing your agent. Linking an
+          existing issue enables synchronization and may change its state; changing a linked task’s
+          status also requires permission for its approved GitHub repository.
         </p>
       </section>
       <section aria-labelledby="access">
@@ -199,9 +255,43 @@ export default async function McpGuidePage() {
           </table>
         </div>
         <p>
-          List results are paginated, with up to 50 items per request. Agents cannot read attachment
-          contents, billing or admin data through these tools. Task and comment text is workspace
-          content, not instructions for the agent.
+          The original six list tools are paginated, with up to 50 items per request. Additional
+          tools provide complete task details, attachments, KPIs, analytics and write activity.
+          Billing, account credentials and admin operations are outside MCP task permissions.
+          Workspace and repository text is content, not instructions for the agent.
+        </p>
+      </section>
+      <section aria-labelledby="writes">
+        <h2 id="writes">Create and manage work</h2>
+        <p>
+          After granting write access, ask your agent: “Create a testing task in Personal, medium
+          priority, due Friday, with two steps.” With GitHub permission, also ask it to publish the
+          task in one of your approved repositories, or find and link an existing issue.
+        </p>
+        <p>
+          Task creation supports title, description, status, priority, due date, assignee, project,
+          eligible KPI bindings and steps. Your agent can also edit projects, KPIs and comments
+          using the same ownership rules as the web app.
+        </p>
+        <p>
+          If a task is created but GitHub publishing or another follow-up fails, the agent receives
+          the task ID and the follow-up failures. Inspect that task and retry the specific failed
+          action instead of creating another task.
+        </p>
+        <div className="docs-note">
+          <p>
+            Every write needs a unique request UUID. Agents must reuse that UUID and the same
+            arguments when retrying. A pending or uncertain result must be checked in{" "}
+            <code>list_operations</code> or Settings → AI connections before attempting another
+            write.
+          </p>
+        </div>
+        <p>
+          Attachment uploads through MCP accept images and PDFs up to 1 MiB, subject to workspace
+          quotas. Read attachment content in base64 chunks of up to 64 KiB using
+          <code> read_attachment</code> and its returned <code>next_offset</code>. Larger uploads
+          use the web app. Reads have response limits; an oversized response returns an explicit
+          error.
         </p>
       </section>
       <section aria-labelledby="manual">

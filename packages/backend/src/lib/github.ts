@@ -390,9 +390,10 @@ export async function getGitHubIssue(
   number: number
 ): Promise<GitHubIssueInfo> {
   const token = await installationToken(repository.installationId, repository.repositoryId);
-  const found = issue(
-    await githubFetch(`${repositoryUrl(repository)}/issues/${number}`, { token })
-  );
+  const payload = await githubFetch(`${repositoryUrl(repository)}/issues/${number}`, { token });
+  if (object(payload)?.pull_request)
+    throw new GitHubError(400, "github_invalid_issue", "Choose an issue, not a pull request");
+  const found = issue(payload);
   if (!found) throw new GitHubError(502, "github_unavailable", "GitHub returned an invalid issue");
   return found;
 }
@@ -501,4 +502,37 @@ export async function getGitHubPullRequest(
       );
   } while (cursor);
   return { id: BigInt(id), number, state, updatedAt, branch, issueNumbers };
+}
+
+export async function listGitHubIssues(
+  repository: GitHubCoordinates,
+  page: number,
+  limit: number,
+  state: "open" | "closed" | "all"
+) {
+  const token = await installationToken(repository.installationId, repository.repositoryId);
+  const url = new URL(`${repositoryUrl(repository)}/issues`);
+  url.searchParams.set("state", state);
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("per_page", String(limit));
+  const payload = await githubFetch(url.toString(), { token });
+  if (!Array.isArray(payload))
+    throw new GitHubError(502, "github_unavailable", "Invalid issue list");
+  const items = payload.flatMap((value) => {
+    const raw = object(value);
+    if (!raw || raw.pull_request) return [];
+    const row = issue(value);
+    const title = string(raw.title);
+    if (!row || title === null) throw new GitHubError(502, "github_unavailable", "Invalid issue");
+    return [
+      {
+        number: row.number,
+        title,
+        url: row.htmlUrl,
+        state: row.state,
+        updated_at: row.updatedAt.toISOString(),
+      },
+    ];
+  });
+  return { items, next_page: payload.length === limit ? page + 1 : null };
 }

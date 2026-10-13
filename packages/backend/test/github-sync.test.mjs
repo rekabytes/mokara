@@ -971,3 +971,94 @@ test("installation and repository enumeration includes pages after the first 100
   assert.equal((await github.listInstallationRepositories(10n)).length, 101);
   assert.deepEqual(pages, [1, 2, 1, 2, 1, 2]);
 });
+
+test("an in-flight publisher cannot have its repository overwritten by a competing request", async (t) => {
+  state.link.status = "creating";
+  state.link.lastAttemptAt = new Date();
+  const previousRepository = state.link.repositoryId;
+  t.mock.method(db.gitHubRepository, "findFirst", async () => state.repository);
+  t.mock.method(db.task, "findUnique", async () => ({ ...state.task, githubIssueLink: null }));
+  const response = await app.request(`/tasks/${TASK}/github-issue`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ repository_id: REPOS[0] }),
+  });
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).error, "github_publish_in_progress");
+  assert.equal(state.link.repositoryId, previousRepository);
+  assert.equal(requests.length, 0);
+});
+test("a link completed after the initial task snapshot is rejected before another publish", async (t) => {
+  state.link.status = "linked";
+  t.mock.method(db.gitHubRepository, "findFirst", async () => state.repository);
+  t.mock.method(db.task, "findUnique", async () => ({ ...state.task, githubIssueLink: null }));
+  const response = await app.request(`/tasks/${TASK}/github-issue`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ repository_id: REPOS[0] }),
+  });
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).error, "github_issue_already_linked");
+  assert.equal(requests.length, 0);
+});
+
+test("issue discovery paginates and excludes pull requests without returning private credentials", async (t) => {
+  const github = await import("../src/lib/github.ts");
+  t.mock.method(globalThis, "fetch", async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith("access_tokens"))
+      return Response.json({ token: "test-ephemeral-token" });
+    assert.equal(url.searchParams.get("page"), "1");
+    assert.equal(url.searchParams.get("per_page"), "2");
+    return Response.json([
+      { ...state.remoteIssue, title: "Issue" },
+      { ...state.remoteIssue, number: 456, title: "PR", pull_request: {} },
+    ]);
+  });
+  const result = await github.listGitHubIssues(
+    { installationId: 10n, repositoryId: 100n, owner: "test", name: "repository" },
+    1,
+    2,
+    "open"
+  );
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0].title, "Issue");
+  assert.equal(result.next_page, 2);
+  assert.ok(!JSON.stringify(result).includes("test-ephemeral-token"));
+});
+test("an existing pull request cannot be linked as a GitHub issue", async () => {
+  const github = await import("../src/lib/github.ts");
+  state.remoteIssue.pull_request = {};
+  await assert.rejects(
+    () =>
+      github.getGitHubIssue(
+        { installationId: 10n, repositoryId: 100n, owner: "test", name: "repository" },
+        123
+      ),
+    (error) => error.code === "github_invalid_issue"
+  );
+});
+test("linking an existing issue fetches it and does not create another GitHub issue", async (t) => {
+  state.link.status = "failed";
+  t.mock.method(db.gitHubRepository, "findFirst", async () => state.repository);
+  db.gitHubIssueLink.upsert = async ({ update }) => {
+    Object.assign(state.link, { ...update, attemptCount: 2 });
+    return linked();
+  };
+  t.after(() => {
+    delete db.gitHubIssueLink.upsert;
+  });
+  const response = await app.request(`/tasks/${TASK}/github-issue`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ repository_id: REPOS[0], issue_number: 123 }),
+  });
+  assert.equal(response.status, 201, await response.clone().text());
+  assert.equal((await response.json()).github_issue.issue_number, 123);
+  assert.ok(
+    requests.some((request) => request.path.endsWith("/issues/123") && request.method === "GET")
+  );
+  assert.ok(
+    !requests.some((request) => request.path.endsWith("/issues") && request.method === "POST")
+  );
+});

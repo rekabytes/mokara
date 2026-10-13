@@ -82,7 +82,7 @@ const prisma = {
   },
 };
 mock.module("../src/db.ts", { namedExports: { prisma } });
-mock.module("../src/env.ts", { namedExports: { env } });
+mock.module("../src/env.ts", { namedExports: { env, githubConfigured: false } });
 mock.module("../src/redis.ts", {
   namedExports: {
     getRedis: () => ({
@@ -181,7 +181,7 @@ test("credentials are random and only SHA-256 digests persist", () => {
   assert.equal(hashCredential(credential.token), credential.tokenHash);
   assert.notEqual(newCredential().token, credential.token);
 });
-test("official stateless transport initializes and lists exactly six read-only tools", async () => {
+test("stateless transport lists read tools but hides all writes from legacy connections", async () => {
   const init = await rpc("initialize", {
     protocolVersion: "2025-11-25",
     capabilities: {},
@@ -193,12 +193,21 @@ test("official stateless transport initializes and lists exactly six read-only t
   assert.equal(init.headers.get("cache-control"), "no-store");
   const tools = (await (await rpc("tools/list")).json()).result.tools;
   assert.deepEqual(tools.map((tool) => tool.name).sort(), [
+    "get_analytics",
+    "get_kpi_progress",
+    "get_project",
     "get_task",
+    "get_task_details",
+    "get_workspace_progress",
+    "list_attachments",
     "list_comments",
+    "list_kpis",
     "list_members",
+    "list_operations",
     "list_projects",
     "list_tasks",
     "list_workspaces",
+    "read_attachment",
   ]);
   assert.ok(
     tools.every((tool) => tool.annotations.readOnlyHint && !tool.annotations.destructiveHint)
@@ -326,7 +335,7 @@ test("origins require explicit allow-list; preflight supports protocol headers w
   assert.equal(response.headers.get("access-control-allow-credentials"), null);
 });
 test("transport rejects oversized bodies, malformed JSON and unsupported methods", async () => {
-  assert.equal((await rpc("tools/list", {}, {}, "x".repeat(65537))).status, 413);
+  assert.equal((await rpc("tools/list", {}, {}, "x".repeat(2 * 1024 * 1024 + 1))).status, 413);
   assert.equal((await rpc("tools/list", {}, {}, "{")).status, 400);
   for (const method of ["GET", "DELETE"])
     assert.equal(

@@ -357,5 +357,7 @@ export type McpConnection = {
   created_at: string;
   expires_at: string;
   revoked_at: string | null;
-  access: "read";
+  access: "read" | "write";
+  scopes: string[];
+  repository_ids: string[];
 };

@@ -1,3 +1,4 @@
+import { MCP_SCOPES } from "./mcp-permissions";
 import { z } from "zod";
 import type {
   McpConnection,
@@ -338,7 +339,9 @@ const mcpConnectionSchema = z.object({
   created_at: z.iso.datetime(),
   expires_at: z.iso.datetime(),
   revoked_at: z.iso.datetime().nullable(),
-  access: z.literal("read"),
+  access: z.enum(["read", "write"]),
+  scopes: z.array(z.enum(MCP_SCOPES)).default(["mokara:read"]),
+  repository_ids: z.array(z.uuid()).default([]),
 }) satisfies z.ZodType<McpConnection>;
 export const mcpConnectionsSchema = z.object({ connections: z.array(mcpConnectionSchema) });
 export const mcpCredentialSchema = z.object({
@@ -348,7 +351,11 @@ export const mcpCredentialSchema = z.object({
 
 export const mcpConsentSchema = z.object({
   client: z.object({ id: z.uuid(), name: z.string(), redirect_uri: z.url() }),
-  scope: z.literal("mokara:read"),
+  scope: z.string(),
+  requested_scopes: z.array(z.enum(MCP_SCOPES)).default(["mokara:read"]),
+  repositories: z
+    .array(z.object({ id: z.uuid(), name: z.string(), private: z.boolean() }))
+    .default([]),
   expires_in_days: z.literal(30),
   workspaces: z.array(z.object({ id: z.uuid(), name: z.string() })),
 });
@@ -369,4 +376,22 @@ export const mcpConsentResultSchema = z.object({
       return false;
     }
   }),
+});
+
+export const mcpRepositoriesSchema = z.object({
+  repositories: z.array(z.object({ id: z.uuid(), name: z.string(), private: z.boolean() })),
+});
+export const mcpActivitySchema = z.object({
+  activity: z.array(
+    z.object({
+      id: z.uuid(),
+      connection_id: z.uuid(),
+      workspace_id: z.uuid(),
+      operation: z.string(),
+      request_id: z.uuid(),
+      status: z.enum(["pending", "succeeded", "failed"]),
+      created_at: z.iso.datetime(),
+      finished_at: z.iso.datetime().nullable(),
+    })
+  ),
 });

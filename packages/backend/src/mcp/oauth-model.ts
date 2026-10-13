@@ -3,6 +3,7 @@ import type { Prisma } from "@mokara/db/prisma/generated/client";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { hashCredential } from "./access.ts";
+import { validScopes, MCP_SCOPES } from "./permissions.ts";
 import { ACCESS_SECONDS, GRANT_SECONDS, MCP_SCOPE } from "./oauth-config.ts";
 
 const userSchema = z.object({ id: z.uuid(), connection_id: z.uuid().optional() });
@@ -18,9 +19,16 @@ const tokenSchema = z.object({
   accessTokenExpiresAt: z.date(),
   refreshToken: z.string(),
   refreshTokenExpiresAt: z.date(),
+  scope: z.array(z.enum(MCP_SCOPES)).default(["mokara:read"]),
 });
 export const oauthSecret = (prefix: string) => `${prefix}${randomBytes(32).toString("base64url")}`;
-type Approval = { userId: string; workspaceIds: string[]; name: string };
+type Approval = {
+  userId: string;
+  workspaceIds: string[];
+  name: string;
+  scopes?: string[];
+  repositoryIds?: string[];
+};
 
 // Instantiate per transaction/request. Never share an authenticated model across
 // users, and never keep a database transaction open across provider/network calls.
@@ -40,8 +48,27 @@ export function oauthModel(
       const row = await db.mcpOAuthClient.findUnique({ where: { id } });
       return row ? client(row.id, row.redirectUris) : false;
     },
-    async validateScope(_user, _client, scope) {
-      return scope?.length === 1 && scope[0] === MCP_SCOPE ? [MCP_SCOPE] : false;
+    async validateScope(user, _client, scope) {
+      if (!scope || !validScopes(scope)) return false;
+      if (approval)
+        return (approval.scopes ?? [MCP_SCOPE]).every((value) => scope.includes(value))
+          ? (approval.scopes ?? [MCP_SCOPE])
+          : false;
+      const owner = userSchema.safeParse(user);
+      if (!owner.success || !owner.data.connection_id) return false;
+      const grant = await db.mcpConnection.findFirst({
+        where: {
+          id: owner.data.connection_id,
+          userId: owner.data.id,
+          clientId: _client.id,
+          resource,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+      });
+      return grant && scope.every((value) => (grant.scopes ?? [MCP_SCOPE]).includes(value))
+        ? scope
+        : false;
     },
     async validateRedirectUri(uri, row) {
       return Array.isArray(row.redirectUris) && row.redirectUris.includes(uri);
@@ -65,6 +92,8 @@ export function oauthModel(
           userId: owner.id,
           name: approval.name,
           workspaceIds: approval.workspaceIds,
+          scopes: approval.scopes ?? [MCP_SCOPE],
+          repositoryIds: approval.repositoryIds ?? [],
           clientId: row.id,
           resource,
           expiresAt: new Date(Date.now() + GRANT_SECONDS * 1000),
@@ -81,7 +110,7 @@ export function oauthModel(
       });
       return {
         ...parsed,
-        scope: [MCP_SCOPE],
+        scope: approval?.scopes ?? [MCP_SCOPE],
         client: row,
         user: { id: owner.id, connection_id: grant.id },
       };
@@ -116,7 +145,7 @@ export function oauthModel(
         redirectUri: row.redirectUri,
         codeChallenge: row.challenge,
         codeChallengeMethod: "S256",
-        scope: [MCP_SCOPE],
+        scope: grant.scopes ?? [MCP_SCOPE],
         client: client(grant.clientId),
         user: { id: grant.userId, connection_id: grant.id },
       };
@@ -159,7 +188,7 @@ export function oauthModel(
       return {
         refreshToken: raw,
         refreshTokenExpiresAt: row.refreshExpiresAt,
-        scope: [MCP_SCOPE],
+        scope: row.scopes ?? [MCP_SCOPE],
         client: client(grant.clientId),
         user: { id: grant.userId, connection_id: grant.id },
       };
@@ -193,6 +222,11 @@ export function oauthModel(
         },
       });
       if (!grant) throw new OAuth2Server.InvalidGrantError("Invalid grant");
+      if (
+        !validScopes(parsed.scope) ||
+        parsed.scope.some((scope) => !(grant.scopes ?? [MCP_SCOPE]).includes(scope))
+      )
+        throw new OAuth2Server.InvalidScopeError("Invalid scope");
       const accessTokenExpiresAt = new Date(
         Math.min(parsed.accessTokenExpiresAt.getTime(), grant.expiresAt.getTime())
       );
@@ -206,13 +240,14 @@ export function oauthModel(
           refreshHash: hashCredential(parsed.refreshToken),
           accessExpiresAt: accessTokenExpiresAt,
           refreshExpiresAt: refreshTokenExpiresAt,
+          scopes: parsed.scope,
         },
       });
       return {
         ...parsed,
         accessTokenExpiresAt,
         refreshTokenExpiresAt,
-        scope: [MCP_SCOPE],
+        scope: parsed.scope,
         client: row,
         user: owner,
       };

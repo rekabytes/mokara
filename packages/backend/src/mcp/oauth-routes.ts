@@ -22,6 +22,8 @@ import {
 } from "./oauth-config.ts";
 import { McpOAuthFailure, handleMcpOAuthError } from "./oauth-errors.ts";
 import { storeConsent, readConsent, consumeConsent } from "./oauth-flow.ts";
+import { MCP_SCOPES, parseScopes } from "./permissions.ts";
+import { eligibleRepositories, validateRepositoryGrant } from "./repositories.ts";
 import { oauthModel, oauthServer } from "./oauth-model.ts";
 
 function remotePeer(c: Context): string | undefined {
@@ -81,7 +83,7 @@ mcpOAuthRoutes.post("/register", async (c) => {
       token_endpoint_auth_method: "none",
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
-      scope: MCP_SCOPE,
+      scope: input.data.scope ?? MCP_SCOPES.join(" "),
     },
     201
   );
@@ -117,7 +119,13 @@ mcpOAuthRoutes.get("/consent", async (c) => {
       name: flow.clientName,
       redirect_uri: flow.params.redirect_uri,
     },
-    scope: MCP_SCOPE,
+    scope: flow.params.scope,
+    requested_scopes: parseScopes(flow.params.scope),
+    repositories: (await eligibleRepositories(c.get("userId"))).map((repo) => ({
+      id: repo.id,
+      name: repo.fullName,
+      private: repo.private,
+    })),
     expires_in_days: 30,
     workspaces: memberships.map((row) => row.team),
   });
@@ -154,6 +162,12 @@ mcpOAuthRoutes.post("/consent", async (c) => {
   });
   if (members.length !== input.data.workspace_ids.length)
     throw new McpOAuthFailure("access_denied", "Choose workspaces you belong to.");
+  if (input.data.scopes.some((scope) => !parseScopes(params.scope).includes(scope)))
+    throw new McpOAuthFailure(
+      "invalid_scope",
+      "The client did not request that permission. Reconnect with the required scopes."
+    );
+  await validateRepositoryGrant(userId, input.data.scopes, input.data.repository_ids);
   await checkLimit("mcpIssue", userId);
   await consumeConsent(input.data.request, raw);
   const code = await prisma.$transaction(async (db) =>
@@ -162,6 +176,8 @@ mcpOAuthRoutes.post("/consent", async (c) => {
         userId,
         workspaceIds: input.data.workspace_ids,
         name: client.name,
+        scopes: input.data.scopes,
+        repositoryIds: input.data.repository_ids,
       })
     ).authorize(
       new OAuth2Server.Request({ method: "GET", headers: {}, query: params }),
@@ -185,8 +201,6 @@ mcpOAuthRoutes.post("/token", async (c) => {
     throw new McpOAuthFailure("invalid_client");
   if (body.grant_type !== "authorization_code" && body.grant_type !== "refresh_token")
     throw new McpOAuthFailure("unsupported_grant_type");
-  if (body.scope !== undefined && body.scope !== MCP_SCOPE)
-    throw new McpOAuthFailure("invalid_scope");
   if (
     body.grant_type === "authorization_code" &&
     (!/^[A-Za-z0-9._~-]{43,128}$/.test(body.code_verifier ?? "") ||
@@ -230,7 +244,7 @@ mcpOAuthRoutes.post("/token", async (c) => {
       )
     ),
     refresh_token: token.refreshToken,
-    scope: MCP_SCOPE,
+    scope: token.scope?.join(" ") ?? MCP_SCOPE,
   });
 });
 mcpOAuthRoutes.post("/revoke", async (c) => {

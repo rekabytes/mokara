@@ -28,6 +28,11 @@ export function handleMcpOAuthError(error: Error, c: Context) {
       400
     );
   if (error instanceof McpFailure) {
+    if (error.status < 500 && error.status !== 429)
+      return c.json(
+        { error: "access_denied", error_description: error.message, message: error.message },
+        400
+      );
     if (error.retryAfter) c.header("Retry-After", String(error.retryAfter));
     return c.json(
       {

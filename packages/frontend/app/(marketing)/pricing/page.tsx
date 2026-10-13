@@ -40,7 +40,7 @@ export default async function PricingPage() {
     <main className="pricing-page" id="main">
       <section className="pricing-hero public-container" aria-labelledby="pricing-title">
         <div>
-          <p className="pricing-eyebrow">Pricing · flat per workspace</p>
+          <p className="pricing-eyebrow">Pricing · flat per account</p>
           <h1 id="pricing-title">
             Pay for capacity.
             <br />

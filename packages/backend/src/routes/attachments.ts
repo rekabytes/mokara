@@ -1,8 +1,7 @@
 import { Hono } from "hono";
 import { prisma } from "../db.ts";
 import { getTeamRole } from "../lib/team-membership.ts";
-import { limitsOfTeam } from "../lib/entitlements.ts";
-import { usedBytes } from "../lib/quota.ts";
+import { storageAccountForTeam, storageUploadDenial, withStorageAccount } from "../lib/quota.ts";
 import {
   deleteObject,
   getObjectBytes,
@@ -13,7 +12,7 @@ import {
 import { toAttachment } from "../lib/types.ts";
 import type { Vars } from "../middleware/auth.ts";
 
-// PRD-11 Phase 1.3: files on a task, metered against the workspace's storage
+// PRD-11 Phase 1.3: files on a task, metered against the workspace owner's account storage
 // quota — and since comment attachments (owner, 2026-09-05), files on comments
 // too. Same nesting idiom as comments.ts: list/upload hang off the owner
 // (task or comment), download/delete off the file itself.
@@ -21,7 +20,7 @@ import type { Vars } from "../middleware/auth.ts";
 // Deletion is the UPLOADER's alone (owner decision 2026-09-05, superseding the
 // earlier "uploader or leader" rule): whoever put the file there owns its
 // removal. The quota consequence — a leader cannot clear someone else's stray
-// upload — is accepted; the per-workspace cap still bounds total exposure.
+// upload — is accepted; the account-wide cap still bounds total exposure.
 //
 // BOTH surfaces accept IMAGES AND PDFS ONLY (owner decision 2026-09-05, which
 // also retired the earlier any-type task files): the content type is checked
@@ -105,8 +104,8 @@ async function storeUpload(
     return { status: 400, error: "invalid_input", message: "a file is required" };
   }
 
-  const limits = await limitsOfTeam(input.teamId);
-  if (!limits) return { status: 404, error: "not_found", message: "team not found" };
+  const account = await storageAccountForTeam(input.teamId);
+  if (!account) return { status: 404, error: "not_found", message: "team not found" };
 
   const contentType = file.type || "application/octet-stream";
   if (input.allowlist && !commentFileTypeOk(contentType)) {
@@ -117,23 +116,10 @@ async function storeUpload(
     };
   }
 
-  // Size comes from the bytes we actually received — never from a header or a
-  // client claim, which is what makes the quota enforceable.
-  if (file.size > limits.maxFileBytes) {
-    return {
-      status: 400,
-      error: "file_too_large",
-      message: `that file is too large — ${Math.floor(limits.maxFileBytes / (1024 * 1024))} MB maximum per file on this plan`,
-    };
-  }
-  const used = await usedBytes(input.teamId);
-  if (used + file.size > limits.storageBytes) {
-    return {
-      status: 409,
-      error: "quota_exceeded",
-      message: `this workspace is out of storage — its plan allows ${Math.floor(limits.storageBytes / (1024 * 1024 * 1024))} GB`,
-    };
-  }
+  // Preflight avoids an unnecessary object upload; the transactional check below
+  // enforces the shared account cap when other uploads finish concurrently.
+  const denial = await storageUploadDenial(account, file.size);
+  if (denial) return denial;
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   const id = crypto.randomUUID();
@@ -158,21 +144,27 @@ async function storeUpload(
   }
 
   try {
-    const row = await prisma.attachment.create({
-      data: {
-        id,
-        taskId: input.scope === "tasks" ? input.scopeId : null,
-        commentId: input.scope === "comments" ? input.scopeId : null,
-        teamId: input.teamId,
-        uploaderId: userId,
-        filename: safeFilename(file.name),
-        sizeBytes: file.size,
-        contentType,
-        storageKey: key,
-      },
-      include: uploaderInclude,
+    const result = await withStorageAccount(input.teamId, async (client, currentAccount) => {
+      const finalDenial = await storageUploadDenial(currentAccount, file.size, 0, client);
+      if (finalDenial) return finalDenial;
+      const row = await client.attachment.create({
+        data: {
+          id,
+          taskId: input.scope === "tasks" ? input.scopeId : null,
+          commentId: input.scope === "comments" ? input.scopeId : null,
+          teamId: input.teamId,
+          uploaderId: userId,
+          filename: safeFilename(file.name),
+          sizeBytes: file.size,
+          contentType,
+          storageKey: key,
+        },
+        include: uploaderInclude,
+      });
+      return { attachment: toAttachment(row) };
     });
-    return { attachment: toAttachment(row) };
+    if ("error" in result) await deleteObject(key);
+    return result;
   } catch (e) {
     await deleteObject(key);
     throw e;

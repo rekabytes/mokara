@@ -698,9 +698,9 @@ export const ADMIN_JS = `
     content.textContent = "";
     setNotice("");
     statCards([["Workspaces", data.total], ["Members · page", data.workspaces.reduce((sum, workspace) => sum + workspace.members, 0)], ["Tasks · page", data.workspaces.reduce((sum, workspace) => sum + workspace.tasks, 0)], ["Files · page", data.workspaces.reduce((sum, workspace) => sum + workspace.files, 0)]]);
-    pageToolbar(loadWorkspaces, data.checked_at, [{ name: "q", label: "Workspace, slug or owner", placeholder: "Search workspaces" }], "/workspaces", "Workspaces covers all matches; usage cards total this page only. Membership counts are not unique people. Limits follow the owner's effective plan and deployment mode. Tasks have no plan quota. Storage includes recorded attachments and logos, not orphaned bucket objects.");
+    pageToolbar(loadWorkspaces, data.checked_at, [{ name: "q", label: "Workspace, slug or owner", placeholder: "Search workspaces" }], "/workspaces", "Workspaces covers all matches; usage cards total this page only. Membership counts are not unique people. Limits follow the owner's effective plan and deployment mode. Tasks have no plan quota. Storage includes recorded attachments and logos, not orphaned bucket objects. The storage allowance is shared across all workspaces owned by the same account.");
     heading("Workspace directory");
-    content.append(expandableTable(["Workspace", "Owner", "Plan", "Members"], data.workspaces.map(workspace => ({ label: workspace.name, values: [recordLink("/workspaces/" + workspace.id, workspace.name), link("/users/" + workspace.owner.id, workspace.owner.username), badge(workspace.plan), quota(workspace.members, workspace.limits.members, false)], details: [["Kind", workspace.kind], ["Tasks", count(workspace.tasks)], ["Files", count(workspace.files)], ["Storage", quota(workspace.storage_bytes, workspace.limits.storage_bytes, true)]] }))));
+    content.append(expandableTable(["Workspace", "Owner", "Plan", "Members"], data.workspaces.map(workspace => ({ label: workspace.name, values: [recordLink("/workspaces/" + workspace.id, workspace.name), link("/users/" + workspace.owner.id, workspace.owner.username), badge(workspace.plan), quota(workspace.members, workspace.limits.members, false)], details: [["Kind", workspace.kind], ["Tasks", count(workspace.tasks)], ["Files", count(workspace.files)], ["Workspace storage", bytes(workspace.storage_bytes)]] }))));
     if (!data.workspaces.length) content.append(emptyState("No workspaces match this page/filter."));
     pagination(data, "/workspaces");
     groupSections();
@@ -715,14 +715,14 @@ export const ADMIN_JS = `
     setNotice("");
     const back = link("/workspaces", "← All workspaces"); back.className = "back"; content.append(back);
     const workspace = data.workspace;
-    statCards([["Members", quota(workspace.members.length, workspace.limits.members, false)], ["Tasks", workspace.tasks], ["Files", workspace.files], ["Storage", quota(workspace.storage_bytes, workspace.limits.storage_bytes, true)]]);
-    pageToolbar(() => loadWorkspace(id), data.checked_at, [], "", "Limits follow the owner's effective plan and deployment mode. Tasks are uncapped; storage is recorded attachments/logos, not bucket inventory.");
+    statCards([["Members", quota(workspace.members.length, workspace.limits.members, false)], ["Tasks", workspace.tasks], ["Files", workspace.files], ["Workspace storage", bytes(workspace.storage_bytes)]]);
+    pageToolbar(() => loadWorkspace(id), data.checked_at, [], "", "Limits follow the owner's effective plan and deployment mode. Tasks are uncapped. Storage shown here belongs to this workspace; the account allowance is shared across all owned workspaces. Recorded attachments/logos are counted, not bucket inventory.");
     heading(workspace.name);
     const card = document.createElement("section"); card.className = "card profile-card";
     const grid = document.createElement("div"); grid.className = "profile-facts-grid";
     const sections = [
       ["Workspace", [["Slug / kind", workspace.slug + " / " + workspace.kind], ["Owner", workspace.owner.username], ["Effective / Stripe plan", workspace.plan + " / " + workspace.stripe_plan], ["Operator grant", workspace.plan_override || "—"]]],
-      ["Capacity", [["Owner team slots", quota(workspace.owner_team_count, workspace.limits.teams, false)], ["Maximum file size", workspace.limits.max_file_bytes === null ? "Unlimited" : bytes(workspace.limits.max_file_bytes)]]],
+      ["Capacity", [["Owner team slots", quota(workspace.owner_team_count, workspace.limits.teams, false)], ["Account storage allowance", workspace.limits.storage_bytes === null ? "Unlimited" : bytes(workspace.limits.storage_bytes)], ["Maximum file size", workspace.limits.max_file_bytes === null ? "Unlimited" : bytes(workspace.limits.max_file_bytes)]]],
       ["Owner GitHub", [["Connection", workspace.github.owner_connection ? workspace.github.owner_connection.status : "Not connected"], ["Last verified", workspace.github.owner_connection ? when(workspace.github.owner_connection.verified_at) : "Not verified"]]],
     ];
     for (const [label, fields] of sections) { const section = document.createElement("section"); const title = document.createElement("h3"); title.textContent = label; const facts = document.createElement("dl"); facts.className = "facts"; for (const [name, value] of fields) facts.append(fact(name, value)); section.append(title, facts); grid.append(section); }

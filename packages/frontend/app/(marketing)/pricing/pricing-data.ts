@@ -42,7 +42,7 @@ export const TIERS: Tier[] = [
     capacity: [
       { label: "Members per team", value: "3" },
       { label: "Workspaces", value: "personal + 1 team" },
-      { label: "Storage", value: "1 GB" },
+      { label: "Storage per account", value: "1 GB" },
       { label: "Per file", value: "25 MB" },
     ],
     addsLabel: "Everything Mokara does today",
@@ -63,11 +63,11 @@ export const TIERS: Tier[] = [
     capacity: [
       { label: "Members per team", value: "8" },
       { label: "Workspaces", value: "personal + 3" },
-      { label: "Storage", value: "10 GB" },
+      { label: "Storage per account", value: "10 GB" },
       { label: "Per file", value: "100 MB" },
     ],
     addsLabel: "Everything in Free, plus",
-    adds: ["Custom workspace logo", "Priority support", "Flat per workspace — never per seat"],
+    adds: ["Custom workspace logo", "Priority support", "Flat per account — never per seat"],
     featured: true,
   },
 ];
@@ -79,13 +79,13 @@ export const LATER_TIERS: { name: string; price: string; summary: string; cells:
     name: "Pro",
     price: "$9/mo",
     summary: "For growing companies",
-    cells: ["25 members", "personal + 10", "50 GB", "250 MB / file"],
+    cells: ["25 members", "personal + 10", "50 GB / account", "250 MB / file"],
   },
   {
     name: "Ultra",
     price: "$18/mo",
     summary: "API, MCP and audit log",
-    cells: ["Unlimited members", "Unlimited workspaces", "200 GB", "1 GB / file"],
+    cells: ["Unlimited members", "Unlimited workspaces", "200 GB / account", "1 GB / file"],
   },
 ];
 
@@ -103,6 +103,10 @@ export const IN_EVERY_PLAN: [string, string][] = [
 ];
 
 export const FAQ: { q: string; a: string }[] = [
+  {
+    q: "Is storage shared across my workspaces?",
+    a: "Yes. Your plan includes one account-wide storage pool shared by your personal workspace and every team workspace you own. Files uploaded by team members count toward the workspace owner’s allowance. Creating another workspace does not add storage.",
+  },
   {
     q: "What happens when I hit a limit?",
     a: "Nothing is deleted. Uploads stop and no further members can join until you are back under the cap; files already stored stay downloadable. A team that outgrows its plan by downgrading keeps its people — the freeze is forward-looking, never destructive.",

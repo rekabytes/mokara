@@ -346,3 +346,21 @@ test("nested corruption and unsafe navigation targets never reach UI state", asy
   assert.equal(asBoardTask({ ...task, assignee: { id: "u" } }), null);
   assert.equal(asBoardTask({ ...task, subtasks: [{}] }), null);
 });
+
+test("account storage usage validates its scope and byte count while accepting older billing responses", async (t) => {
+  const legacy = cases.find(([name]) => name === "getBilling")[2];
+  let response = legacy;
+  t.mock.method(globalThis, "fetch", async () => Response.json(response));
+  assert.equal((await api.getBilling()).storage, undefined);
+  response = { ...legacy, storage: { scope: "account", used_bytes: 0 } };
+  assert.deepEqual((await api.getBilling()).storage, { scope: "account", used_bytes: 0 });
+  for (const storage of [
+    { scope: "workspace", used_bytes: 0 },
+    { scope: "account", used_bytes: -1 },
+    { scope: "account", used_bytes: "100" },
+    { scope: "account" },
+  ]) {
+    response = { ...legacy, storage };
+    await assert.rejects(api.getBilling(), (error) => error.error === "invalid_response");
+  }
+});

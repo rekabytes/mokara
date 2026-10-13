@@ -23,6 +23,7 @@ import {
   capWord,
   fmtMemberSince,
   pitchRows,
+  storageUsage,
 } from "./billing-copy";
 import type { BillingInfo } from "@/lib/api";
 import { tileIn } from "@/lib/motion";
@@ -75,9 +76,14 @@ export function BillingTile({
           >
             <Stat value={capNum(billing?.caps.members)} label="members / team" />
             <Stat value={capNum(billing?.caps.teams)} label="team workspaces" />
-            <Stat value={capGb(billing?.caps.storage_bytes)} label="storage" />
+            <Stat value={capGb(billing?.caps.storage_bytes)} label="storage / account" />
             <Stat value={capMb(billing?.caps.file_bytes)} label="per file" />
           </div>
+          <p className="mb-0 mt-3 text-[0.8rem] leading-relaxed text-[var(--color-ink-muted)]">
+            {billing?.storage && <span>{storageUsage(billing.storage.used_bytes)} used. </span>}
+            One storage pool across your personal and owned team workspaces. Team members’ uploads
+            use the workspace owner’s allowance.
+          </p>
         </div>
 
         {/* Right: the upgrade pitch — only when Free on a billing-enabled

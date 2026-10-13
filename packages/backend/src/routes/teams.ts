@@ -12,8 +12,7 @@ import {
   teamCountDenial,
 } from "../lib/entitlements.ts";
 import { publicCap } from "../lib/plans.ts";
-import { limitsOfTeam } from "../lib/entitlements.ts";
-import { usedBytes } from "../lib/quota.ts";
+import { storageAccountForTeam, storageUploadDenial, withStorageAccount } from "../lib/quota.ts";
 import {
   deleteObject,
   getObjectBytes,
@@ -252,8 +251,8 @@ teamRoutes.post("/:id/invitations", validate("json", inviteSchema), async (c) =>
 });
 
 // ---- PRD-11 Phase 1.4: the container logo -------------------------------
-// Leader-only, image-only, one object per workspace (overwritten in place),
-// and metered against the SAME storage quota as task files — a Starter perk
+// Leader-only, image-only, one current logo per workspace,
+// and metered against the SAME account storage quota as task files — a Starter perk
 // must not be a way to store extra bytes for free.
 
 teamRoutes.put("/:id/logo", async (c) => {
@@ -294,30 +293,10 @@ teamRoutes.put("/:id/logo", async (c) => {
   });
   if (!team) return c.json({ error: "not_found", message: "team not found" }, 404);
 
-  const limits = await limitsOfTeam(teamId);
-  if (!limits) return c.json({ error: "not_found", message: "team not found" }, 404);
-  if (file.size > limits.maxFileBytes) {
-    return c.json(
-      {
-        error: "file_too_large",
-        message: `that image is too large — ${Math.floor(limits.maxFileBytes / (1024 * 1024))} MB maximum per file on this plan`,
-      },
-      400
-    );
-  }
-  // Replacing a logo frees its old bytes first, so the check is "everything
-  // except the logo I am about to overwrite, plus the new image".
-  const used = await usedBytes(teamId);
-  const withoutLogo = used - (team.logoBytes ?? 0);
-  if (withoutLogo + file.size > limits.storageBytes) {
-    return c.json(
-      {
-        error: "quota_exceeded",
-        message: `this workspace is out of storage — its plan allows ${Math.floor(limits.storageBytes / (1024 * 1024 * 1024))} GB`,
-      },
-      409
-    );
-  }
+  const account = await storageAccountForTeam(teamId);
+  if (!account) return c.json({ error: "not_found", message: "team not found" }, 404);
+  const denial = await storageUploadDenial(account, file.size, team.logoBytes ?? 0);
+  if (denial) return c.json({ error: denial.error, message: denial.message }, denial.status);
 
   const key = teamLogoKey(teamId);
   try {
@@ -333,10 +312,33 @@ teamRoutes.put("/:id/logo", async (c) => {
     );
   }
 
-  await prisma.team.update({
-    where: { id: teamId },
-    data: { logoKey: key, logoBytes: file.size, logoType: file.type },
+  const result = await withStorageAccount(teamId, async (client, currentAccount) => {
+    const current = await client.team.findUnique({
+      where: { id: teamId },
+      select: { logoKey: true, logoBytes: true },
+    });
+    if (!current) return { status: 404 as const, error: "not_found", message: "Team not found." };
+    const finalDenial = await storageUploadDenial(
+      currentAccount,
+      file.size,
+      current.logoBytes ?? 0,
+      client
+    );
+    if (finalDenial) return finalDenial;
+    await client.team.update({
+      where: { id: teamId },
+      data: { logoKey: key, logoBytes: file.size, logoType: file.type },
+    });
+    return { previousKey: current.logoKey };
+  }).catch(async (error: unknown) => {
+    await deleteObject(key);
+    throw error;
   });
+  if ("error" in result) {
+    await deleteObject(key);
+    return c.json({ error: result.error, message: result.message }, result.status);
+  }
+  if (result.previousKey) await deleteObject(result.previousKey);
   const updated = await teamPayload(teamId);
   return c.json({ team: updated }, updated ? 200 : 500);
 });
@@ -356,16 +358,18 @@ teamRoutes.delete("/:id/logo", async (c) => {
     );
   }
 
-  const team = await prisma.team.findUnique({ where: { id: teamId }, select: { logoKey: true } });
-  if (!team) return c.json({ error: "not_found", message: "team not found" }, 404);
-
-  await prisma.team.update({
-    where: { id: teamId },
-    data: { logoKey: null, logoBytes: null, logoType: null },
+  const result = await withStorageAccount(teamId, async (client) => {
+    const team = await client.team.findUnique({ where: { id: teamId }, select: { logoKey: true } });
+    if (!team) return { status: 404 as const, error: "not_found", message: "Team not found." };
+    await client.team.update({
+      where: { id: teamId },
+      data: { logoKey: null, logoBytes: null, logoType: null },
+    });
+    return { previousKey: team.logoKey };
   });
-  // Row cleared first: a leftover object is a billing nuisance, never a lie
-  // the user can see. deleteObject already swallows and logs its own failures.
-  if (team.logoKey) await deleteObject(team.logoKey);
+  if ("error" in result)
+    return c.json({ error: result.error, message: result.message }, result.status);
+  if (result.previousKey) await deleteObject(result.previousKey);
   const updated = await teamPayload(teamId);
   return c.json({ team: updated }, updated ? 200 : 500);
 });

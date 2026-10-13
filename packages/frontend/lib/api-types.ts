@@ -229,6 +229,8 @@ export type PlanCaps = {
 };
 
 export type BillingInfo = {
+  /** Optional during rolling deployment; never treat an absent usage read as zero. */
+  storage?: { scope: "account"; used_bytes: number };
   plan: string;
   billing_configured: boolean;
   checkout_configured: boolean;

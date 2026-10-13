@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DocPage } from "../DocPage";
+import { ToolCatalog } from "./ToolCatalog";
 import { getMcpConnectionUrl } from "./connection-config.server";
 
 export const metadata: Metadata = {
@@ -10,6 +11,9 @@ export const metadata: Metadata = {
 };
 export default async function McpGuidePage() {
   const endpoint = await getMcpConnectionUrl();
+  const skillUrl = endpoint ? new URL("/skills/mokara/SKILL.md", endpoint).href : null;
+  // Quote the configured URL as one shell argument, including literal apostrophes.
+  const skillSource = skillUrl ? "'" + skillUrl.replaceAll("'", "'\\''") + "'" : null;
   return (
     <DocPage
       current="/docs/mcp"
@@ -62,6 +66,32 @@ export default async function McpGuidePage() {
           existing-task publishing and safe recovery from partial failures. Basic MCP tools work
           without installing it.
         </p>
+        <h3>Install with npx</h3>
+        <p>
+          Run this command from the project where you want your agent to use Mokara. Node.js and npm
+          are required:
+        </p>
+        {skillSource ? (
+          <pre>
+            <code>{`npx skills@latest add ${skillSource} --skill mokara --agent universal --yes`}</code>
+          </pre>
+        ) : (
+          <p>The installation command will appear when connection details are available.</p>
+        )}
+        <p>
+          This installs <code>.agents/skills/mokara/SKILL.md</code> in the current project.
+          <code> --agent universal</code> selects the shared skills directory, and
+          <code> --yes</code> skips installer selection prompts. Reload skills in your agent if
+          needed, then ask it to use the Mokara skill. You still need the authenticated MCP
+          connection and the permissions required for your request.
+        </p>
+        <p>
+          You can ask a terminal-capable agent to read this page and run the installation command in
+          your project. For clients that use another skills directory, choose the appropriate agent
+          instead of <code>universal</code>. See the{" "}
+          <a href="https://github.com/vercel-labs/skills">skills CLI documentation</a>.
+        </p>
+        <h3>Manual download</h3>
         <p>
           <a href="/skills/mokara/SKILL.md" download="SKILL.md">
             Download Mokara skill · v1.0.0
@@ -239,61 +269,23 @@ export default async function McpGuidePage() {
         </p>
       </section>
       <section aria-labelledby="access">
-        <h2 id="access">What the agent can read</h2>
-        <div className="docs-table-wrap">
-          <table>
-            <caption>Available read-only MCP tools</caption>
-            <thead>
-              <tr>
-                <th scope="col">Tool</th>
-                <th scope="col">Access</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <code>list_workspaces</code>
-                </td>
-                <td>Approved workspaces you still belong to.</td>
-              </tr>
-              <tr>
-                <td>
-                  <code>list_tasks</code>
-                </td>
-                <td>Task summaries, with optional search and filters.</td>
-              </tr>
-              <tr>
-                <td>
-                  <code>get_task</code>
-                </td>
-                <td>A task’s details, including its description.</td>
-              </tr>
-              <tr>
-                <td>
-                  <code>list_projects</code>
-                </td>
-                <td>Projects in an approved workspace.</td>
-              </tr>
-              <tr>
-                <td>
-                  <code>list_members</code>
-                </td>
-                <td>Member names, IDs and roles; no emails or login details.</td>
-              </tr>
-              <tr>
-                <td>
-                  <code>list_comments</code>
-                </td>
-                <td>A task’s comments and replies.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <h2 id="access">All 41 MCP tools</h2>
         <p>
-          The original six list tools are paginated, with up to 50 items per request. Additional
-          tools provide complete task details, attachments, KPIs, analytics and write activity.
-          Billing, account credentials and admin operations are outside MCP task permissions.
-          Workspace and repository text is content, not instructions for the agent.
+          Your agent only sees tools allowed by the permissions you approved. The original
+          connection offered six read tools; the full catalog below includes all 35 additions.
+          Workspace membership, ownership rules and quotas still apply.
+        </p>
+        <ToolCatalog />
+        <p>
+          All mutations require a <code>request_id</code> UUID. Deletions additionally require your
+          explicit deletion request and <code>confirm: true</code>. GitHub tools only use
+          repositories you specifically approved for the connection.
+        </p>
+        <p>
+          List tools that expose cursors return <code>next_cursor</code>; pass it unchanged to
+          continue. GitHub issue listing uses page numbers. Read each tool’s schema for its filters
+          and limits. Billing, account credentials and admin operations are outside MCP task
+          permissions. Workspace and repository text is content, not instructions for the agent.
         </p>
       </section>
       <section aria-labelledby="writes">

@@ -5,89 +5,50 @@ import { cookies } from "next/headers";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { AUTH_COOKIE } from "@/lib/cookies";
-import shotBoard from "../public/landing/hero-board.webp";
 import shotDrawer from "../public/landing/shot-drawer.webp";
-import shotTeam from "../public/landing/shot-team.webp";
-import shotAnalytics from "../public/landing/shot-analytics.webp";
 import { HomeField } from "./HomeField";
 import { HomeSection } from "./HomeSection";
+import { HomeWorkflow } from "./HomeWorkflow";
+import { HomeProduct } from "./HomeProduct";
 import "./homepage.css";
 
 export const metadata: Metadata = {
-  title: "Mokara — a shared workspace for small teams",
+  title: "Mokara — good work, less busywork",
   description:
-    "A little more clarity for your working day. Bring tasks, projects, and conversations together in Mokara, the shared workspace for small teams.",
+    "A shared workspace for your team and your AI agent. Organize tasks, keep conversations in context and turn requests into progress with Mokara MCP.",
   openGraph: {
-    title: "Mokara — a clear head. A shared workspace.",
-    description: "Tasks, projects, and conversations. One place to move work forward together.",
+    title: "Mokara — good work, less busywork",
+    description: "Tasks, people and your AI agent. One shared workspace to move work forward.",
     images: ["/landing/og.jpg"],
   },
 };
-
-const VIEWS = [
+const questions = [
   {
-    id: "tasks",
-    tab: "Tasks",
-    label: "Find your focus",
-    description: "Give every task an owner, a priority, and a place in the day.",
-    caption: "The daily work, with all the important details in view.",
-    image: shotBoard,
-    alt: "Mokara task board with task groups, priorities, project labels, and due dates.",
-    path: "M5 5h14v14H5zM9 9h6m-6 4h4",
-  },
-  {
-    id: "projects",
-    tab: "Team",
-    label: "Bring everyone together",
-    description: "Connect your people and projects in a shared team workspace.",
-    caption: "A shared home for your team and its projects.",
-    image: shotTeam,
-    alt: "Mokara team workspace with project progress, team members, and personal KPIs.",
-    path: "M3 7h7l2 3h9v10H3zM3 7V4h7l2 3h7v3",
-  },
-  {
-    id: "progress",
-    tab: "Progress",
-    label: "See the bigger picture",
-    description: "Follow task progress and deadlines without chasing another update.",
-    caption: "Progress and deadlines, seen together rather than in separate updates.",
-    image: shotAnalytics,
-    alt: "Mokara progress heatmap showing task timelines and deadlines.",
-    path: "M4 4v16h16M8 15v-4m5 4V7m5 8V4",
-  },
-];
-const FAQS = [
-  {
-    question: "Can I use Mokara on my own?",
+    question: "Can I start on my own?",
     answer:
-      "Absolutely. Start in a personal workspace to organise your own tasks. When you’re ready to work with others, bring them into a shared workspace.",
+      "Yes. Start in a personal workspace, organize your tasks and bring your teammates into a shared workspace when you’re ready.",
   },
   {
-    question: "What’s included in the Free plan?",
-    answer: (
-      <>
-        The Free plan supports up to three people per team and includes the core task features. No
-        credit card is needed to create an account.{" "}
-        <Link href="/pricing">See all plans and capacity limits.</Link>
-      </>
-    ),
-  },
-  {
-    question: "How do I invite my team?",
+    question: "Do I need an AI agent to use Mokara?",
     answer:
-      "Your teammates create an account, then you invite them by username from the Team page. When the first invitation is accepted, your workspace becomes a team and the work is shared.",
+      "No. Tasks, projects, comments and progress work directly in Mokara. Connect an agent whenever it fits your workflow.",
   },
   {
-    question: "Can I host Mokara myself?",
+    question: "What can my agent do?",
     answer:
-      "Yes. Self-hosting is free and doesn’t have the hosted capacity caps. You manage your own infrastructure and data. Or choose the hosted service if you’d rather leave server management to us.",
+      "With the permissions you approve, your agent can read and update work, create tasks, manage steps and comments, and publish or link GitHub issues in selected repositories. You can revoke the connection in Settings.",
+  },
+  {
+    question: "Is it free to get started?",
+    answer:
+      "Yes. The Free plan includes the core task features and supports up to three people per team. No credit card is needed. See Pricing for the full plan limits.",
   },
 ];
 
 export default async function LandingPage() {
   const hasSession = (await cookies()).has(AUTH_COOKIE);
   const startHref = hasSession ? "/tasks" : "/signup";
-  const startLabel = hasSession ? "Open your workspace" : "Create your free workspace";
+  const startLabel = hasSession ? "Open your workspace" : "Start your workspace";
   return (
     <div className="public-site homepage">
       <a className="homepage-skip" href="#main">
@@ -101,275 +62,233 @@ export default async function LandingPage() {
         <div className="home-hero-scene">
           <HomeField />
           <HomeSection className="home-hero public-container" labelledBy="hero-title">
-            <p className="home-kicker">Made for the way small teams work</p>
-            <h1 id="hero-title">
-              A clear head. <span>A shared workspace.</span>
-            </h1>
-            <p className="home-intro">
-              Tasks, projects, and all the conversations in between. Give your team one place to
-              turn plans into progress.
-            </p>
-            <div className="home-hero-action">
-              <Link className="public-button public-button-primary" href={startHref}>
-                {startLabel}
-                <Arrow />
+            <div className="home-hero-copy">
+              <Link href="/docs/mcp" className="home-announcement">
+                <span className="home-announcement-dot" />
+                Meet Mokara MCP<span aria-hidden>↗</span>
               </Link>
-              <a className="home-text-link" href="#product">
-                Take a look inside
-                <Arrow />
-              </a>
+              <h1 id="hero-title">
+                Good work.
+                <br />
+                <em>Less busywork.</em>
+              </h1>
+              <p className="home-intro">
+                A shared place for your team to make things happen. Bring your tasks, conversations
+                and AI agent together. Keep the work moving.
+              </p>
+              <div className="home-hero-action">
+                <Link className="public-button public-button-primary" href={startHref}>
+                  {startLabel}
+                  <Arrow />
+                </Link>
+                <a href="#product" className="home-text-link">
+                  Look around <Arrow />
+                </a>
+              </div>
+              <p className="home-reassurance">
+                {hasSession
+                  ? "Pick up where you left off."
+                  : "Free for up to 3 people per team. No credit card."}
+              </p>
             </div>
-            <p className="home-reassurance">
-              {hasSession
-                ? "Your next step is already waiting."
-                : "Free for up to 3 people per team. No credit card needed."}
-            </p>
+            <HomeWorkflow />
           </HomeSection>
         </div>
 
-        <HomeSection className="home-demo public-container" labelledBy="demo-title">
-          <h2 id="demo-title" className="sr-only">
-            A look inside Mokara
-          </h2>
-          <figure>
-            <div
-              className="home-demo-viewport"
-              role="region"
-              tabIndex={0}
-              aria-label="Mokara task board. Scroll horizontally on smaller screens."
-            >
-              <Image
-                src={shotBoard}
-                alt="Mokara task board showing task groups, priorities, project labels, and due dates."
-                sizes="(max-width: 600px) 900px, (max-width: 1280px) calc(100vw - 80px), 1200px"
-                loading="eager"
-                unoptimized
-              />
-            </div>
-            <figcaption>
-              <span>Actual product. Example workspace.</span>
-              <a href={shotBoard.src} target="_blank" rel="noopener noreferrer">
-                Open full size<span className="sr-only"> in a new tab</span>
-                <Arrow />
-              </a>
-            </figcaption>
-            <p className="home-scroll-hint">
-              Swipe or scroll sideways to explore <span aria-hidden>↔</span>
-            </p>
-          </figure>
-          <div className="home-essentials" aria-label="Workspace essentials">
-            <p>
-              <LineIcon path="m5 12 4 4L19 6" />
-              <span>
-                <strong>A clear next step</strong>Owners, priorities, and due dates
-              </span>
-            </p>
-            <p>
-              <LineIcon path="M4 5h16v12H9l-5 4zM8 9h8m-8 4h5" />
-              <span>
-                <strong>Context that stays close</strong>Comments, files, and subtasks
-              </span>
-            </p>
-            <p>
-              <LineIcon path="M4 18 9 12l4 3 7-10M15 5h5v5" />
-              <span>
-                <strong>Progress you can see</strong>Projects, timelines, and activity
-              </span>
-            </p>
-          </div>
-        </HomeSection>
-
-        <HomeSection className="home-detail" labelledBy="detail-title">
-          <div className="public-container home-detail-layout">
-            <div className="home-detail-copy">
-              <p className="home-overline">Everything that goes into getting it done</p>
-              <h2 id="detail-title">
-                More than a task.
-                <br />
-                The whole conversation.
-              </h2>
-              <p>
-                The brief, the feedback, that file someone sent. Keep it all with the task, not
-                scattered across your working day.
-              </p>
-              <ul>
-                <li>
-                  <span aria-hidden>✓</span>Break bigger work into smaller steps
-                </li>
-                <li>
-                  <span aria-hidden>✓</span>Keep comments and replies in context
-                </li>
-                <li>
-                  <span aria-hidden>✓</span>Find the files you need, where you need them
-                </li>
-              </ul>
-              <Link href={startHref} className="public-button public-button-secondary">
-                Give your next project a home
-                <Arrow />
-              </Link>
-            </div>
-            <figure className="home-detail-image">
-              <a
-                href={shotDrawer.src}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="View the full task detail screenshot in a new tab"
-              >
-                <Image
-                  src={shotDrawer}
-                  alt="The full Mokara workspace with a task drawer showing its description, status, due date, and threaded comments."
-                  sizes="(max-width: 900px) calc(100vw - 48px), 700px"
-                  unoptimized
-                />
-              </a>
-              <figcaption>
-                <span>All the details. One place.</span>
-                <a href={shotDrawer.src} target="_blank" rel="noopener noreferrer">
-                  Open full size<span className="sr-only"> in a new tab</span>
-                  <Arrow />
-                </a>
-              </figcaption>
-            </figure>
-          </div>
-        </HomeSection>
+        <div className="home-principles public-container" aria-label="Built around your work">
+          <span>
+            A little less friction.
+            <br />
+            <strong>A lot more flow.</strong>
+          </span>
+          <p>
+            <span className="home-index">01</span>Plan with your team
+          </p>
+          <p>
+            <span className="home-index">02</span>Act with your agent
+          </p>
+          <p>
+            <span className="home-index">03</span>See what moves forward
+          </p>
+        </div>
 
         <HomeSection
           id="product"
           className="home-product public-container"
           labelledBy="product-title"
         >
-          <div className="home-product-heading">
-            <h2 id="product-title">A home for the work.</h2>
-            <p>Tasks, people, and progress. Explore the workspace from every angle.</p>
+          <div className="home-section-heading">
+            <div>
+              <p className="home-overline">01 / Your everyday workspace</p>
+              <h2 id="product-title">
+                A place for the work.
+                <br />
+                Room for the details.
+              </h2>
+            </div>
+            <p>
+              From the first idea to the last checkmark.
+              <br />
+              An overview when you need it.
+              <br />
+              The context when you don’t.
+            </p>
           </div>
-          <fieldset className="home-explorer">
-            <legend className="sr-only">Choose a product screenshot</legend>
-            {VIEWS.map((view, index) => (
-              <input
-                key={view.id}
-                id={`view-${view.id}`}
-                type="radio"
-                name="product-view"
-                className="sr-only home-view-control"
-                defaultChecked={index === 0}
-                aria-label={view.label}
-              />
-            ))}
-            <div className="home-view-options">
-              {VIEWS.map((view) => (
-                <label key={view.id} htmlFor={`view-${view.id}`}>
-                  {view.tab}
-                </label>
-              ))}
-            </div>
-            <div className="home-preview-stage">
-              {VIEWS.map((view) => (
-                <figure key={view.id} className={`home-preview home-preview-${view.id}`}>
-                  <figcaption className="home-preview-copy">
-                    <div className="home-view-name">
-                      <LineIcon path={view.path} />
-                      <span>{view.tab}</span>
-                    </div>
-                    <h3>{view.label}</h3>
-                    <p>{view.description}</p>
-                    <p className="home-preview-caption">{view.caption}</p>
-                    <a
-                      className="home-text-link"
-                      href={view.image.src}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Explore this view<span className="sr-only"> full size in a new tab</span>
-                      <Arrow />
-                    </a>
-                  </figcaption>
-                  <div className="home-preview-media">
-                    <div
-                      className="home-preview-viewport"
-                      role="region"
-                      tabIndex={0}
-                      aria-label={`${view.label} screenshot. Scroll horizontally on smaller screens.`}
-                    >
-                      <Image
-                        src={view.image}
-                        alt={view.alt}
-                        sizes="(max-width: 600px) 780px, (max-width: 900px) calc(100vw - 48px), 700px"
-                        unoptimized
-                      />
-                    </div>
-                    <p className="home-scroll-hint">
-                      Swipe or scroll sideways to explore <span aria-hidden>↔</span>
-                    </p>
-                  </div>
-                </figure>
-              ))}
-            </div>
-          </fieldset>
+          <HomeProduct />
         </HomeSection>
 
-        <HomeSection className="home-your-way public-container" labelledBy="your-way-title">
-          <div className="home-your-way-heading">
-            <p className="home-overline">A workspace that fits</p>
-            <h2 id="your-way-title">Your team. Your way to work.</h2>
-            <p>Just you, a few collaborators, or the whole team. Start with what you need.</p>
-          </div>
-          <div className="home-hosting-options">
-            <article>
-              <LineIcon path="M7 17H6a4 4 0 0 1-1-8 7 7 0 0 1 13-1 4.5 4.5 0 0 1 0 9h-1M12 20V11m-3 3 3-3 3 3" />
-              <h3>Open a workspace. Get going.</h3>
+        <HomeSection id="agents" className="home-agent-section" labelledBy="agent-title">
+          <div className="public-container">
+            <div className="home-section-heading">
+              <div>
+                <p className="home-overline">02 / Meet your new way to work</p>
+                <h2 id="agent-title">
+                  You set the direction.
+                  <br />
+                  <em>Your agent takes a step.</em>
+                </h2>
+              </div>
               <p>
-                Use Mokara hosted. Start free with up to three people per team, and choose a plan as
-                your needs change.
+                Already working with an AI agent? Give it a connection to Mokara. A conversation can
+                become a task, an update or a linked GitHub issue.
               </p>
-              <Link href="/pricing" className="home-text-link">
-                Find your plan
-                <Arrow />
-              </Link>
-            </article>
-            <article>
-              <LineIcon path="M4 4h16v6H4zM4 14h16v6H4zM7 7h.01M7 17h.01" />
-              <h3>Your server. Your setup.</h3>
+            </div>
+            <div className="home-agent-layout">
+              <div className="home-agent-quote">
+                <span className="home-overline">From a request</span>
+                <blockquote>
+                  “Create a task for the onboarding review. Add two steps and publish a GitHub
+                  issue.”
+                </blockquote>
+                <span className="home-quote-caption">An example of what you can ask</span>
+              </div>
+              <div className="home-agent-outcomes">
+                <span className="home-overline">To something your team can work with</span>
+                <div>
+                  <span aria-hidden>✓</span>
+                  <p>
+                    One task in your workspace<small>With the details and steps together</small>
+                  </p>
+                </div>
+                <div>
+                  <span aria-hidden>↗</span>
+                  <p>
+                    A connected GitHub issue<small>In a repository you approved</small>
+                  </p>
+                </div>
+                <div>
+                  <span aria-hidden>○</span>
+                  <p>
+                    You stay in control<small>Choose permissions. Revoke access anytime.</small>
+                  </p>
+                </div>
+                <Link href="/docs/mcp" className="home-agent-link">
+                  Connect your AI agent <Arrow />
+                </Link>
+              </div>
+            </div>
+            <div className="home-agent-footnote">
               <p>
-                Prefer to run things yourself? Self-host Mokara for free, without the hosted
-                capacity caps.
+                <span className="home-index">41</span>tools for your agent, with access you choose
               </p>
-              <Link href="/pricing" className="home-text-link">
-                Explore self-hosting
-                <Arrow />
+              <Link href="/docs/mcp#skill">
+                Get the Mokara skill <Arrow />
               </Link>
-            </article>
+              <Link href="/docs/mcp#access">
+                Explore the tools <Arrow />
+              </Link>
+            </div>
           </div>
+        </HomeSection>
+
+        <HomeSection className="home-context public-container" labelledBy="context-title">
+          <div className="home-context-copy">
+            <p className="home-overline">03 / Keep the whole story</p>
+            <h2 id="context-title">
+              The task is just
+              <br />
+              the beginning.
+            </h2>
+            <p>
+              The brief. The feedback. The file that makes everything click. Give the work a home,
+              and the conversation a place to stay.
+            </p>
+            <dl>
+              <div>
+                <dt>Break it down</dt>
+                <dd>Turn a bigger task into smaller, useful steps.</dd>
+              </div>
+              <div>
+                <dt>Talk it through</dt>
+                <dd>Keep comments and replies with the work.</dd>
+              </div>
+              <div>
+                <dt>Bring it together</dt>
+                <dd>Files, priorities and due dates, all in reach.</dd>
+              </div>
+            </dl>
+          </div>
+          <figure className="home-context-media">
+            <div className="home-context-image">
+              <Image
+                src={shotDrawer}
+                alt="Mokara task drawer showing a description, status, due date and threaded comments beside the workspace."
+                sizes="(max-width: 800px) calc(100vw - 40px), 65vw"
+              />
+            </div>
+            <figcaption>
+              Inside a task · Actual product, example workspace
+              <a href={shotDrawer.src} target="_blank" rel="noopener noreferrer">
+                Full view ↗<span className="sr-only"> in a new tab</span>
+              </a>
+            </figcaption>
+          </figure>
         </HomeSection>
 
         <HomeSection id="faq" className="home-faq public-container" labelledBy="faq-title">
-          <div className="home-faq-heading">
-            <p className="home-overline">Before you settle in</p>
-            <h2 id="faq-title">A few good questions.</h2>
+          <div>
+            <p className="home-overline">A few things to know</p>
+            <h2 id="faq-title">
+              Before you
+              <br />
+              get going.
+            </h2>
+            <Link href="/pricing" className="home-text-link">
+              Find your plan <Arrow />
+            </Link>
           </div>
           <div className="home-faq-list">
-            {FAQS.map((faq) => (
-              <details key={faq.question}>
+            {questions.map((item) => (
+              <details key={item.question}>
                 <summary>
-                  {faq.question}
+                  {item.question}
                   <span aria-hidden>+</span>
                 </summary>
-                <p>{faq.answer}</p>
+                <p>{item.answer}</p>
               </details>
             ))}
           </div>
         </HomeSection>
-        <HomeSection className="home-closing" labelledBy="closing-title">
-          <div className="public-container">
-            <p className="home-overline">Make it happen, together</p>
-            <h2 id="closing-title">Your next project starts here.</h2>
-            <p>Bring your tasks, conversations, and team into one shared workspace.</p>
+
+        <HomeSection className="home-closing public-container" labelledBy="closing-title">
+          <div>
+            <p className="home-overline">Make space for your next idea</p>
+            <h2 id="closing-title">
+              A fresh page.
+              <br />
+              <em>A shared next step.</em>
+            </h2>
+          </div>
+          <div>
             <Link className="public-button public-button-primary" href={startHref}>
               {startLabel}
               <Arrow />
             </Link>
-            <small>
-              {hasSession ? "Pick up where you left off." : "Start free. No credit card required."}
-            </small>
+            <p>
+              {hasSession
+                ? "Your work is waiting for you."
+                : "Start free. Bring your team when you’re ready."}
+            </p>
           </div>
         </HomeSection>
       </main>
@@ -384,28 +303,12 @@ function Arrow() {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.7"
+      strokeWidth="1.6"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden
     >
       <path d="M5 12h14m-5-5 5 5-5 5" />
-    </svg>
-  );
-}
-function LineIcon({ path }: { path: string }) {
-  return (
-    <svg
-      className="home-line-icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d={path} />
     </svg>
   );
 }

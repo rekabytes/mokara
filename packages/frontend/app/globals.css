@@ -418,7 +418,7 @@
 }
 .public-footer-grid {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
   gap: 40px;
   padding-block: 48px;
 }
@@ -593,5 +593,17 @@
 @media (prefers-reduced-motion: reduce) {
   .ticker-track {
     animation: none !important;
+  }
+}
+
+/* Respect the OS preference for CSS movement as well as Motion components. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+    scroll-behavior: auto !important;
   }
 }

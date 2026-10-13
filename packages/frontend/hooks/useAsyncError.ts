@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { authReturnPath } from "@/lib/auth-return-path";
 import { normalizeError, type NormalizedError } from "@/lib/errors";
 
 // Global error handling for anything that talks to the API. One hook, used by
@@ -24,6 +25,10 @@ import { normalizeError, type NormalizedError } from "@/lib/errors";
 export type RunOptions = {
   /** Copy used only when the error code is genuinely unmapped. */
   fallback?: string;
+  /** Preserve a validated application flow across session expiry. */
+  loginFrom?: string;
+  /** An obsolete read must not update error state or redirect. */
+  signal?: AbortSignal;
   /** Side effects that must run on any failure (optimistic-UI rollback etc). */
   onError?: (err: NormalizedError) => void;
 };
@@ -45,14 +50,21 @@ export function useAsyncError() {
 
   const run = useCallback(
     async <T>(fn: () => Promise<T>, opts: RunOptions = {}): Promise<T | null> => {
+      if (opts.signal?.aborted) return null;
       try {
-        return await fn();
+        const result = await fn();
+        return opts.signal?.aborted ? null : result;
       } catch (e) {
+        if (opts.signal?.aborted) return null;
         const err = normalizeError(e, opts.fallback);
         opts.onError?.(err);
         if (err.action === "redirect") {
           setError(null);
-          routerRef.current.replace("/login");
+          routerRef.current.replace(
+            opts.loginFrom
+              ? `/login?from=${encodeURIComponent(authReturnPath(opts.loginFrom))}`
+              : "/login"
+          );
         } else {
           setError(err);
         }

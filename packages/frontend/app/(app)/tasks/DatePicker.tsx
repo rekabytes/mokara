@@ -148,12 +148,21 @@ export function DatePicker({
   function pick(d: Date) {
     onChange(toIso(d));
     setOpen(false);
+    triggerRef.current?.focus();
   }
 
   const panel =
     open && pos ? (
       <motion.div
         key="date-panel"
+        ref={(node) => node?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus()}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape") return;
+          event.preventDefault();
+          event.stopPropagation();
+          setOpen(false);
+          triggerRef.current?.focus();
+        }}
         data-date-menu
         role="dialog"
         aria-label="Pick due date"

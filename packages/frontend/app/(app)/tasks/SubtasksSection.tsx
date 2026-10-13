@@ -3,10 +3,11 @@
 import { MoveArrowIcon, TrashIcon } from "./icons";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { api, type SubtaskItem, type Task } from "@/lib/api";
+import { ErrorBanner } from "@/components/ErrorBanner";
 import { cn } from "@/lib/cn";
 import { listItemVariants, tickVariants } from "@/lib/motion";
 import { AnimatePresence, motion } from "framer-motion";
-import { useState } from "react";
+import { useRef, useState } from "react";
 // The task checklist: `SubtasksSection` (list + add + reorder + delete) and
 // `SubtaskTitle` (the inline rename field).
 //
@@ -26,77 +27,121 @@ export function SubtasksSection({ task }: { task: Task }) {
   const [items, setItems] = useState<SubtaskItem[]>(task.subtasks);
   const { error, setError, run } = useAsyncError();
 
+  const pending = useRef(false);
+  const [busy, setBusy] = useState(false);
+
   const doneCount = items.filter((i) => i.done).length;
 
   async function toggle(item: SubtaskItem) {
-    const done = !item.done;
-    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, done } : i)));
-    const res = await run(() => api.updateSubtask(item.id, { done }), {
-      fallback: "Failed to update the step",
-      onError: () =>
-        setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, done: !done } : i))),
-    });
-    if (!res) return;
+    if (pending.current) return;
+    pending.current = true;
+    setBusy(true);
     setError(null);
-    setItems((prev) => prev.map((i) => (i.id === item.id ? res.subtask : i)));
+    try {
+      const done = !item.done;
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, done } : i)));
+      const res = await run(() => api.updateSubtask(item.id, { done }), {
+        fallback: "Failed to update the step",
+        onError: () =>
+          setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, done: !done } : i))),
+      });
+      if (!res) return;
+      setError(null);
+      setItems((prev) => prev.map((i) => (i.id === item.id ? res.subtask : i)));
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
   }
 
   async function rename(item: SubtaskItem, title: string) {
+    if (pending.current) return;
     const trimmed = title.trim();
     if (!trimmed || trimmed === item.title) return;
-    const prevTitle = item.title;
-    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, title: trimmed } : i)));
-    const res = await run(() => api.updateSubtask(item.id, { title: trimmed }), {
-      fallback: "Failed to rename the step",
-      onError: () =>
-        setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, title: prevTitle } : i))),
-    });
-    if (!res) return;
+    pending.current = true;
+    setBusy(true);
     setError(null);
-    setItems((prev) => prev.map((i) => (i.id === item.id ? res.subtask : i)));
+    try {
+      const prevTitle = item.title;
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, title: trimmed } : i)));
+      const res = await run(() => api.updateSubtask(item.id, { title: trimmed }), {
+        fallback: "Failed to rename the step",
+        onError: () =>
+          setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, title: prevTitle } : i))),
+      });
+      if (!res) return;
+      setError(null);
+      setItems((prev) => prev.map((i) => (i.id === item.id ? res.subtask : i)));
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
   }
 
   async function remove(item: SubtaskItem) {
-    const snapshot = items;
-    setItems((prev) => prev.filter((i) => i.id !== item.id));
-    // DELETE resolves void → undefined, so test for null, not falsiness.
-    const ok = await run(() => api.deleteSubtask(item.id), {
-      fallback: "Failed to delete the step",
-      onError: () => setItems(snapshot),
-    });
-    if (ok !== null) setError(null);
+    if (pending.current) return;
+    pending.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      const snapshot = items;
+      setItems((prev) => prev.filter((i) => i.id !== item.id));
+      // DELETE resolves void → undefined, so test for null, not falsiness.
+      const ok = await run(() => api.deleteSubtask(item.id), {
+        fallback: "Failed to delete the step",
+        onError: () => setItems(snapshot),
+      });
+      if (ok !== null) setError(null);
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
   }
 
   async function move(index: number, delta: number) {
+    if (pending.current) return;
     const target = index + delta;
     if (target < 0 || target >= items.length) return;
-    const moved = items[index];
-    const rest = items.filter((_, i) => i !== index);
-    const next = [...rest.slice(0, target), moved, ...rest.slice(target)];
-    setItems(next);
-    // The whole order goes up every time: a dense 0..n-1 rewrite is cheaper to
-    // reason about than patching two positions and hoping they land in order.
-    const ok = await run(
-      () =>
-        api.orderSubtasks(
-          task.id,
-          next.map((i) => i.id)
-        ),
-      {
-        fallback: "Failed to reorder the steps",
-        // The array order is what we drew, so roll the whole list back.
-        onError: () => setItems(items),
-      }
-    );
-    if (ok !== null) setError(null);
+    pending.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      const moved = items[index];
+      const rest = items.filter((_, i) => i !== index);
+      const next = [...rest.slice(0, target), moved, ...rest.slice(target)];
+      setItems(next);
+      // The whole order goes up every time: a dense 0..n-1 rewrite is cheaper to
+      // reason about than patching two positions and hoping they land in order.
+      const ok = await run(
+        () =>
+          api.orderSubtasks(
+            task.id,
+            next.map((i) => i.id)
+          ),
+        {
+          fallback: "Failed to reorder the steps",
+          // The array order is what we drew, so roll the whole list back.
+          onError: () => setItems(items),
+        }
+      );
+      if (ok !== null) setError(null);
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
   }
 
   // A task created without steps shows no checklist at all (owner: "if it
   // wasn't added, don't show"). Deleting the last step hides it again.
-  if (items.length === 0) return null;
+  if (items.length === 0) return <ErrorBanner className="mt-2" message={error?.message} />;
 
   return (
-    <section className="mt-5 shrink-0" aria-label="Checklist" data-tour="drawer-checklist">
+    <section
+      aria-busy={busy}
+      className="mt-5 shrink-0"
+      aria-label="Checklist"
+      data-tour="drawer-checklist"
+    >
       <div className="flex items-center gap-2">
         <h3 className="text-[0.74rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-muted)]">
           Checklist
@@ -106,7 +151,10 @@ export function SubtasksSection({ task }: { task: Task }) {
         </span>
       </div>
 
-      <div className="mt-1.5 max-h-[9rem] overflow-y-auto pr-1">
+      <fieldset
+        disabled={busy}
+        className="mt-1.5 min-w-0 max-h-[9rem] overflow-y-auto border-0 p-0 pr-1"
+      >
         <AnimatePresence initial={false}>
           {items.map((item, index) => (
             <motion.div
@@ -159,7 +207,11 @@ export function SubtasksSection({ task }: { task: Task }) {
               {/* Title: contentEditable-free inline edit — a double-click
                     swaps in an input seeded with the current text, same
                     contract as the drawer's title/description fields. */}
-              <SubtaskTitle value={item.title} onCommit={(next) => rename(item, next)} />
+              <SubtaskTitle
+                value={item.title}
+                disabled={busy}
+                onCommit={(next) => rename(item, next)}
+              />
 
               <span className="flex shrink-0 items-center opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
                 {index > 0 && (
@@ -194,9 +246,9 @@ export function SubtasksSection({ task }: { task: Task }) {
             </motion.div>
           ))}
         </AnimatePresence>
-      </div>
+      </fieldset>
 
-      {error && <p className="mt-1 text-[0.72rem] text-[var(--color-danger)]">{error.message}</p>}
+      <ErrorBanner className="mt-1" message={error?.message} />
     </section>
   );
 }
@@ -206,7 +258,9 @@ export function SubtasksSection({ task }: { task: Task }) {
 export function SubtaskTitle({
   value,
   onCommit,
+  disabled = false,
 }: {
+  disabled?: boolean;
   value: string;
   onCommit: (next: string) => void;
 }) {
@@ -217,6 +271,7 @@ export function SubtaskTitle({
     return (
       <span
         onDoubleClick={() => {
+          if (disabled) return;
           setDraft(value);
           setEditing(true);
         }}

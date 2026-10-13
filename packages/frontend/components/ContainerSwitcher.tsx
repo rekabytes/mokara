@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useDialogFocus } from "@/hooks/use-dialog-focus";
+import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useContainers } from "@/lib/containers";
 import { api } from "@/lib/api";
@@ -14,23 +15,31 @@ import { cn } from "@/lib/cn";
 // Selection lives in the Jotai container atoms, so every page follows along.
 
 export function ContainerSwitcher() {
-  const { containers, selected, setSelectedId, error, create } = useContainers();
+  const { containers, selected, setSelectedId, error, create, load } = useContainers();
+  const [retrying, setRetrying] = useState(false);
   const [open, setOpen] = useState(false);
+  const modalFocus = useDialogFocus();
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState("");
   const [kind, setKind] = useState<"workspace" | "team">("workspace");
+  const pending = useRef(false);
   const [busy, setBusy] = useState(false);
 
   async function submit() {
     const trimmed = name.trim();
-    if (!trimmed || busy) return;
+    if (!trimmed || pending.current) return;
+    pending.current = true;
     setBusy(true);
-    const created = await create(trimmed, kind);
-    setBusy(false);
-    if (!created) return;
-    setName("");
-    setKind("workspace");
-    setModalOpen(false);
+    try {
+      const created = await create(trimmed, kind);
+      if (!created) return;
+      setName("");
+      setKind("workspace");
+      setModalOpen(false);
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
   }
 
   return (
@@ -57,7 +66,22 @@ export function ContainerSwitcher() {
           answers with workspace_limit / team_full, and the person hitting it is
           inside the modal). This line is for list-load errors only. */}
       {error && !modalOpen && (
-        <p className="mt-1.5 text-[0.72rem] text-[var(--color-danger)]">{error.message}</p>
+        <div className="mt-1.5">
+          <ErrorBanner message={error.message} />
+          <button
+            type="button"
+            className="btn-base btn-ghost mt-2 w-full"
+            disabled={retrying}
+            onClick={async () => {
+              if (retrying) return;
+              setRetrying(true);
+              await load();
+              setRetrying(false);
+            }}
+          >
+            {retrying ? "Loading…" : "Retry workspaces"}
+          </button>
+        </div>
       )}
 
       {/* Backdrop closes the menu — no outside-click listener needed. It's
@@ -133,6 +157,9 @@ export function ContainerSwitcher() {
         {modalOpen && (
           <motion.div
             key="container-modal"
+            ref={modalFocus}
+            data-focus-scope
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-label="Create a workspace or team"
@@ -141,14 +168,16 @@ export function ContainerSwitcher() {
             animate="visible"
             exit="exit"
             onKeyDown={(e) => {
-              if (e.key === "Escape") setModalOpen(false);
+              if (e.key === "Escape" && !pending.current) setModalOpen(false);
             }}
             className="fixed inset-0 z-50 grid place-items-center px-4"
           >
             <button
               type="button"
               aria-label="Close"
-              onClick={() => setModalOpen(false)}
+              onClick={() => {
+                if (!pending.current) setModalOpen(false);
+              }}
               className="absolute inset-0 cursor-default border-0 bg-[rgba(15,23,42,0.75)] backdrop-blur-[2px]"
             />
             <motion.form
@@ -170,10 +199,11 @@ export function ContainerSwitcher() {
                 leader and can add team projects and KPIs right away.
               </p>
               <input
-                autoFocus
+                data-autofocus
                 type="text"
                 required
                 maxLength={50}
+                disabled={busy}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Name"
@@ -202,7 +232,9 @@ export function ContainerSwitcher() {
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setModalOpen(false)}
+                  onClick={() => {
+                    if (!pending.current) setModalOpen(false);
+                  }}
                   className="btn-base btn-ghost"
                   style={{ padding: "0.45rem 0.85rem", fontSize: "0.82rem" }}
                 >

@@ -1,17 +1,15 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { LEGAL_DOCS, type LegalDocMeta, type LegalSlug } from "@/lib/legal-links";
 import {
   ADDRESS_NOT_PUBLISHED,
   CONTACT,
   GOVERNING_LAW,
-  LEGAL_DOCS,
   LEGAL_EFFECTIVE,
   LEGAL_UPDATED,
   OPERATOR,
   siteOrigin,
-  type LegalDocMeta,
-  type LegalSlug,
-} from "@/lib/legal";
+} from "@/lib/legal.server";
 
 /**
  * Chrome + content primitives for the public legal documents.

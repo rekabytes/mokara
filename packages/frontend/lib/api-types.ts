@@ -56,7 +56,7 @@ export type SubtaskItem = {
 // so the quota display can trust it.
 export type Attachment = {
   id: string;
-  task_id: string;
+  task_id: string | null;
   filename: string;
   size_bytes: number;
   content_type: string;
@@ -155,7 +155,6 @@ export type TaskKpiBinding = { kpi_id: string; name: string; weight: number };
 export type KpiProgress = {
   id: string;
   name: string;
-  scope: ContainerScope;
   owner_username: string;
   task_count: number;
   weight_sum: number;
@@ -349,4 +348,14 @@ export type ProgressTask = {
 
 export type Progress = {
   tasks: ProgressTask[];
+};
+
+export type McpConnection = {
+  id: string;
+  name: string;
+  workspace_ids: string[];
+  created_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  access: "read";
 };

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { LegalDoc } from "@/components/LegalDoc";
-import { LEGAL_DOCS } from "@/lib/legal";
+import { LEGAL_DOCS } from "@/lib/legal-links";
 
 import { SECTIONS } from "./sections";
 

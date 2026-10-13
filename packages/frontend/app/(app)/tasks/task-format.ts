@@ -7,30 +7,13 @@
 // midnight (`new Date(y, m, d)` / setHours(0,0,0,0)); never derive a day index
 // from a live timestamp or an `.toISOString()` round-trip.
 
+import { taskSchema } from "@/lib/api-validation";
 import type { Attachment, Comment, Task } from "@/lib/api";
 
-/**
- * Board-event payload guard (SSE). The wire contract is the server's shape()
- * output — byte-identical to what the REST task routes return — so this
- * validates the fields the board branches on (identity, routing, grouping,
- * and the two arrays the drawer chips read), not all fourteen. A frame that
- * fails it is ignored, never half-applied.
- */
+/** SSE uses the same task contract as REST; reject an invalid frame whole. */
 export function asBoardTask(v: unknown): Task | null {
-  if (v === null || typeof v !== "object") return null;
-  const o = v as Record<string, unknown>;
-  if (
-    typeof o.id === "string" &&
-    typeof o.team_id === "string" &&
-    typeof o.title === "string" &&
-    typeof o.status === "string" &&
-    typeof o.priority === "string" &&
-    Array.isArray(o.kpis) &&
-    Array.isArray(o.subtasks)
-  ) {
-    return v as Task;
-  }
-  return null;
+  const result = taskSchema.safeParse(v);
+  return result.success ? result.data : null;
 }
 
 export function isToday(iso: string): boolean {

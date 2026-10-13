@@ -1,93 +1,108 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
-import { atom, getDefaultStore, useAtom, useAtomValue } from "jotai";
+import { useCallback, useEffect, useMemo } from "react";
+import { getDefaultStore, useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useResetAtom } from "jotai/utils";
 import { api, type NotificationInfo } from "./api";
 import { onSse } from "./sse";
-
-// PRD-05: shared notification state, same pattern as lib/session.ts — module
-// atoms on the default store, one REST backfill + one SSE connection per app
-// lifetime (the `booted` guard). The bell badge and the drawer both read the
-// same atoms; SSE keeps them live without polling.
-
-const listAtom = atom<NotificationInfo[] | null>(null);
-const unreadAtom = atom(0);
-const panelOpenAtom = atom(false);
+import { notificationSchema } from "./api-validation";
+import {
+  notificationErrorAtom,
+  notificationListAtom,
+  notificationOpenAtom,
+  notificationReadAtom,
+  notificationReceivedAtom,
+  notificationUnreadAtom,
+} from "./notification-state";
+import { useAsyncError } from "@/hooks/useAsyncError";
 
 let booted = false;
+let activeRead: AbortController | null = null;
+let pendingEvents = new Map<string, NotificationInfo>();
 
-function store() {
-  return getDefaultStore();
-}
-
-/** Opens the drawer from anywhere (the bell uses this — no hook needed). */
 export function openNotificationCenter() {
-  store().set(panelOpenAtom, true);
+  getDefaultStore().set(notificationOpenAtom, true);
 }
 
 export function useNotifications() {
-  const [list] = useAtom(listAtom);
-  const unread = useAtomValue(unreadAtom);
-  const [open, setOpen] = useAtom(panelOpenAtom);
+  const list = useAtomValue(notificationListAtom);
+  const unread = useAtomValue(notificationUnreadAtom);
+  const [open, setOpen] = useAtom(notificationOpenAtom);
+  const error = useAtomValue(notificationErrorAtom);
+  const setError = useSetAtom(notificationErrorAtom);
+  const clearError = useResetAtom(notificationErrorAtom);
+  const { run } = useAsyncError();
 
   const load = useCallback(async () => {
-    const res = await api.listNotifications().catch(() => null);
+    activeRead?.abort();
+    const controller = new AbortController();
+    activeRead = controller;
+    const events = new Map<string, NotificationInfo>();
+    pendingEvents = events;
+    clearError();
+    const res = await run(() => api.listNotifications(controller.signal), {
+      fallback: "Couldn't load notifications.",
+      onError: setError,
+      signal: controller.signal,
+    });
+    if (controller.signal.aborted) return;
+    activeRead = null;
     if (!res) return;
-    store().set(listAtom, res.notifications);
-    store().set(unreadAtom, res.unread_count);
-  }, []);
+    const store = getDefaultStore();
+    store.set(notificationListAtom, res.notifications);
+    store.set(notificationUnreadAtom, res.unread_count);
+    // Replay events received during the snapshot read. The domain action
+    // compares prior read state, so echoes already in the response are inert.
+    for (const item of events.values()) store.set(notificationReceivedAtom, item);
+  }, [run, clearError, setError]);
 
   const markAllRead = useCallback(async () => {
-    const res = await api.markNotificationsRead(null).catch(() => null);
+    clearError();
+    activeRead?.abort();
+    const res = await run(() => api.markNotificationsRead(null), {
+      fallback: "Couldn't mark notifications as read.",
+      onError: setError,
+    });
     if (!res) return;
-    store().set(unreadAtom, 0);
-    store().set(
-      listAtom,
-      (prev) => prev?.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })) ?? null
-    );
-  }, []);
+    // Reconcile the server's complete unread count, including rows outside
+    // this page and notifications delivered while the mutation was in flight.
+    await load();
+  }, [run, clearError, setError, load]);
 
-  const markRead = useCallback(async (id: string) => {
-    await api.markNotificationsRead([id]).catch(() => null);
-    store().set(unreadAtom, (u) => Math.max(0, u - 1));
-    store().set(
-      listAtom,
-      (prev) =>
-        prev?.map((n) =>
-          n.id === id && !n.read_at ? { ...n, read_at: new Date().toISOString() } : n
-        ) ?? null
-    );
-  }, []);
+  const markRead = useCallback(
+    async (id: string) => {
+      clearError();
+      activeRead?.abort();
+      const res = await run(() => api.markNotificationsRead([id]), {
+        fallback: "Couldn't mark the notification as read.",
+        onError: setError,
+      });
+      if (!res) return false;
+      getDefaultStore().set(notificationReadAtom, id);
+      return true;
+    },
+    [run, clearError, setError]
+  );
 
-  // One-time REST backfill + SSE subscription. The connection itself is the
-  // shared lib/sse.ts singleton (one per tab, auto-reconnecting); the
-  // `booted` guard keeps this handler registered once across page
-  // navigations (the document reload of a sign-out resets everything, per
-  // PRD-08).
+  // App-scoped external SSE subscription: the shared source survives route
+  // changes and sign-out reloads the document. No effect drives UI animation.
   useEffect(() => {
     if (booted) return;
     booted = true;
     void load();
     onSse("notification", (data) => {
-      // sse.ts unwrapped the {event,data} envelope; the payload is exactly
-      // what the REST list returns (toNotification) — the id check is the
-      // same trust the pre-singleton handler had on its own parse.
-      const n = data as NotificationInfo | null;
-      if (!n?.id) return;
-      store().set(listAtom, (prev) => {
-        // An existing id means this is an UPDATE (e.g. an invitation gained
-        // its `responded` state) — replace in place, don't duplicate.
-        const idx = prev?.findIndex((p) => p.id === n.id) ?? -1;
-        if (prev && idx >= 0) {
-          const next = [...prev];
-          next[idx] = n;
-          return next;
-        }
-        return [n, ...(prev ?? [])].slice(0, 50);
-      });
-      if (!n.read_at) store().set(unreadAtom, (u) => u + 1);
+      const parsed = notificationSchema.safeParse(data);
+      if (!parsed.success) return;
+      if (activeRead && !activeRead.signal.aborted) pendingEvents.set(parsed.data.id, parsed.data);
+      getDefaultStore().set(notificationReceivedAtom, parsed.data);
+    });
+    onSse("sse:reopened", () => {
+      void load();
     });
   }, [load]);
 
-  return { list, unread, open, setOpen, load, markAllRead, markRead };
+  return useMemo(
+    () => ({ list, unread, open, setOpen, error, clearError, load, markAllRead, markRead }),
+    [list, unread, open, setOpen, error, clearError, load, markAllRead, markRead]
+  );
 }

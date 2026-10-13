@@ -1,5 +1,6 @@
 "use client";
 
+import { useDialogFocus } from "@/hooks/use-dialog-focus";
 import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { usePathname } from "next/navigation";
@@ -13,13 +14,12 @@ import {
   nextVisibleIndex,
   prevVisibleIndex,
   shouldRunTour,
-  stepVisible,
+  resolvedTourIndex,
   tourTargetSelector,
-  waitSatisfied,
   type TourProgress,
 } from "@/lib/onboarding";
-import { CARD_W, cardPosition, frameOf, scrimPanels, type Rect } from "@/lib/tour-geometry";
-import { DUR, snap, tourGlide } from "@/lib/motion";
+import { CARD_W, cardPosition, frameOf, scrimPanels, type Rect } from "./tour-geometry";
+import { DUR, snap, tourGlide, noMotion } from "@/lib/motion";
 
 // PRD-13: the first-run walkthrough. Dims the app, frames one real control,
 // explains it — and, on ACT steps, leaves that control LIVE so the user can
@@ -84,6 +84,12 @@ export function TourOverlay({
     dismissed,
   });
 
+  // Progress is React state, not an external subscription. Adjust this
+  // component's cursor during render; React retries before committing children.
+  // Keep the cursor while closed so loading/mobile gates cannot skip teaching.
+  const resolved = open ? resolvedTourIndex(TOUR_STEPS, index, progress) : index;
+  if (resolved !== index) setIndex(resolved);
+
   const dismiss = useCallback((state: TourState) => {
     // Hide first, write second, never block the user on the write — the same
     // fire-and-forget posture as selectContainer -> PUT /me/last-container.
@@ -114,7 +120,7 @@ export function TourOverlay({
   // they come back the moment the user acts.
   const atTrueEnd = atWalkthroughEnd(TOUR_STEPS, index);
   // Mid-array exhaustion HOLDS: the card stays on a step that is still real,
-  // and the progress effect resumes the walk on its own when the state changes.
+  // and derived progress resumes the walk when the state changes.
   const holding = nextVisibleIndex(TOUR_STEPS, index, progress) === -1 && !atTrueEnd;
 
   // One advance for every button: Next on a LOOK step, and on a WAIT step too
@@ -139,18 +145,6 @@ export function TourOverlay({
     const prev = prevVisibleIndex(TOUR_STEPS, index, progress);
     if (prev !== -1) setIndex(prev);
   }, [index, progress]);
-
-  // Syncs with the app's own state: the walkthrough advances itself when the
-  // user does what a WAIT step asked for, and skips a step whose moment has
-  // passed. Bounded — the index only ever moves forward, and -1 ends the tour.
-  useEffect(() => {
-    if (!open) return;
-    if (!stepVisible(step, progress)) {
-      advance();
-      return;
-    }
-    if (waitSatisfied(step, progress)) advance();
-  }, [open, step, progress, advance]);
 
   // Syncs with the DOM: the hole is positioned from the target's live rect, so
   // it is re-read on every step and on every viewport change. A target that no
@@ -191,6 +185,8 @@ export function TourOverlay({
   // resize must re-measure both (and can also close the tour below 800px).
   useEffect(() => {
     const onResize = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
+    // Reconcile the SSR width (0) even when no resize event has occurred.
+    onResize();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
@@ -234,11 +230,12 @@ export function TourOverlay({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, dismiss]);
 
+  const tourFocus = useDialogFocus({ modal: !step.act });
   // Geometry is top/left/width/height rather than x/y transforms on purpose:
   // MotionConfig reducedMotion="user" strips TRANSFORMS, which would drop the
   // hole at the viewport origin for reduced-motion users. Layout properties
   // survive that setting, so they are gated here instead — jump, never glide.
-  const glide = reduced === true ? { duration: 0 } : tourGlide;
+  const glide = reduced === true ? noMotion : tourGlide;
   const pos = hole === null ? null : cardPosition(hole, step.side, viewport.w, viewport.h);
   const waiting = step.waitFor !== undefined;
   // ACT steps keep the hole live: four bands around it catch the clicks, so the
@@ -250,8 +247,11 @@ export function TourOverlay({
       {open && hole !== null && pos !== null ? (
         <motion.div
           key="tour-overlay"
+          ref={tourFocus}
+          data-focus-scope
+          tabIndex={-1}
           role="dialog"
-          aria-modal="true"
+          aria-modal={!step.act}
           aria-label="Product tour"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -291,30 +291,6 @@ export function TourOverlay({
             initial={false}
             animate={pos}
             transition={glide}
-            onKeyDown={
-              step.act
-                ? undefined
-                : (e) => {
-                    // aria-modal="true" claims the page behind is inert; the
-                    // trap is what makes that true. On an ACT step the trap is
-                    // lifted — the whole point of those steps is that the user
-                    // reaches the framed control, and a keyboard user should be
-                    // able to Tab to it like anyone else.
-                    if (e.key !== "Tab") return;
-                    const nodes =
-                      e.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)");
-                    if (nodes.length === 0) return;
-                    const first = nodes[0];
-                    const lastNode = nodes[nodes.length - 1];
-                    if (e.shiftKey && document.activeElement === first) {
-                      e.preventDefault();
-                      lastNode.focus();
-                    } else if (!e.shiftKey && document.activeElement === lastNode) {
-                      e.preventDefault();
-                      first.focus();
-                    }
-                  }
-            }
             className="absolute pointer-events-auto"
             style={{ width: CARD_W }}
           >
@@ -364,9 +340,8 @@ export function TourOverlay({
                     Back
                   </button>
                 )}
-                {/* autoFocus is the whole focus story: it moves focus into the
-                    dialog on mount, and because this element persists across
-                    steps the focus follows the tour without an effect.
+                {/* The focus scope selects this button on mount, then contains
+                    keyboard navigation on LOOK steps and restores the opener.
                     Hidden while HOLDING (owner flow bug): a Next that does
                     nothing is a lie — the hint above already says what the
                     walkthrough is waiting for, and Skip tour is the way out. */}
@@ -374,7 +349,7 @@ export function TourOverlay({
                   <button
                     type="button"
                     onClick={advance}
-                    autoFocus
+                    data-autofocus
                     className="btn-base btn-primary btn-small"
                   >
                     {atTrueEnd ? TOUR_FINISH_LABEL : "Next"}

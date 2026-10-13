@@ -1,7 +1,8 @@
 "use client";
 
-import { Suspense, useState, type FormEvent } from "react";
+import { Suspense, useState, useRef, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { authReturnPath } from "@/lib/auth-return-path";
 import { api } from "@/lib/api";
 import { setSessionUser } from "@/lib/session";
 import { useAsyncError } from "@/hooks/useAsyncError";
@@ -27,24 +28,39 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const { error, setError, run } = useAsyncError();
   const [loading, setLoading] = useState(false);
+  const pending = useRef(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setError(null);
-    setLoading(true);
-    const res = await run(() => api.login({ username: username.trim(), password }), {
-      fallback: "Login failed",
-    });
-    setLoading(false);
-    if (!res) return;
-    setSessionUser(res.user);
-    const from = search.get("from") || "/tasks";
-    router.push(from);
-    router.refresh();
+    if (pending.current) return;
+    pending.current = true;
+    try {
+      setError(null);
+      setLoading(true);
+      const res = await run(() => api.login({ username: username.trim(), password }), {
+        fallback: "Login failed",
+      });
+      if (!res) return;
+      setSessionUser(res.user);
+      const from = authReturnPath(search.get("from"));
+      router.push(from);
+      router.refresh();
+    } finally {
+      pending.current = false;
+      setLoading(false);
+    }
   }
 
   return (
-    <AuthLayout title="Welcome back" description="Sign in and pick up where you left off.">
+    <AuthLayout
+      title="Welcome back"
+      description="Sign in and pick up where you left off."
+      alternateHref={
+        search.has("from")
+          ? `/signup?from=${encodeURIComponent(authReturnPath(search.get("from")))}`
+          : undefined
+      }
+    >
       <SocialSignIn appearance="auth" />
       <div className="my-6 flex items-center gap-3 text-xs text-[var(--color-ink-muted)]">
         <span className="h-px flex-1 bg-[var(--color-border-strong)]" />

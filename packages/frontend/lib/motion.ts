@@ -182,3 +182,11 @@ export const homepageBenefitReveal: Variants = {
     transition: { ...snap(DUR.panel + DUR.fast), delay: index * DUR.fast },
   }),
 };
+
+/** Geometry must jump under reduced motion; MotionConfig only removes transforms. */
+export const noMotion: Transition = { duration: 0 };
+export const reducedCollapseVariants: Variants = {
+  hidden: { height: 0, opacity: 0, transition: noMotion },
+  visible: { height: "auto", opacity: 1, transition: noMotion },
+};
+export const reducedBannerVariants: Variants = reducedCollapseVariants;

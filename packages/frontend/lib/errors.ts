@@ -18,7 +18,18 @@ export type ApiError = {
 };
 
 export function isApiError(e: unknown): e is ApiError {
-  return typeof e === "object" && e !== null && "error" in e && "message" in e && "status" in e;
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    "error" in e &&
+    typeof e.error === "string" &&
+    "message" in e &&
+    typeof e.message === "string" &&
+    "status" in e &&
+    typeof e.status === "number" &&
+    Number.isInteger(e.status) &&
+    (e.status === 0 || (e.status >= 100 && e.status <= 599))
+  );
 }
 
 export type ErrorKind =
@@ -352,6 +363,38 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
     action: "inline",
     message: "This GitHub issue is already being published.",
   },
+  invalid_request: {
+    kind: "input",
+    action: "inline",
+    message: "This connection request is invalid or expired. Start again from your agent.",
+    serverSays: true,
+  },
+  access_denied: {
+    kind: "permission",
+    action: "inline",
+    message: "Connection approval was denied.",
+    serverSays: true,
+  },
+  temporarily_unavailable: {
+    kind: "server",
+    action: "retry",
+    message: "Too many connection attempts. Try again later.",
+  },
+  server_error: {
+    kind: "server",
+    action: "retry",
+    message: "Authorization is temporarily unavailable. Try again.",
+  },
+  mcp_rate_limited: {
+    message: "Too many agent requests. Wait a moment and try again.",
+    kind: "server",
+    action: "retry",
+  },
+  mcp_workspace_forbidden: {
+    message: "You can only connect workspaces you currently belong to.",
+    kind: "permission",
+    action: "inline",
+  },
   github_rate_limited: {
     kind: "server",
     action: "retry",
@@ -479,18 +522,15 @@ export function normalizeError(e: unknown, fallback?: string): NormalizedError {
   if (isApiError(e)) {
     code = e.error;
     status = e.status;
-    serverMessage = (e.message ?? "").trim();
-  } else if (e instanceof TypeError) {
-    // fetch() rejects with TypeError on connection/CORS/offline failures.
-    code = "network_error";
-  } else if (e instanceof Error) {
     serverMessage = e.message.trim();
-  } else if (typeof e === "string") {
-    serverMessage = e.trim();
   }
 
-  const known = ERROR_RULES[code];
-  const rule = known ?? ERROR_RULES[STATUS_FALLBACK[status] ?? ""] ?? UNKNOWN;
+  // Only own entries are rules: provider-controlled codes may match Object's
+  // prototype keys. Network failures are classified at the API boundary;
+  // an arbitrary TypeError here may instead be a programming error.
+  const known = Object.hasOwn(ERROR_RULES, code) ? ERROR_RULES[code] : undefined;
+  const statusCode = STATUS_FALLBACK[status];
+  const rule = known ?? (statusCode ? ERROR_RULES[statusCode] : undefined) ?? UNKNOWN;
   const mapped = Boolean(known);
 
   let message: string;
@@ -499,7 +539,9 @@ export function normalizeError(e: unknown, fallback?: string): NormalizedError {
   } else if (mapped) {
     message = rule.message;
   } else {
-    message = fallback || serverMessage || UNKNOWN.message;
+    // Unexpected exceptions and unknown server copy can contain internals.
+    // Keep them in cause; only allowlisted rules may display server messages.
+    message = fallback?.trim() || rule.message;
   }
 
   return {

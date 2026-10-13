@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
-import { getBackendUrl } from "@/lib/backend-url";
-import { setAuthProxyHeaders } from "@/lib/auth-proxy";
+import { getBackendUrl } from "@/lib/backend-url.server";
+import { setAuthProxyHeaders } from "./auth-proxy.server";
 
 // Same-origin API proxy: the browser calls /api/… on this Next server and this
 // handler forwards it to the backend. Adapted from jejak-athlete's
@@ -98,7 +98,8 @@ async function proxy(request: NextRequest): Promise<Response> {
         "/api/auth/social/complete",
         "/api/auth/social/username/claim",
       ].includes(request.nextUrl.pathname)) ||
-    /^\/api\/auth\/social\/(google|github)\/(start|callback)$/.test(request.nextUrl.pathname)
+    /^\/api\/auth\/social\/(google|github)\/(start|callback)$/.test(request.nextUrl.pathname) ||
+    request.nextUrl.pathname.startsWith("/api/mcp/oauth/")
   ) {
     try {
       setAuthProxyHeaders(headers);
@@ -133,11 +134,13 @@ async function proxy(request: NextRequest): Promise<Response> {
       status: upstream.status,
       headers: copyResponseHeaders(upstream),
     });
-  } catch (err) {
+  } catch {
     // The browser needs a JSON error shaped like every other failure (the API's
     // own contract), not an HTML 502 page. `useAsyncError` maps network_error
     // from the thrown shape, but this is a *response*, so send that shape here.
-    console.error(`[proxy] ${request.method} ${target.pathname} → backend unreachable:`, err);
+    // Upstream exceptions can include URLs, credentials or provider bodies.
+    // Keep the operation and classification without dumping the exception.
+    console.error(`[proxy] ${request.method} ${target.pathname} → backend unreachable`);
     return Response.json(
       { error: "network_error", message: "Backend unavailable" },
       { status: 502 }

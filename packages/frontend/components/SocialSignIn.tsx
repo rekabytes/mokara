@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/cn";
 import { api } from "@/lib/api";
@@ -21,6 +21,7 @@ export function SocialSignIn({
     null
   );
   const [connections, setConnections] = useState<string[]>([]);
+  const pending = useRef(false);
   const [busy, setBusy] = useState<Provider | null>(null);
   const [callbackMessage, setCallbackMessage] = useState<string>();
   const [connected, setConnected] = useState(false);
@@ -29,7 +30,7 @@ export function SocialSignIn({
 
   // Sync provider availability, linked accounts and callback state from the server/browser URL.
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
     clearError();
     const query = new URLSearchParams(window.location.search);
     const code = query.get("auth_error");
@@ -38,29 +39,37 @@ export function SocialSignIn({
     void run(
       async () => {
         const [available, linked] = await Promise.all([
-          api.socialProviders(),
-          intent === "link" ? api.socialConnections() : Promise.resolve({ connections: [] }),
+          api.socialProviders(controller.signal),
+          intent === "link"
+            ? api.socialConnections(controller.signal)
+            : Promise.resolve({ connections: [] }),
         ]);
-        if (active) {
+        if (!controller.signal.aborted) {
           setProviders(available.providers);
           setConnections(linked.connections.map((item) => item.provider));
         }
         return true;
       },
-      { fallback: "Couldn't load sign-in methods. Please retry." }
+      { fallback: "Couldn't load sign-in methods. Please retry.", signal: controller.signal }
     );
     return () => {
-      active = false;
+      controller.abort();
     };
   }, [intent, attempt, run, clearError]);
 
   async function start(provider: Provider) {
-    clearError();
-    setBusy(provider);
-    const from = new URLSearchParams(window.location.search).get("from") ?? undefined;
-    const result = await run(() => api.startSocial(provider, { intent, from }));
-    if (result) window.location.assign(result.url);
-    else setBusy(null);
+    if (pending.current) return;
+    pending.current = true;
+    try {
+      clearError();
+      setBusy(provider);
+      const from = new URLSearchParams(window.location.search).get("from") ?? undefined;
+      const result = await run(() => api.startSocial(provider, { intent, from }));
+      if (result) window.location.assign(result.url);
+    } finally {
+      pending.current = false;
+      setBusy(null);
+    }
   }
 
   return (

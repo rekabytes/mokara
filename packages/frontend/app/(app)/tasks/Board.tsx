@@ -25,14 +25,14 @@
 //   - the `@container` row and the drawer stay in `page.tsx`: the drawer is
 //     sized in `cqw` against that row, so it must remain a sibling of the card.
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { FILTERS, SORTS } from "./board-model";
 import { IconButton } from "./chrome";
 import { FilterIcon, LayoutIcon, PlusSmallIcon, SettingsIcon } from "./icons";
 import { TaskRow } from "./TaskRow";
 import type { Project, Task } from "@/lib/api";
-import type { GroupId, TaskFilter, TaskSort } from "@/lib/tasksView";
-import { DUR, snap, collapseVariants } from "@/lib/motion";
+import type { GroupId, TaskFilter, TaskSort } from "./task-view";
+import { DUR, snap, collapseVariants, reducedCollapseVariants } from "@/lib/motion";
 import { cn } from "@/lib/cn";
 
 export function BoardToolbar({
@@ -159,6 +159,7 @@ export function TaskBoard({
   toggleFlag: (t: Task) => void;
   removeTask: (id: string) => void;
 }) {
+  const reduced = useReducedMotion();
   return (
     <div className="card flex min-h-0 max-h-[calc(100dvh-12rem)] max-[800px]:max-h-[calc(100dvh-15rem)] flex-1 min-w-0 flex-col overflow-hidden">
       {/* Inner scrollable surface — only the task area scrolls. */}
@@ -269,7 +270,7 @@ export function TaskBoard({
                     {!isCollapsed && (
                       <motion.ul
                         key="rows"
-                        variants={collapseVariants}
+                        variants={reduced ? reducedCollapseVariants : collapseVariants}
                         initial="hidden"
                         animate="visible"
                         exit="hidden"

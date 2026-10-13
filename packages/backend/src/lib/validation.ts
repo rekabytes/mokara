@@ -291,3 +291,97 @@ export const adminAuditQuerySchema = z
 export const adminPageSchema = z
   .object({ page: z.coerce.number().int().min(1).max(10000).default(1) })
   .strict();
+
+// An agent receives read access only to explicit current memberships.
+export const createMcpConnectionSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    workspace_ids: z
+      .array(z.uuid())
+      .min(1)
+      .max(20)
+      .refine((ids) => new Set(ids).size === ids.length),
+    expires_in_days: z.number().int().min(1).max(90).default(30),
+  })
+  .strict();
+
+// Public MCP clients have no client secret; every authorization requires S256.
+export const mcpOAuthRegisterSchema = z
+  .object({
+    client_name: z.string().trim().min(1).max(80).default("MCP client"),
+    redirect_uris: z.array(z.string().min(1).max(2048)).min(1).max(10),
+    token_endpoint_auth_method: z.literal("none").default("none"),
+    // Standard advisory metadata is validated but never fetched or trusted.
+    client_uri: z.url().max(2048).optional(),
+    logo_uri: z.url().max(2048).optional(),
+    tos_uri: z.url().max(2048).optional(),
+    policy_uri: z.url().max(2048).optional(),
+    contacts: z.array(z.email().max(254)).max(10).optional(),
+    software_id: z.string().max(256).optional(),
+    software_version: z.string().max(80).optional(),
+    grant_types: z
+      .array(z.enum(["authorization_code", "refresh_token"]))
+      .min(1)
+      .max(2)
+      .refine(
+        (types) => types.includes("authorization_code") && new Set(types).size === types.length
+      )
+      .default(["authorization_code", "refresh_token"]),
+    response_types: z.array(z.literal("code")).length(1).default(["code"]),
+    scope: z.literal("mokara:read").optional(),
+  })
+  .strict();
+export const mcpOAuthConsentSchema = z
+  .object({
+    request: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+    approve: z.boolean(),
+    workspace_ids: z
+      .array(z.uuid())
+      .max(20)
+      .refine((ids) => new Set(ids).size === ids.length)
+      .default([]),
+  })
+  .strict();
+
+export const mcpOAuthAuthorizeSchema = z
+  .object({
+    client_id: z.uuid(),
+    response_type: z.literal("code"),
+    redirect_uri: z.string().max(2048),
+    code_challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+    code_challenge_method: z.literal("S256"),
+    resource: z.string().max(2048),
+    scope: z.literal("mokara:read").default("mokara:read"),
+    state: z.string().max(2048).optional(),
+  })
+  .strict();
+
+export const mcpOAuthTokenSchema = z.discriminatedUnion("grant_type", [
+  z
+    .object({
+      grant_type: z.literal("authorization_code"),
+      client_id: z.uuid(),
+      resource: z.string().max(2048),
+      code: z.string().regex(/^mk_code_[A-Za-z0-9_-]{43}$/),
+      redirect_uri: z.string().max(2048),
+      code_verifier: z.string().regex(/^[A-Za-z0-9._~-]{43,128}$/),
+      scope: z.literal("mokara:read").optional(),
+    })
+    .strict(),
+  z
+    .object({
+      grant_type: z.literal("refresh_token"),
+      client_id: z.uuid(),
+      resource: z.string().max(2048),
+      refresh_token: z.string().regex(/^mk_ort_[A-Za-z0-9_-]{43}$/),
+      scope: z.literal("mokara:read").optional(),
+    })
+    .strict(),
+]);
+export const mcpOAuthRevokeSchema = z
+  .object({
+    client_id: z.uuid(),
+    token: z.string().min(1).max(256),
+    token_type_hint: z.enum(["access_token", "refresh_token"]).optional(),
+  })
+  .strict();

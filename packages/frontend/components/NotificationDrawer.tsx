@@ -1,13 +1,15 @@
 "use client";
 
-import { type ReactElement, useEffect, useState } from "react";
+import { useDialogFocus } from "@/hooks/use-dialog-focus";
+import { type ReactElement, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { notifDrawerVariants } from "@/lib/motion";
 import { useNotifications } from "@/lib/notifications";
 import { useContainers } from "@/lib/containers";
 import { api, type NotificationInfo } from "@/lib/api";
-import { normalizeError } from "@/lib/errors";
+import { useAsyncError } from "@/hooks/useAsyncError";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 // PRD-05: the right-side notification drawer — non-blocking (no backdrop; the
 // page stays usable), mounted once in AppShell so it is available on every
@@ -170,17 +172,28 @@ function when(iso: string): string {
 }
 
 export function NotificationDrawer() {
-  const { list, unread, open, setOpen, markAllRead, markRead } = useNotifications();
+  const { list, unread, open, setOpen, markAllRead, markRead, error, load } = useNotifications();
   const router = useRouter();
   const { setSelectedId } = useContainers();
-  const [actionError, setActionError] = useState<string | null>(null);
+  const { error: actionError, run, clearError } = useAsyncError();
+  const invitationRequests = useRef(new Set<string>());
+  const completedInvitations = useRef(new Map<string, "accept" | "decline">());
+  const [pendingInvitations, setPendingInvitations] = useState<ReadonlySet<string>>(new Set());
+  const [responses, setResponses] = useState<ReadonlyMap<string, "accept" | "decline">>(new Map());
 
   // Esc closes the drawer — a listener on the window (outside React), the
   // documented allowed effect.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (
+        e.key === "Escape" &&
+        !e.defaultPrevented &&
+        !document.querySelector('[aria-modal="true"]')
+      ) {
+        e.preventDefault();
+        setOpen(false);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -201,16 +214,28 @@ export function NotificationDrawer() {
   // swaps its buttons for a state chip on every device; the row is also
   // read-marked. Errors (team_full, already responded) show inline.
   const onInviteRespond = async (n: NotificationInfo, action: "accept" | "decline") => {
-    setActionError(null);
-    if (!n.payload.invitation_id) return;
+    if (!n.payload.invitation_id || n.payload.responded) return;
+    const id = n.payload.invitation_id;
+    if (invitationRequests.current.has(id) || completedInvitations.current.has(id)) return;
+    invitationRequests.current.add(id);
+    setPendingInvitations(new Set(invitationRequests.current));
+    clearError();
     try {
-      await api.respondToInvitation(n.payload.invitation_id, action);
-      await markRead(n.id);
-    } catch (e) {
-      setActionError(normalizeError(e, "Couldn't respond to the invitation. Try again.").message);
+      const result = await run(() => api.respondToInvitation(id, action), {
+        fallback: "Couldn't respond to the invitation. Try again.",
+      });
+      if (result !== null) {
+        completedInvitations.current.set(id, action);
+        setResponses(new Map(completedInvitations.current));
+        await markRead(n.id);
+      }
+    } finally {
+      invitationRequests.current.delete(id);
+      setPendingInvitations(new Set(invitationRequests.current));
     }
   };
 
+  const drawerFocus = useDialogFocus({ modal: false });
   const todayKey = new Date().toDateString();
 
   return (
@@ -221,6 +246,9 @@ export function NotificationDrawer() {
           initial="hidden"
           animate="visible"
           exit="hidden"
+          ref={drawerFocus}
+          data-focus-scope
+          tabIndex={-1}
           role="dialog"
           aria-label="Notifications"
           className="fixed right-0 top-0 z-50 flex h-dvh w-[400px] max-w-full flex-col border-l border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] shadow-[var(--shadow-lift)]"
@@ -243,12 +271,17 @@ export function NotificationDrawer() {
           </div>
 
           <div className="flex-1 overflow-y-auto pb-3">
-            {actionError && (
-              <p className="mx-4.5 mb-1 rounded-[10px] border border-[var(--color-danger-border)] bg-[var(--color-danger-soft)] px-3 py-2 text-[0.75rem] text-[var(--color-danger)]">
-                {actionError}
-              </p>
+            <ErrorBanner className="mx-4.5 mb-2" message={actionError?.message ?? error?.message} />
+            {error && (
+              <button
+                type="button"
+                className="btn-base btn-ghost mx-4.5 mb-2"
+                onClick={() => void load()}
+              >
+                Retry notifications
+              </button>
             )}
-            {list === null && (
+            {list === null && !error && (
               <p className="px-4.5 py-3 text-[0.8rem] text-[var(--color-ink-faint)]">Loading…</p>
             )}
             {list !== null && list.length === 0 && (
@@ -362,10 +395,12 @@ export function NotificationDrawer() {
                       </button>
                       {n.type === "invitation" &&
                         !n.payload.responded &&
+                        !responses.has(n.payload.invitation_id ?? "") &&
                         n.payload.invitation_id && (
                           <span className="mt-2 flex gap-1.5">
                             <button
                               type="button"
+                              disabled={pendingInvitations.has(n.payload.invitation_id ?? "")}
                               onClick={() => void onInviteRespond(n, "accept")}
                               className="btn-base btn-primary px-3 py-1.5 text-[0.72rem]"
                             >
@@ -373,6 +408,7 @@ export function NotificationDrawer() {
                             </button>
                             <button
                               type="button"
+                              disabled={pendingInvitations.has(n.payload.invitation_id ?? "")}
                               onClick={() => void onInviteRespond(n, "decline")}
                               className="btn-base btn-ghost border border-[var(--color-border-soft)] px-3 py-1.5 text-[0.72rem]"
                             >
@@ -380,11 +416,18 @@ export function NotificationDrawer() {
                             </button>
                           </span>
                         )}
-                      {n.type === "invitation" && n.payload.responded && (
-                        <span className="mt-1.5 inline-block rounded-[var(--radius-pill)] bg-[var(--color-accent-soft)] px-2 py-0.5 text-[0.66rem] font-semibold text-[var(--color-accent)]">
-                          {n.payload.responded === "accepted" ? "Joined" : "Declined"}
-                        </span>
-                      )}
+                      {n.type === "invitation" &&
+                        (n.payload.responded || responses.has(n.payload.invitation_id ?? "")) && (
+                          <span className="mt-1.5 inline-block rounded-[var(--radius-pill)] bg-[var(--color-accent-soft)] px-2 py-0.5 text-[0.66rem] font-semibold text-[var(--color-accent)]">
+                            {(
+                              n.payload.responded
+                                ? n.payload.responded === "accepted"
+                                : responses.get(n.payload.invitation_id ?? "") === "accept"
+                            )
+                              ? "Joined"
+                              : "Declined"}
+                          </span>
+                        )}
                     </div>
                     <span className="w-10 flex-none pt-0.5 text-right text-[0.66rem] text-[var(--color-ink-faint)]">
                       {when(n.created_at)}

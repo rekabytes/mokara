@@ -26,6 +26,9 @@ export const selectedContainerAtom = atom<TeamWithRole | null>((get) => {
 });
 
 let booted = false;
+let activeRead: AbortController | null = null;
+let legacyWorkspace: Promise<{ team: Team }> | null = null;
+let selectionWrite: Promise<void> = Promise.resolve();
 
 export function useContainers() {
   const [containers, setContainers] = useAtom(containersAtom);
@@ -42,17 +45,36 @@ export function useContainers() {
   const selectContainer = useCallback(
     (id: string | null) => {
       setSelectedId(id);
-      if (id) void api.setLastContainer(id).catch(() => undefined);
+      // Keep this tab's server preference writes in click order. A failed
+      // best-effort preference write must not block the next selection.
+      if (id)
+        selectionWrite = selectionWrite.then(() => api.setLastContainer(id)).catch(() => undefined);
     },
     [setSelectedId]
   );
 
   const load = useCallback(async () => {
+    activeRead?.abort();
+    const controller = new AbortController();
+    activeRead = controller;
     try {
-      const { teams, last_container_id } = await api.listTeams();
+      const { teams, last_container_id } = await api.listTeams(controller.signal);
+      if (controller.signal.aborted) return;
       // Legacy fallback: accounts predating server-side signup workspaces.
       if (teams.length === 0) {
-        const created = await api.createTeam({ name: "Personal", kind: "workspace" });
+        // A refresh may supersede the reader, but not the already-started
+        // legacy creation. Share that mutation so remount/retry cannot repeat it.
+        if (!legacyWorkspace) {
+          legacyWorkspace = api.createTeam({ name: "Personal", kind: "workspace" });
+        }
+        const pending = legacyWorkspace;
+        let created: { team: Team };
+        try {
+          created = await pending;
+        } finally {
+          if (legacyWorkspace === pending) legacyWorkspace = null;
+        }
+        if (controller.signal.aborted) return;
         teams.push({ ...created.team, role: "owner" });
       }
       setContainers(teams);
@@ -70,7 +92,9 @@ export function useContainers() {
         getDefaultStore().set(selectedContainerIdAtom, last_container_id);
       }
     } catch (e) {
-      setError(normalizeError(e, "Failed to load your workspaces"));
+      if (!controller.signal.aborted) setError(normalizeError(e, "Failed to load your workspaces"));
+    } finally {
+      if (activeRead === controller) activeRead = null;
     }
   }, [setContainers, setError]);
 
@@ -79,6 +103,8 @@ export function useContainers() {
     async (name: string, kind: "workspace" | "team"): Promise<Team | null> => {
       try {
         const { team } = await api.createTeam({ name, kind });
+        // An earlier list snapshot cannot erase this confirmed creation.
+        activeRead?.abort();
         setContainers((prev) => [{ ...team, role: "owner" }, ...prev]);
         selectContainer(team.id);
         setError(null);

@@ -1,7 +1,7 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
-import { bannerVariants } from "@/lib/motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { bannerVariants, reducedBannerVariants } from "@/lib/motion";
 import { cn } from "@/lib/cn";
 
 // One error banner for the whole app. Every page already funnels failures
@@ -21,13 +21,14 @@ export function ErrorBanner({
   /** Vertical rhythm only — the banner owns its own look. */
   className?: string;
 }) {
+  const reduced = useReducedMotion();
   return (
     <AnimatePresence initial={false}>
       {message ? (
         <motion.div
           key="error-banner"
           role="alert"
-          variants={bannerVariants}
+          variants={reduced ? reducedBannerVariants : bannerVariants}
           initial="hidden"
           animate="visible"
           exit="hidden"

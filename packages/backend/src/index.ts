@@ -4,6 +4,10 @@ import { corsMiddleware } from "./middleware/cors.ts";
 import { requestLogger } from "./middleware/request-log.ts";
 import { authRequired, type Vars } from "./middleware/auth.ts";
 import { authRoutes, meHandler, updateMe, setLastContainer, setTourState } from "./routes/auth.ts";
+import { mcpOAuthRoutes } from "./mcp/oauth-routes.ts";
+import { mcpOAuthMetadata } from "./mcp/oauth-metadata.ts";
+import { mcpRoutes } from "./mcp/routes.ts";
+import { mcpConnectionRoutes } from "./mcp/connections.ts";
 import { notificationRoutes } from "./routes/notifications.ts";
 import { mountEventsRoute } from "./routes/events.ts";
 import { teamRoutes } from "./routes/teams.ts";
@@ -78,6 +82,10 @@ async function main() {
 
   const api = new Hono<{ Variables: Vars }>();
   api.route("/auth", authRoutes);
+  // Agent credentials authenticate independently of browser cookies.
+  api.route("/mcp/oauth", mcpOAuthRoutes);
+  api.route("/mcp", mcpRoutes);
+  app.route("/.well-known", mcpOAuthMetadata);
   // The Stripe webhook is mounted BEFORE the authed sub-app on purpose: it
   // carries no session cookie — its signature is the authentication. Hono
   // composes in registration order, so the handler answers before
@@ -94,6 +102,7 @@ async function main() {
   const authed = new Hono<{ Variables: Vars }>();
   authed.use("*", authRequired);
   authed.get("/me", meHandler);
+  authed.route("/me/mcp-connections", mcpConnectionRoutes);
   authed.patch("/me", validate("json", updateMeSchema), async (c) =>
     c.json({ user: await updateMe(c.get("userId"), c.req.valid("json").display_name) })
   );

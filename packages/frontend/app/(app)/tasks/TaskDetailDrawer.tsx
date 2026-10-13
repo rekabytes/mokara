@@ -5,6 +5,7 @@ import { PRIORITY_IDS, STATUS_IDS, STATUS_LABEL, containerMembersAtom } from "./
 import { AssigneeChip, KpiChip, ProjectChip } from "./chips";
 import { ChipShell, Dropdown, MenuItem, PriorityBars } from "./chrome";
 import { CommentsSection } from "./CommentsSection";
+import { DescriptionField } from "./DescriptionField";
 import { DatePicker } from "./DatePicker";
 import {
   CalendarIcon,
@@ -30,7 +31,7 @@ import { ERROR_RULES } from "@/lib/errors";
 import Link from "next/link";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
-import { useAtom } from "jotai";
+import { useAtomValue } from "jotai";
 // The task detail drawer: `TaskDetailDrawer` (header, chips, description,
 // checklist, files, comment thread) and `DescriptionField` (the inline
 // save-on-blur textarea).
@@ -80,7 +81,7 @@ export function TaskDetailDrawer({
   // ---- PRD-10/11: container members, read from the shared atom — the page
   // effect keeps the current container's list warm; the drawer manages no
   // member state of its own.
-  const [members] = useAtom(containerMembersAtom);
+  const members = useAtomValue(containerMembersAtom);
 
   // ---- Due date: read straight off the task, persisted via PATCH on every
   //      change. DatePicker is fully controlled by `task.due_date`, so a
@@ -93,7 +94,10 @@ export function TaskDetailDrawer({
   //      keydown listener is outside React, so this effect stays. ----
   useEffect(() => {
     function onKey(e: globalThis.KeyboardEvent) {
-      if (e.key !== "Escape") return;
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      // A higher overlay/menu owns Escape; never close the task behind it.
+      if (document.querySelector("[data-focus-scope], [data-dropdown-menu], [data-date-menu]"))
+        return;
       const active = document.activeElement;
       if (
         active &&
@@ -114,10 +118,6 @@ export function TaskDetailDrawer({
   function startRename() {
     setTitleDraft(task.title);
     setTitleEditing(true);
-    requestAnimationFrame(() => {
-      titleInputRef.current?.focus();
-      titleInputRef.current?.select();
-    });
   }
 
   function commitRename() {
@@ -186,6 +186,8 @@ export function TaskDetailDrawer({
         {titleEditing ? (
           <input
             ref={titleInputRef}
+            autoFocus
+            onFocus={(event) => event.currentTarget.select()}
             value={titleDraft}
             onChange={(e) => setTitleDraft(e.target.value)}
             onBlur={commitRename}
@@ -196,7 +198,14 @@ export function TaskDetailDrawer({
           <h2
             data-tour="drawer-title"
             onDoubleClick={startRename}
-            title="Double-click to rename"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                startRename();
+              }
+            }}
+            title="Double-click or press Enter to rename"
             className={cn(
               "cursor-text rounded-md px-1 py-0.5 -mx-1 text-[1.3rem] font-semibold tracking-[-0.012em] transition-colors duration-150 hover:bg-[var(--color-surface-2)] line-clamp-2",
               task.status === "done"
@@ -423,7 +432,7 @@ export function TaskDetailDrawer({
         <SubtasksSection key={task.id} task={task} />
 
         {/* Comments — fills remaining drawer height (PRD-03 Phase 1) */}
-        <CommentsSection taskId={task.id} currentUser={currentUser} />
+        <CommentsSection key={task.id} taskId={task.id} currentUser={currentUser} />
       </div>
 
       {/* Footer — the walkthrough frames this on a LOOK step on purpose: the
@@ -449,75 +458,5 @@ export function TaskDetailDrawer({
         </button>
       </div>
     </aside>
-  );
-}
-
-export function DescriptionField({
-  value,
-  onSave,
-}: {
-  value: string;
-  onSave: (text: string) => void;
-}) {
-  // Read-only branch shows `value`, `startEdit()` seeds the draft — so nothing
-  // has to copy `value` into `draft` behind the scenes.
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-
-  function startEdit() {
-    setDraft(value);
-    setEditing(true);
-  }
-
-  function commit() {
-    setEditing(false);
-    if (draft !== value) onSave(draft);
-    else setDraft(value);
-  }
-
-  if (editing) {
-    return (
-      <textarea
-        autoFocus
-        data-tour="drawer-description"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            e.preventDefault();
-            setDraft(value);
-            setEditing(false);
-          }
-          // Owner (2026-09-10): Enter saves, Shift+Enter is a newline — the
-          // chat-input grammar, since ⌘+Enter was undiscoverable. ⌘/Ctrl+Enter
-          // still saves (same action, and it matches the composer's hint).
-          else if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            commit();
-          }
-        }}
-        rows={3}
-        placeholder="Add description…"
-        className="mt-3 w-full resize-none rounded-md border border-[var(--color-border-soft)] bg-white px-2.5 py-2 text-[0.92rem] leading-[1.5] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
-      />
-    );
-  }
-
-  return (
-    <div
-      onClick={startEdit}
-      data-tour="drawer-description"
-      // line-clamp-3 keeps a long description from pushing the compact
-      // drawer taller than its content-allocated height (no internal scroll).
-      // whitespace-pre-wrap keeps the newlines typed in the textarea — HTML
-      // collapses them to spaces otherwise, so a 3-line note rendered as one.
-      className={cn(
-        "mt-3 min-h-[2.25rem] cursor-text rounded-md px-2.5 py-1.5 -mx-2 whitespace-pre-wrap break-words text-[0.92rem] leading-[1.5] transition-colors duration-150 hover:bg-[var(--color-surface-2)] line-clamp-3",
-        value ? "text-[var(--color-ink)]" : "text-[var(--color-ink-faint)]"
-      )}
-    >
-      {value || "Add description…"}
-    </div>
   );
 }

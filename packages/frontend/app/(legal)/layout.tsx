@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
-import { OPERATOR } from "@/lib/legal";
+import { OPERATOR } from "@/lib/legal.server";
 import { AUTH_COOKIE } from "@/lib/cookies";
 
 // Public document shell: the same header and footer as the landing page, a

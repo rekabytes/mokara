@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useCallback, useState, useRef, type FormEvent } from "react";
+import { authReturnPath } from "@/lib/auth-return-path";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { setSessionUser } from "@/lib/session";
 import { useAsyncError } from "@/hooks/useAsyncError";
@@ -11,12 +12,22 @@ import { AuthLayout } from "@/components/AuthLayout";
 import { SignupVerification, type SignupVerificationState } from "./SignupVerification";
 
 export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
+  );
+}
+
+function SignupForm() {
+  const search = useSearchParams();
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const { error, setError, run, clearError } = useAsyncError();
   const [loading, setLoading] = useState(false);
+  const pending = useRef(false);
   const [verification, setVerification] = useState<SignupVerificationState>({ ready: false });
   const [verificationAttempt, setVerificationAttempt] = useState(0);
   const onVerificationChange = useCallback(
@@ -35,31 +46,42 @@ export default function SignupPage() {
     e.preventDefault();
     setError(null);
     if (!canSubmit) return;
-    setLoading(true);
-    const res = await run(
-      () =>
-        api.signUp({
-          username: username.trim(),
-          password,
-          display_name: displayName.trim() || undefined,
-          turnstile_token: verification.token,
-        }),
-      { fallback: "Sign up failed" }
-    );
-    setLoading(false);
-    if (!res) {
-      setVerification({ ready: false });
-      setVerificationAttempt((value) => value + 1);
-      return;
+    if (pending.current) return;
+    pending.current = true;
+    try {
+      setLoading(true);
+      const res = await run(
+        () =>
+          api.signUp({
+            username: username.trim(),
+            password,
+            display_name: displayName.trim() || undefined,
+            turnstile_token: verification.token,
+          }),
+        { fallback: "Sign up failed" }
+      );
+      if (!res) {
+        setVerification({ ready: false });
+        setVerificationAttempt((value) => value + 1);
+        return;
+      }
+      setSessionUser(res.user);
+      router.push(authReturnPath(search.get("from")));
+      router.refresh();
+    } finally {
+      pending.current = false;
+      setLoading(false);
     }
-    setSessionUser(res.user);
-    router.push("/tasks");
-    router.refresh();
   }
 
   return (
     <AuthLayout
       mode="signup"
+      alternateHref={
+        search.has("from")
+          ? `/login?from=${encodeURIComponent(authReturnPath(search.get("from")))}`
+          : undefined
+      }
       title="Create your account"
       description="Choose a username so teammates can find you."
     >

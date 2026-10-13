@@ -9,7 +9,7 @@
 // become two disconnected stores and drift apart with no error anywhere.
 import { atom } from "jotai";
 import type { TaskPriority, TaskStatus, TeamMember } from "@/lib/api";
-import type { GroupId, TaskFilter, TaskSort } from "@/lib/tasksView";
+import type { GroupId, TaskFilter, TaskSort } from "./task-view";
 
 // PRD-10/11: members of the current container, shared by the drawer's and the
 // create-modal's AssigneeChip. Written by the page-level fetch (outside React)

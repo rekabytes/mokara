@@ -4,6 +4,11 @@ import type { Redis } from "@mokara/redis";
 import { z } from "zod";
 
 export const AUTH_LIMITS = {
+  mcpOAuthPeer: { attempts: 120, seconds: 60 },
+  mcpOAuthGlobal: { attempts: 1200, seconds: 60 },
+  mcpRegister: { attempts: 100, seconds: 3600 },
+  mcp: { attempts: 120, seconds: 60 },
+  mcpIssue: { attempts: 10, seconds: 3600 },
   signup: { attempts: 5, seconds: 3600 },
   login: { attempts: 60, seconds: 600 },
   account: { attempts: 10, seconds: 600 },

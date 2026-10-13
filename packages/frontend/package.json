@@ -1,13 +1,14 @@
 {
   "name": "@mokara/frontend",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "private": true,
   "scripts": {
     "dev": "next dev -p 4701",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint . && node scripts/check-architecture.mjs",
+    "architecture:check": "node scripts/check-architecture.mjs"
   },
   "dependencies": {
     "@fontsource-variable/fraunces": "^5.3.0",

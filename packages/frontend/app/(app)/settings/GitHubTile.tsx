@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type GitHubIntegration } from "@/lib/api";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { tileIn } from "@/lib/motion";
 import { motion } from "framer-motion";
 import { TILE, TileHeader } from "./settings-chrome";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 type Run = ReturnType<typeof useAsyncError>["run"];
 
@@ -24,15 +25,23 @@ function GitHubIcon() {
 }
 
 export function GitHubTile({ run }: { run: Run }) {
+  const { error: loadError, run: runLoad, clearError: clearLoadError } = useAsyncError();
   const [integration, setIntegration] = useState<GitHubIntegration | null>(null);
+  const pending = useRef(false);
   const [busy, setBusy] = useState(false);
   const [managing, setManaging] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [callbackMessage, setCallbackMessage] = useState<string | null>(null);
 
+  const read = useRef<AbortController | null>(null);
   const load = useCallback(async () => {
-    const data = await run(() => api.getGitHubIntegration(), {
+    read.current?.abort();
+    const controller = new AbortController();
+    read.current = controller;
+    clearLoadError();
+    const data = await runLoad(() => api.getGitHubIntegration(controller.signal), {
       fallback: "Couldn't load the GitHub connection.",
+      signal: controller.signal,
     });
     if (data) {
       setIntegration(data);
@@ -43,10 +52,13 @@ export function GitHubTile({ run }: { run: Run }) {
       setSelected(active);
       if (data.connection && active.length === 0) setManaging(true);
     }
-  }, [run]);
+  }, [runLoad, clearLoadError]);
 
+  // External repository snapshot; an obsolete response must not replace the
+  // current selection or report errors after Settings unmounts.
   useEffect(() => {
     void load();
+    return () => read.current?.abort();
   }, [load]);
 
   // The GitHub callback is a top-level browser navigation. Read its small,
@@ -69,45 +81,74 @@ export function GitHubTile({ run }: { run: Run }) {
   }, []);
 
   const navigate = async (kind: "connect" | "install") => {
+    if (pending.current) return;
+    pending.current = true;
+    read.current?.abort();
     setBusy(true);
-    const result = await run(kind === "connect" ? api.connectGitHub : api.installGitHub, {
-      fallback: "Couldn't start the GitHub connection.",
-    });
-    setBusy(false);
-    if (result) window.location.assign(result.url);
+    try {
+      const result = await run(kind === "connect" ? api.connectGitHub : api.installGitHub, {
+        fallback: "Couldn't start the GitHub connection.",
+      });
+      if (result) window.location.assign(result.url);
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
   };
 
   const refresh = async () => {
+    if (pending.current) return;
+    pending.current = true;
+    read.current?.abort();
     setBusy(true);
-    const result = await run(() => api.refreshGitHub(), {
-      fallback: "Couldn't refresh GitHub repositories.",
-    });
-    setBusy(false);
-    if (result) window.location.assign(result.url);
+    try {
+      const result = await run(() => api.refreshGitHub(), {
+        fallback: "Couldn't refresh GitHub repositories.",
+      });
+      if (result) window.location.assign(result.url);
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
   };
 
   const disconnect = async () => {
+    if (pending.current) return;
     if (!confirm("Disconnect your GitHub account from Mokara? Existing issue links will remain.")) {
       return;
     }
+    pending.current = true;
+    read.current?.abort();
     setBusy(true);
-    const result = await run(() => api.disconnectGitHub(), {
-      fallback: "Couldn't disconnect GitHub.",
-    });
-    setBusy(false);
-    if (result !== null) await load();
+    try {
+      const result = await run(() => api.disconnectGitHub(), {
+        fallback: "Couldn't disconnect GitHub.",
+      });
+      if (result !== null) await load();
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
   };
 
   const saveRepositories = async () => {
+    if (pending.current) return;
+    pending.current = true;
+    read.current?.abort();
     setBusy(true);
-    const data = await run(() => api.setGitHubRepositories(selected), {
-      fallback: "Couldn't save active repositories.",
-    });
-    setBusy(false);
-    if (data) {
-      setIntegration(data);
-      setManaging(false);
-      setCallbackMessage("Active repositories saved.");
+    try {
+      const data = await run(() => api.setGitHubRepositories(selected), {
+        fallback: "Couldn't save active repositories.",
+      });
+      if (data) {
+        read.current?.abort();
+        setIntegration(data);
+        setManaging(false);
+        setCallbackMessage("Active repositories saved.");
+      }
+    } finally {
+      pending.current = false;
+      setBusy(false);
     }
   };
 
@@ -132,10 +173,18 @@ export function GitHubTile({ run }: { run: Run }) {
         </p>
       )}
 
+      <ErrorBanner className="mt-3" message={loadError?.message} />
+      {loadError && (
+        <button type="button" className="btn-base btn-ghost mt-2" onClick={() => void load()}>
+          Retry GitHub connection
+        </button>
+      )}
       {integration === null ? (
-        <p className="mb-0 mt-4 text-[0.85rem] text-[var(--color-ink-faint)]">
-          Loading GitHub connection…
-        </p>
+        !loadError && (
+          <p className="mb-0 mt-4 text-[0.85rem] text-[var(--color-ink-faint)]">
+            Loading GitHub connection…
+          </p>
+        )
       ) : !integration.configured ? (
         <p className="mb-0 mt-4 text-[0.85rem] text-[var(--color-ink-muted)]">
           GitHub integration is not configured on this instance.

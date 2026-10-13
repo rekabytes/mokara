@@ -89,6 +89,14 @@ mock.module("../src/mcp/internal-api.ts", {
       if (gate && method === "POST" && path.endsWith("/tasks")) await gate();
       if (failure && (failure.path === undefined || path.endsWith(failure.path)))
         throw failure.error;
+      if (path.endsWith("/github-issue"))
+        return {
+          github_issue: {
+            issue_number: 42,
+            issue_url: "https://github.com/test/repo/issues/42",
+            status: "linked",
+          },
+        };
       return { id: taskId, ...body };
     },
   },
@@ -212,6 +220,8 @@ test("task creation forwards all task fields, steps and selected GitHub publishi
   const response = await tool("create_task", input);
   assert.ok(!response.isError, JSON.stringify(response));
   assert.equal(response.structuredContent.task_id, taskId);
+  assert.equal(response.structuredContent.completion.github_issue, "published");
+  assert.equal(response.structuredContent.github_issue.issue_number, 42);
   assert.deepEqual(response.structuredContent.follow_up_errors, []);
   assert.equal(calls.length, 4);
   assert.equal(calls[0].body.assignee_id, userId);
@@ -306,6 +316,8 @@ test("GitHub publishing failure reports the created task and replays without rec
   const input = { ...createInput(), github_repository_id: repositoryId };
   const result = await tool("create_task", input);
   assert.equal(result.structuredContent.task_id, taskId);
+  assert.equal(result.structuredContent.completion.github_issue, "failed_or_uncertain");
+  assert.equal(result.structuredContent.github_issue, null);
   assert.equal(result.structuredContent.follow_up_errors[0].error, "github_unavailable");
   assert.equal(calls.length, 2);
   await tool("create_task", input);
@@ -392,4 +404,43 @@ test("attachment upload passes a typed file through domain quotas and is replay 
     true
   );
   assert.equal(calls.length, 1);
+});
+
+test("local task creation explicitly reports no GitHub request and performs no publication", async () => {
+  const result = await tool("create_task", createInput());
+  assert.equal(result.structuredContent.completion.github_issue, "not_requested");
+  assert.equal(result.structuredContent.github_issue, null);
+  assert.equal(calls.length, 1);
+});
+test("workflow prompts are permission filtered and render without any side effects", async () => {
+  const all = (await rpc("prompts/list")).result.prompts.map((prompt) => prompt.name);
+  assert.deepEqual(all.sort(), [
+    "create_task_with_github_issue",
+    "publish_existing_task_to_github",
+  ]);
+  const rendered = await rpc("prompts/get", {
+    name: "create_task_with_github_issue",
+    arguments: { title: "testing", repository: "test/repo", workspace: "Personal" },
+  });
+  assert.ok(rendered.result.messages[0].content.text.includes('"repository":"test/repo"'));
+  assert.equal(calls.length, 0);
+  assert.equal(operations.size, 0);
+  connection.scopes = ["mokara:read", "mokara:github"];
+  assert.deepEqual(
+    (await rpc("prompts/list")).result.prompts.map((prompt) => prompt.name),
+    ["publish_existing_task_to_github"]
+  );
+  connection.scopes = ["mokara:read"];
+  assert.equal((await rpc("prompts/list")).error.code, -32601);
+});
+test("publishing for an existing task never creates a replacement task", async () => {
+  const result = await tool("publish_github_issue", {
+    workspace_id: workspace,
+    task_id: taskId,
+    repository_id: repositoryId,
+    request_id: randomUUID(),
+  });
+  assert.equal(result.structuredContent.github_issue.issue_number, 42);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].path, `/tasks/${taskId}/github-issue`);
 });

@@ -29,6 +29,13 @@ test("docs and both client configurations follow backend discovery at request ti
   ]) {
     const html = renderToStaticMarkup(await McpGuidePage());
     assert.equal(html.split(resource).length - 1, 3);
+    const skillUrl = new URL("/skills/mokara/SKILL.md", resource).href;
+    assert.ok(
+      html.includes(
+        `npx skills@latest add &#x27;${skillUrl}&#x27; --skill mokara --agent universal --yes`
+      )
+    );
+    assert.ok(html.includes(".agents/skills/mokara/SKILL.md"));
     assert.ok(html.includes("mcpServers"));
     assert.ok(html.includes("servers"));
     assert.ok(!html.includes("mokara.my"));
@@ -47,6 +54,7 @@ test("absent backend configuration never inherits a local or production URL", as
   assert.ok(!html.includes("mokara.my"));
   assert.ok(!html.includes("localhost"));
   assert.ok(!html.includes("&quot;url&quot;"));
+  assert.ok(!html.includes("npx skills@latest add"));
 });
 test("invalid metadata and backend failures return unavailable instead of invented endpoints", async (t) => {
   configureBackend(t);
@@ -64,4 +72,36 @@ test("invalid metadata and backend failures return unavailable instead of invent
     new Error("private upstream data"),
   ])
     assert.equal(await getMcpConnectionUrl(), null);
+});
+
+test("public tool catalog covers all permissions and the complete current tool inventory", async (t) => {
+  configureBackend(t);
+  t.mock.method(globalThis, "fetch", async () =>
+    Response.json({ resource: "https://staging.example.invalid/api/mcp" })
+  );
+  const html = renderToStaticMarkup(await McpGuidePage());
+  const catalog = html.slice(
+    html.indexOf('<h2 id="access">'),
+    html.indexOf('<section aria-labelledby="writes">')
+  );
+  const names = [...catalog.matchAll(/<td><code>([a-z_]+)<\/code><\/td>/g)].map(
+    (match) => match[1]
+  );
+  assert.equal(names.length, 41);
+  assert.equal(new Set(names).size, 41);
+  for (const name of [
+    "create_task",
+    "get_task_details",
+    "upload_attachment",
+    "delete_attachment",
+    "get_kpi_progress",
+    "publish_github_issue",
+    "link_github_issue",
+    "list_operations",
+  ])
+    assert.ok(names.includes(name), name);
+  for (const scope of ["mokara:read", "mokara:write", "mokara:delete", "mokara:github"])
+    assert.ok(catalog.includes(scope), scope);
+  assert.ok(catalog.includes("confirm: true"));
+  assert.ok(catalog.includes("request_id"));
 });

@@ -175,7 +175,11 @@ export function registerWorkspaceTools(register: ToolRegistrar, principal: McpPr
         ...write,
         data: createTaskSchema.strict(),
         steps: z.array(z.string().trim().min(1).max(200)).max(50).default([]),
-        github_repository_id: uuid.optional(),
+        github_repository_id: uuid
+          .describe(
+            "Approved repository ID from list_github_repositories. REQUIRED when the user requests a NEW task with a GitHub issue; omitting it creates only a Mokara task. Do not use project_id as a repository ID."
+          )
+          .optional(),
       })
       .strict(),
     async (input) => {
@@ -208,15 +212,31 @@ export function registerWorkspaceTools(register: ToolRegistrar, principal: McpPr
           await followUp("add_step", () =>
             domainJson(principal, `/tasks/${taskId}/subtasks`, "POST", { title: step })
           );
+        const github: { response: Record<string, unknown> | null } = { response: null };
         if (input.github_repository_id)
-          await followUp("publish_github_issue", () =>
-            domainJson(principal, `/tasks/${taskId}/github-issue`, "POST", {
+          await followUp("publish_github_issue", async () => {
+            github.response = await domainJson(principal, `/tasks/${taskId}/github-issue`, "POST", {
               repository_id: input.github_repository_id,
-            })
-          );
+            });
+          });
         return {
           task: created,
           task_id: taskId,
+          completion: {
+            task: "created",
+            github_issue: !input.github_repository_id
+              ? "not_requested"
+              : github.response
+                ? "published"
+                : "failed_or_uncertain",
+            steps: warnings.some((warning) => warning.operation === "add_step")
+              ? "failed_or_uncertain"
+              : "completed",
+          },
+          github_issue: github.response?.github_issue ?? null,
+          next_action: warnings.length
+            ? "Inspect get_task_details and list_operations before recovery. Keep this task; do not recreate it. If publication is confirmed failed, use publish_github_issue on this task; never retry an uncertain action with a new request ID."
+            : "Report the task ID and, when published, the returned GitHub issue URL. No further write is needed.",
           follow_up_errors: warnings,
           message: warnings.length
             ? "Task created. Some follow-up actions failed or have an uncertain result; inspect the task before retrying them."

@@ -149,8 +149,8 @@ then commit and tag that version:
 
 ```bash
 pnpm release:bump patch
-git commit -am "chore(release): 0.2.2"
-git tag v0.2.2 && git push origin v0.2.2
+git commit -am "chore(release): 0.2.3"
+git tag v0.2.3 && git push origin v0.2.3
 ```
 
 The tag must equal `version` in the root `package.json` and every workspace
@@ -163,9 +163,9 @@ frontend build · every migration applied to an empty Postgres · synchronized
 release version matches the tag), then publishes:
 
 ```
-ghcr.io/<owner>/mokara-frontend:0.2.2   (+ :0.2, :latest)
-ghcr.io/<owner>/mokara-backend:0.2.2    (+ :0.2, :latest)
-ghcr.io/<owner>/mokara-admin:0.2.2      (+ :0.2, :latest)
+ghcr.io/<owner>/mokara-frontend:0.2.3   (+ :0.2, :latest)
+ghcr.io/<owner>/mokara-backend:0.2.3    (+ :0.2, :latest)
+ghcr.io/<owner>/mokara-admin:0.2.3      (+ :0.2, :latest)
 ```
 
 Coolify runs all three as **Docker Image** services and pulls them. Full design and

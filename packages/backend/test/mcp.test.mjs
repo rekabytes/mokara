@@ -82,7 +82,9 @@ const prisma = {
   },
 };
 mock.module("../src/db.ts", { namedExports: { prisma } });
-mock.module("../src/env.ts", { namedExports: { env, githubConfigured: false } });
+mock.module("../src/env.ts", {
+  namedExports: { env, githubConfigured: false, storageConfigured: false },
+});
 mock.module("../src/redis.ts", {
   namedExports: {
     getRedis: () => ({
@@ -428,4 +430,13 @@ test("issuance has its own hourly quota; browser MCP responses retain CORS and n
     JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })
   );
   assert.equal(initialized.status, 202);
+});
+
+test("mDrive-read connections remain labeled read-only; upload grants are writable", async () => {
+  connection.scopes = ["mokara:read", "mokara:drive:read"];
+  let response = await settings.request("/connections");
+  assert.equal((await response.json()).connections[0].access, "read");
+  connection.scopes.push("mokara:drive:upload");
+  response = await settings.request("/connections");
+  assert.equal((await response.json()).connections[0].access, "write");
 });

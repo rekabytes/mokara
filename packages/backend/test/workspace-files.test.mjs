@@ -144,7 +144,7 @@ const db = {
   },
 };
 mock.module("../src/db.ts", { namedExports: { prisma: db } });
-mock.module("../src/env.ts", { namedExports: { isHosted: true } });
+mock.module("../src/env.ts", { namedExports: { isHosted: true, env: {} } });
 mock.module("../src/lib/logger.ts", { namedExports: { log: { warn() {} } } });
 mock.module("../src/lib/storage.ts", {
   namedExports: {
@@ -521,4 +521,30 @@ test("mDrive images larger than 3 MB retain the package per-file allowance", asy
   const result = await upload({ bytes, name: "Large.png", type: "image/png" });
   assert.equal(result.status, 201);
   assert.equal((await result.json()).file.size_bytes, bytes.length);
+});
+
+test("MCP in-process mDrive uploads execute the actual file route and membership/quota rules", async () => {
+  const { domainJson } = await import("../src/mcp/internal-api.ts");
+  const principal = {
+    userId: MEMBER,
+    connectionId: randomUUID(),
+    workspaceIds: [TEAM],
+    scopes: ["mokara:read", "mokara:drive:upload"],
+  };
+  const form = new FormData();
+  form.set("file", new File(["%PDF-1.7 sample"], "Agent.pdf", { type: "application/pdf" }));
+  const result = await domainJson(
+    principal,
+    `/teams/${TEAM}/files?upload_id=${randomUUID()}`,
+    "POST",
+    form
+  );
+  assert.equal(result.file.name, "Agent.pdf");
+  assert.equal(state.files[0].uploadedById, MEMBER);
+  assert.equal(state.jobs.length, 0);
+  state.member = false;
+  await assert.rejects(
+    domainJson(principal, `/teams/${TEAM}/folders`, "POST", { name: "No access" }),
+    (e) => e.code === "forbidden"
+  );
 });

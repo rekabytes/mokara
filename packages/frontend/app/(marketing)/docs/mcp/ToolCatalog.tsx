@@ -1,5 +1,26 @@
 const groups = [
   {
+    title: "mDrive read · 4 tools",
+    scope: "mokara:drive:read",
+    tools: [
+      ["list_drive_items", "Browse active files and folders with separate pagination."],
+      ["search_drive_items", "Search file/folder names across an approved workspace."],
+      ["get_drive_file", "Read file metadata, uploader, type and size."],
+      ["read_drive_file", "Read PDF text by page, view images, or retrieve bounded byte chunks."],
+    ],
+  },
+  {
+    title: "mDrive upload · 2 tools",
+    scope: "mokara:drive:upload",
+    tools: [
+      ["create_drive_folder", "Create a folder, optionally inside another folder."],
+      [
+        "upload_drive_file",
+        "Upload an image or PDF up to 1 MiB using base64 and a stable request UUID.",
+      ],
+    ],
+  },
+  {
     title: "Read · 15 tools",
     scope: "mokara:read",
     tools: [

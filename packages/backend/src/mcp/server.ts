@@ -8,6 +8,7 @@ import { prisma } from "../db.ts";
 import { taskStatusSchema } from "../lib/validation.ts";
 import { log } from "../lib/logger.ts";
 import { requireScope } from "./access.ts";
+import { registerDriveTools } from "./drive-tools.ts";
 import { registerGitHubTools } from "./github-tools.ts";
 import { registerWorkspaceTools } from "./write-tools.ts";
 import type { McpScope } from "./permissions.ts";
@@ -41,7 +42,22 @@ function page<T>(rows: T[], limit: number, key: (row: T) => string) {
   return { items, next_cursor: rows.length > limit && last ? key(last) : null };
 }
 
-function result(data: Record<string, unknown>): CallToolResult {
+function result(data: Record<string, unknown>, allowImage = false): CallToolResult {
+  if (allowImage && data.image) {
+    const image = z
+      .object({
+        data: z.string().max(1398104),
+        mime_type: z.enum(["image/png", "image/jpeg", "image/gif", "image/webp"]),
+      })
+      .parse(data.image);
+    const { image: _image, ...metadata } = data;
+    const summary = result(metadata);
+    if (summary.isError) return summary;
+    return {
+      ...summary,
+      content: [...summary.content, { type: "image", data: image.data, mimeType: image.mime_type }],
+    };
+  }
   const text = JSON.stringify(data);
   if (Buffer.byteLength(text) > 128 * 1024)
     return {
@@ -79,6 +95,7 @@ export function createMcpServer(principal: McpPrincipal) {
       destructive?: boolean;
       external?: boolean;
       readOnly?: boolean;
+      image?: boolean;
     } = {}
   ) {
     const scope = options.scope ?? "mokara:read";
@@ -90,7 +107,8 @@ export function createMcpServer(principal: McpPrincipal) {
         inputSchema,
         annotations: {
           ...annotations,
-          readOnlyHint: options.readOnly ?? scope === "mokara:read",
+          readOnlyHint:
+            options.readOnly ?? (scope === "mokara:read" || scope === "mokara:drive:read"),
           destructiveHint: options.destructive ?? false,
           openWorldHint: options.external ?? false,
         },
@@ -98,7 +116,7 @@ export function createMcpServer(principal: McpPrincipal) {
       async (input: unknown) => {
         try {
           requireScope(principal, scope);
-          const response = result(await read(inputSchema.parse(input)));
+          const response = result(await read(inputSchema.parse(input)), options.image);
           log.info(`mcp ${principal.connectionId} ${name} ${response.isError ? "limited" : "ok"}`);
           return response;
         } catch (error) {
@@ -288,6 +306,7 @@ export function createMcpServer(principal: McpPrincipal) {
   registerWorkflowPrompts(server, principal);
   registerWorkspaceTools(register, principal);
   registerGitHubTools(register, principal);
+  registerDriveTools(register, principal);
   return server;
 }
 

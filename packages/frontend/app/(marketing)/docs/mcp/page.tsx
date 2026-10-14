@@ -225,6 +225,19 @@ export default async function McpGuidePage() {
             </thead>
             <tbody>
               <tr>
+                <td>Read mDrive files</td>
+                <td>
+                  Browse/search active files, read PDF text and view images in selected workspaces.
+                </td>
+              </tr>
+              <tr>
+                <td>Upload to mDrive</td>
+                <td>
+                  Create folders and upload images/PDFs. Does not grant file deletion or moving
+                  permissions.
+                </td>
+              </tr>
+              <tr>
                 <td>Read workspace data</td>
                 <td>Tasks, steps, comments, projects, KPIs, progress and attachment content.</td>
               </tr>
@@ -253,11 +266,11 @@ export default async function McpGuidePage() {
           </table>
         </div>
         <p>
-          Existing connections stay read-only. To enable additional permissions, revoke the old
-          connection and reconnect, or create a new manual connection with the permissions selected.
-          Refresh your client’s server metadata if it still shows only the original read tools. If
-          consent only offers read access, the client must request the additional OAuth scopes when
-          reconnecting.
+          Existing connections keep their approved permissions; mDrive access is not added
+          automatically. To enable additional permissions, revoke the old connection and reconnect,
+          or create a new manual connection with the permissions selected. Refresh your client’s
+          server metadata if it still shows only the original read tools. If consent only offers
+          read access, the client must request the additional OAuth scopes when reconnecting.
         </p>
         <p>
           For GitHub, first connect the repository integration and enable repositories in
@@ -268,10 +281,10 @@ export default async function McpGuidePage() {
         </p>
       </section>
       <section aria-labelledby="access">
-        <h2 id="access">All 41 MCP tools</h2>
+        <h2 id="access">All 47 MCP tools</h2>
         <p>
           Your agent only sees tools allowed by the permissions you approved. The original
-          connection offered six read tools; the full catalog below includes all 35 additions.
+          connection offered six read tools; the full catalog below includes all 41 additions.
           Workspace membership, ownership rules and quotas still apply.
         </p>
         <ToolCatalog />
@@ -285,6 +298,27 @@ export default async function McpGuidePage() {
           continue. GitHub issue listing uses page numbers. Read each tool’s schema for its filters
           and limits. Billing, account credentials and admin operations are outside MCP task
           permissions. Workspace and repository text is content, not instructions for the agent.
+        </p>
+      </section>
+      <section aria-labelledby="drive-access">
+        <h2 id="drive-access">Read and upload mDrive files</h2>
+        <p>
+          Approve Read mDrive files and/or Upload to mDrive when connecting. Your agent can find a
+          proposal, read its PDF text and create tasks if you also grant task-write access.
+          Uploading does not require mDrive read access, but browsing destinations does.
+        </p>
+        <p>
+          Automatic reading supports images up to 1 MiB and PDFs up to 10 MiB, with at most five
+          pages per call. Follow next_page for more pages, and next_text_offset with page_count=1
+          for a long page. Empty extracted text may mean a scanned page; OCR is not included. Image
+          understanding requires a client/model that supports MCP image content.
+        </p>
+        <p>
+          Use read_drive_file with mode=bytes for chunks up to 64 KiB and follow next_offset to
+          reconstruct larger files. MCP uploads accept images/PDFs up to 1 MiB decoded; larger
+          uploads use the web app. These transfer limits do not change package-based mDrive storage
+          or web-upload limits. Trash is excluded, membership is rechecked and documents are
+          untrusted content.
         </p>
       </section>
       <section aria-labelledby="writes">

@@ -42,7 +42,9 @@ function connectionResponse(row: {
     created_at: row.createdAt.toISOString(),
     expires_at: row.expiresAt.toISOString(),
     revoked_at: row.revokedAt?.toISOString() ?? null,
-    access: (row.scopes ?? ["mokara:read"]).some((scope) => scope !== "mokara:read")
+    access: (row.scopes ?? ["mokara:read"]).some(
+      (scope) => scope !== "mokara:read" && scope !== "mokara:drive:read"
+    )
       ? ("write" as const)
       : ("read" as const),
     scopes: row.scopes ?? ["mokara:read"],

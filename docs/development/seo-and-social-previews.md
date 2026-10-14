@@ -27,7 +27,8 @@ an indexable sitemap. No domain is guessed from request headers.
 
 ## Assets
 
-- `/mokara-mark.svg`: existing vector brand mark.
+- `/mokara-mark.svg`: indigo Interlock mark for public navigation and footer branding.
+- `/icons/mokara-icon.svg`: white Interlock mark on indigo for browser tabs.
 - `/favicon.ico`: 16, 32 and 48 pixel browser icons.
 - `/icons/icon-32.png`: PNG browser fallback.
 - `/icons/apple-touch-icon.png`: 180 pixel Apple home-screen icon.

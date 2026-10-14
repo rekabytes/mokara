@@ -20,7 +20,7 @@ const csp = [
   isProdBuild
     ? "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com"
     : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com",
-  "frame-src https://challenges.cloudflare.com",
+  "frame-src 'self' https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self'",
   "font-src 'self'",
@@ -64,6 +64,13 @@ const nextConfig = {
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },
+      {
+        source: "/api/teams/:teamId/files/:id/preview",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "default-src 'none'; frame-ancestors 'self'" },
+        ],
+      },
       {
         source: "/mcp/authorize",
         headers: [

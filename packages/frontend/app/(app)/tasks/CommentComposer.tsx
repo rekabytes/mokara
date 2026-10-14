@@ -141,6 +141,7 @@ export function CommentComposer({
             type="button"
             onClick={() => fileRef.current?.click()}
             aria-label="Attach an image or PDF"
+            title="Images: up to 3 MB each. PDFs: your workspace owner’s plan limit."
             disabled={busy}
             className="grid size-6 cursor-pointer place-items-center rounded-md text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)]"
           >

@@ -36,7 +36,7 @@ function teamFixture() {
     logoBytes: 1024,
     createdAt: new Date(),
     owner: state.user,
-    _count: { members: 3, tasks: 5, attachments: 2 },
+    _count: { workspaceFiles: 0, members: 3, tasks: 5, attachments: 2 },
     members: [{ role: "owner", joinedAt: new Date(), user: { id: USER, username: "test-user" } }],
   };
 }
@@ -89,6 +89,14 @@ function matchesJob(job, where) {
   return true;
 }
 const db = {
+  workspaceFile: {
+    aggregate: async () => ({ _sum: { sizeBytes: 0 }, _count: { _all: 0 } }),
+    groupBy: async () => [],
+  },
+  fileObjectDeletion: {
+    aggregate: async () => ({ _sum: { sizeBytes: 0 } }),
+    groupBy: async () => [],
+  },
   $queryRaw: async () => {
     if (state.dbDown) throw new Error("private database credentials");
     return [{ value: 1 }];

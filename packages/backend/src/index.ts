@@ -17,6 +17,8 @@ import { projectRoutes } from "./routes/projects.ts";
 import { kpiRoutes } from "./routes/kpis.ts";
 import { commentRoutes } from "./routes/comments.ts";
 import { subtaskRoutes } from "./routes/subtasks.ts";
+import { fileRoutes } from "./routes/files.ts";
+import { startFileCleanupWorker } from "./lib/file-cleanup.ts";
 import { attachmentRoutes } from "./routes/attachments.ts";
 import { billingRoutes, billingWebhook } from "./routes/billing.ts";
 import { adminRoutes } from "./routes/admin.ts";
@@ -130,6 +132,7 @@ async function main() {
   authed.route("/", commentRoutes);
   authed.route("/", subtaskRoutes);
   authed.route("/", attachmentRoutes);
+  authed.route("/", fileRoutes);
   authed.route("/", billingRoutes);
   authed.route("/", analyticsRoutes);
   authed.route("/", projectRoutes);
@@ -167,6 +170,7 @@ async function main() {
   };
   startServer(1);
   const stopGitHubSync = startGitHubSyncWorker();
+  const stopFileCleanup = startFileCleanupWorker();
 
   // 4) Graceful shutdown — drop idle and live connections immediately so the
   //  listening socket frees before tsx watch's next child tries to bind.
@@ -177,7 +181,7 @@ async function main() {
     // Narrowed: the Http2 variant of ServerType lacks closeAllConnections.
     if (s && "closeIdleConnections" in s) s.closeIdleConnections();
     if (s && "closeAllConnections" in s) s.closeAllConnections();
-    await stopGitHubSync();
+    await Promise.all([stopGitHubSync(), stopFileCleanup()]);
     await disconnectRedis();
     await disconnectDB();
     log.ok("Stopped");

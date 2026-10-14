@@ -9,21 +9,35 @@ export type StorageDenial = { status: 404 | 400 | 409; error: string; message: s
 
 /** Workspace usage is still useful for support; it is not a separate allowance. */
 export async function usedBytes(teamId: string): Promise<number> {
-  const [files, team] = await Promise.all([
+  const [files, team, library, pending] = await Promise.all([
     prisma.attachment.aggregate({ where: { teamId }, _sum: { sizeBytes: true } }),
     prisma.team.findUnique({ where: { id: teamId }, select: { logoBytes: true } }),
+    prisma.workspaceFile.aggregate({ where: { teamId }, _sum: { sizeBytes: true } }),
+    prisma.fileObjectDeletion.aggregate({ where: { teamId }, _sum: { sizeBytes: true } }),
   ]);
-  return (files._sum.sizeBytes ?? 0) + (team?.logoBytes ?? 0);
+  return (
+    (files._sum.sizeBytes ?? 0) +
+    (team?.logoBytes ?? 0) +
+    (library._sum.sizeBytes ?? 0) +
+    (pending._sum.sizeBytes ?? 0)
+  );
 }
 
 /** All uploads and logos in the owner's personal AND team workspaces share one pool.
  * Membership and uploader identity never move bytes to another account. */
 export async function usedBytesOfOwner(ownerId: string, client: Client = prisma): Promise<number> {
-  const [files, logos] = await Promise.all([
+  const [files, logos, library, pending] = await Promise.all([
     client.attachment.aggregate({ where: { team: { ownerId } }, _sum: { sizeBytes: true } }),
     client.team.aggregate({ where: { ownerId }, _sum: { logoBytes: true } }),
+    client.workspaceFile.aggregate({ where: { team: { ownerId } }, _sum: { sizeBytes: true } }),
+    client.fileObjectDeletion.aggregate({ where: { ownerId }, _sum: { sizeBytes: true } }),
   ]);
-  return (files._sum.sizeBytes ?? 0) + (logos._sum.logoBytes ?? 0);
+  return (
+    (files._sum.sizeBytes ?? 0) +
+    (logos._sum.logoBytes ?? 0) +
+    (library._sum.sizeBytes ?? 0) +
+    (pending._sum.sizeBytes ?? 0)
+  );
 }
 
 export async function storageAccountForTeam(

@@ -408,3 +408,36 @@ export const mcpOAuthRevokeSchema = z
     token_type_hint: z.enum(["access_token", "refresh_token"]).optional(),
   })
   .strict();
+
+const libraryName = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(/^[^\\/\u0000-\u001f\u007f]+$/, "Use a name without slashes or control characters.");
+export const libraryTeamParam = z.object({ teamId: z.uuid() }).strict();
+export const libraryItemParam = z.object({ teamId: z.uuid(), id: z.uuid() }).strict();
+export const libraryListQuery = z
+  .object({
+    folder_id: z.uuid().optional(),
+    q: z.string().trim().max(200).default(""),
+    view: z.enum(["files", "trash"]).default("files"),
+    type: z.enum(["all", "images", "pdf"]).default("all"),
+    sort: z.enum(["newest", "oldest", "name", "largest"]).default("newest"),
+    page: z.coerce.number().int().min(1).max(10000).default(1),
+  })
+  .strict();
+export const libraryUploadQuery = z
+  .object({ folder_id: z.uuid().optional(), upload_id: z.uuid() })
+  .strict();
+export const libraryFolderCreate = z
+  .object({ name: libraryName, parent_id: z.uuid().nullable().default(null) })
+  .strict();
+export const libraryFolderPatch = z
+  .object({ name: libraryName.optional(), parent_id: z.uuid().nullable().optional() })
+  .strict()
+  .refine((v) => v.name !== undefined || v.parent_id !== undefined, "Choose a change.");
+export const libraryFilePatch = z
+  .object({ name: libraryName.optional(), folder_id: z.uuid().nullable().optional() })
+  .strict()
+  .refine((v) => v.name !== undefined || v.folder_id !== undefined, "Choose a change.");

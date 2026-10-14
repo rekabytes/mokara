@@ -60,3 +60,5 @@ managed. After deployment, browser acceptance should cover:
 - Onboarding and public pricing/legal/auth navigation.
 
 The backend and admin architecture have not been restructured by this frontend work.
+
+The shared workspace file library lives in `app/(app)/files/`: `page.tsx` composes the selected workspace, `FilesWorkspace.tsx` owns the directory UI, `use-files.ts` synchronizes remote reads/uploads, `file-model.ts` owns folder transformations, and `FileDialog.tsx`/`FilePreview.tsx` own overlays. It reuses the global workspace/session model and the shared API/error contracts. See [workspace-files.md](workspace-files.md).

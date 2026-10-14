@@ -9,6 +9,7 @@ import {
   storageKey,
   storageReady,
 } from "../lib/storage.ts";
+import { IMAGE_ATTACHMENT_MAX_BYTES } from "../lib/plans.ts";
 import { toAttachment } from "../lib/types.ts";
 import type { Vars } from "../middleware/auth.ts";
 
@@ -113,6 +114,15 @@ async function storeUpload(
       status: 400,
       error: "unsupported_type",
       message: "comments accept images and PDFs only",
+    };
+  }
+
+  if (contentType.startsWith("image/") && file.size > IMAGE_ATTACHMENT_MAX_BYTES) {
+    return {
+      status: 400,
+      error: "file_too_large",
+      message:
+        "Images attached to tasks or comments must be 3 MB or smaller. Use mDrive for larger images.",
     };
   }
 

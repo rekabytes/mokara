@@ -19,11 +19,11 @@ pattern rather than re-deriving one. Where this PRD deliberately differs from it
 
 ## 1. Goal
 
-`git tag v0.2.7 && git push origin v0.2.7` produces:
+`git tag v0.2.8 && git push origin v0.2.8` produces:
 
-- `ghcr.io/<owner>/mokara-frontend:0.2.7` (+ `:0.2`, `:latest`)
-- `ghcr.io/<owner>/mokara-backend:0.2.7` (+ same)
-- `ghcr.io/<owner>/mokara-admin:0.2.7` (+ same) — the operator console, added
+- `ghcr.io/<owner>/mokara-frontend:0.2.8` (+ `:0.2`, `:latest`)
+- `ghcr.io/<owner>/mokara-backend:0.2.8` (+ same)
+- `ghcr.io/<owner>/mokara-admin:0.2.8` (+ same) — the operator console, added
   2026-09-09; it joins the same matrix and sits behind the same gate
 
 The tag has to match `version` in the root and every workspace `package.json`,

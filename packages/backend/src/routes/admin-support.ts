@@ -106,18 +106,35 @@ adminSupportRoutes.get(
           kind: true,
           logoBytes: true,
           owner: { select: { id: true, username: true, plan: true, planOverride: true } },
-          _count: { select: { members: true, tasks: true, attachments: true } },
+          _count: {
+            select: { members: true, tasks: true, attachments: true, workspaceFiles: true },
+          },
         },
       }),
     ]);
-    const files = teams.length
-      ? await prisma.attachment.groupBy({
-          by: ["teamId"],
-          where: { teamId: { in: teams.map((t) => t.id) } },
-          _sum: { sizeBytes: true },
-        })
-      : [];
-    const bytes = new Map(files.map((row) => [row.teamId, row._sum.sizeBytes ?? 0]));
+    const ids = teams.map((t) => t.id);
+    const [attachments, library, pendingFiles] = ids.length
+      ? await Promise.all([
+          prisma.attachment.groupBy({
+            by: ["teamId"],
+            where: { teamId: { in: ids } },
+            _sum: { sizeBytes: true },
+          }),
+          prisma.workspaceFile.groupBy({
+            by: ["teamId"],
+            where: { teamId: { in: ids } },
+            _sum: { sizeBytes: true },
+          }),
+          prisma.fileObjectDeletion.groupBy({
+            by: ["teamId"],
+            where: { teamId: { in: ids } },
+            _sum: { sizeBytes: true },
+          }),
+        ])
+      : [[], [], []];
+    const bytes = new Map<string, number>();
+    for (const row of [...attachments, ...library, ...pendingFiles])
+      bytes.set(row.teamId, (bytes.get(row.teamId) ?? 0) + (row._sum.sizeBytes ?? 0));
     return c.json({
       page,
       page_size: ADMIN_PAGE_SIZE,
@@ -132,7 +149,7 @@ adminSupportRoutes.get(
         plan: effectivePlan(team.owner),
         members: team._count.members,
         tasks: team._count.tasks,
-        files: team._count.attachments,
+        files: team._count.attachments + team._count.workspaceFiles,
         storage_bytes: (bytes.get(team.id) ?? 0) + (team.logoBytes ?? 0),
         limits: supportCaps(team.owner),
       })),
@@ -167,7 +184,7 @@ adminSupportRoutes.get(
           orderBy: { joinedAt: "asc" },
           select: { role: true, joinedAt: true, user: { select: { id: true, username: true } } },
         },
-        _count: { select: { tasks: true, attachments: true } },
+        _count: { select: { tasks: true, attachments: true, workspaceFiles: true } },
       },
     });
     if (!team) return c.json({ error: "not_found", message: "workspace not found" }, 404);
@@ -197,7 +214,7 @@ adminSupportRoutes.get(
         limits: supportCaps(team.owner),
         storage_bytes: storage,
         tasks: team._count.tasks,
-        files: team._count.attachments,
+        files: team._count.attachments + team._count.workspaceFiles,
         owner_team_count: ownedTeams,
         members: team.members.map((member) => ({
           id: member.user.id,

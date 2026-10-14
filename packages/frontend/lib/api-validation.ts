@@ -168,6 +168,9 @@ export const sessionsSchema = z.object({
 });
 const capsSchema = z.object({ members: cap, teams: cap, storage_bytes: cap, file_bytes: cap });
 export const billingSchema = z.object({
+  people: z
+    .object({ scope: z.enum(["account", "workspace"]), used: count.nullable(), limit: cap })
+    .optional(),
   storage: z.object({ scope: z.literal("account"), used_bytes: count }).optional(),
   plan: z.string(),
   billing_configured: z.boolean(),
@@ -277,6 +280,7 @@ export const invitationResponseSchema = z.object({
   team_id: z.string().optional(),
 });
 export const teamDetailSchema = z.object({
+  people: z.object({ scope: z.enum(["account", "workspace"]), used: count, limit: cap }).optional(),
   team: teamSchema,
   role,
   members: z.array(

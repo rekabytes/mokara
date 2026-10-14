@@ -13,14 +13,18 @@ import {
   adminUserParamSchema,
   adminAuditQuerySchema,
 } from "../lib/validation.ts";
-import { effectivePlan, limitsFor, UNLIMITED, publicCap } from "../lib/plans.ts";
+import { effectivePlan, limitsForOwner, UNLIMITED, publicCap } from "../lib/plans.ts";
 import { usedBytes } from "../lib/quota.ts";
 import { safeMetricCode } from "../lib/operational-metrics.ts";
 import { ADMIN_PAGE_SIZE } from "./admin-monitoring.ts";
 
 export const adminSupportRoutes = new Hono();
-export function supportCaps(owner: { plan: string; planOverride: string | null }) {
-  const limits = isHosted ? limitsFor(effectivePlan(owner)) : UNLIMITED;
+export function supportCaps(owner: {
+  plan: string;
+  planOverride: string | null;
+  peoplePolicy: string;
+}) {
+  const limits = isHosted ? limitsForOwner(owner) : UNLIMITED;
   return {
     members: publicCap(limits.members),
     teams: publicCap(limits.teams),
@@ -107,7 +111,15 @@ adminSupportRoutes.get(
           slug: true,
           kind: true,
           logoBytes: true,
-          owner: { select: { id: true, username: true, plan: true, planOverride: true } },
+          owner: {
+            select: {
+              id: true,
+              username: true,
+              plan: true,
+              planOverride: true,
+              peoplePolicy: true,
+            },
+          },
           _count: {
             select: { members: true, tasks: true, attachments: true, workspaceFiles: true },
           },
@@ -180,6 +192,7 @@ adminSupportRoutes.get(
             username: true,
             plan: true,
             planOverride: true,
+            peoplePolicy: true,
             githubConnection: { select: { status: true, verifiedAt: true } },
           },
         },
@@ -269,6 +282,7 @@ adminSupportRoutes.get(
             username: true,
             plan: true,
             planOverride: true,
+            peoplePolicy: true,
             stripeCustomerId: true,
             periodEnd: true,
             graceUntil: true,

@@ -54,38 +54,61 @@ invitationRoutes.post("/:id/respond", validate("json", respondSchema), async (c)
   }
 
   if (action === "decline") {
-    await prisma.teamInvitation.update({
-      where: { id: invId },
+    const declined = await prisma.teamInvitation.updateMany({
+      where: { id: invId, status: "pending" },
       data: { status: "declined", respondedAt: new Date() },
     });
+    if (!declined.count) {
+      return c.json(
+        { error: "already_responded", message: "invitation already responded to" },
+        409
+      );
+    }
     await markInvitationResponded(userId, invId, "declined");
     return c.json({ invitation_id: invId, status: "declined" });
   }
 
-  // accept — the join gate (PRD-11 Phase 1.1). The enforce_max_team_members
-  // trigger used to be the race-safe guard and it is gone (a trigger cannot see
-  // the leader's plan), so the cap is now checked INSIDE this transaction after
-  // locking the workspace row: two simultaneous accepts serialise on that lock
-  // and the second sees the first one's member, exactly like the trigger did.
-  // An over-cap answer commits an empty transaction - there is nothing to undo.
-  const denial = await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT 1 FROM "teams" WHERE "id" = ${inv.teamId}::uuid FOR UPDATE`;
+  // Lock the owner before the workspace: accepts in DIFFERENT owned workspaces
+  // must share the same gate. READ COMMITTED reloads usage/plan after waiting.
+  const denial = await prisma.$transaction(
+    async (tx) => {
+      const team = await tx.team.findUnique({
+        where: { id: inv.teamId },
+        select: { ownerId: true },
+      });
+      if (!team) return { status: 404 as const, error: "not_found", message: "team not found" };
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${team.ownerId}::uuid FOR UPDATE`;
+      await tx.$executeRaw`SELECT 1 FROM "teams" WHERE "id" = ${inv.teamId}::uuid FOR UPDATE`;
+      await tx.$executeRaw`SELECT 1 FROM team_invitations WHERE id = ${invId}::uuid FOR UPDATE`;
+      const current = await tx.teamInvitation.findUnique({ where: { id: invId } });
+      if (!current || current.status !== "pending") {
+        return {
+          status: 409 as const,
+          error: "already_responded",
+          message: "invitation already responded to",
+        };
+      }
+      if (current.expiresAt.getTime() <= Date.now()) {
+        return { status: 409 as const, error: "invite_expired", message: "invitation has expired" };
+      }
 
-    const join = await joinDenial(tx, inv.teamId);
-    if (join) return join;
+      const join = await joinDenial(tx, inv.teamId, userId);
+      if (join) return join;
 
-    await tx.teamMember.create({
-      data: { teamId: inv.teamId, userId, role: "member" },
-    });
-    await tx.teamInvitation.update({
-      where: { id: invId },
-      data: { status: "accepted", respondedAt: new Date() },
-    });
-    // PRD-06: the first ACCEPTED invitation promotes the container —
-    // one-way, a team never reverts to a workspace.
-    await tx.team.update({ where: { id: inv.teamId }, data: { kind: "team" } });
-    return null;
-  });
+      await tx.teamMember.create({
+        data: { teamId: inv.teamId, userId, role: "member" },
+      });
+      await tx.teamInvitation.update({
+        where: { id: invId },
+        data: { status: "accepted", respondedAt: new Date() },
+      });
+      // PRD-06: the first ACCEPTED invitation promotes the container —
+      // one-way, a team never reverts to a workspace.
+      await tx.team.update({ where: { id: inv.teamId }, data: { kind: "team" } });
+      return null;
+    },
+    { isolationLevel: "ReadCommitted" }
+  );
   if (denial) {
     return c.json({ error: denial.error, message: denial.message }, denial.status);
   }

@@ -11,7 +11,7 @@ import {
   syncBillingForUser,
 } from "../lib/billing.ts";
 import { usedBytesOfOwner } from "../lib/quota.ts";
-import { limitsOfUser } from "../lib/entitlements.ts";
+import { limitsOfUser, memberScopeForOwner, peopleUsedByOwner } from "../lib/entitlements.ts";
 import { effectivePlan, limitsFor, PLAN_IDS, publicCap } from "../lib/plans.ts";
 import { getTeamRole } from "../lib/team-membership.ts";
 import type { Vars } from "../middleware/auth.ts";
@@ -47,6 +47,7 @@ billingRoutes.get("/me/billing", async (c) => {
     select: {
       plan: true,
       planOverride: true,
+      peoplePolicy: true,
       periodEnd: true,
       graceUntil: true,
       stripeCustomerId: true,
@@ -68,6 +69,11 @@ billingRoutes.get("/me/billing", async (c) => {
     period_end: user.periodEnd ? user.periodEnd.toISOString() : null,
     grace_until: user.graceUntil ? user.graceUntil.toISOString() : null,
     storage: { scope: "account", used_bytes: storageUsed },
+    people: {
+      scope: memberScopeForOwner(user),
+      used: memberScopeForOwner(user) === "account" ? await peopleUsedByOwner(userId) : null,
+      limit: publicCap(limits.members),
+    },
     caps: {
       members: publicCap(limits.members),
       teams: publicCap(limits.teams),

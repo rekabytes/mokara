@@ -3,7 +3,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { AUTH_COOKIE } from "@/lib/cookies";
-import { FAQ, IN_EVERY_PLAN, LATER_TIERS, TIERS, type Tier } from "./pricing-data";
+import {
+  FAQ,
+  IN_EVERY_PLAN,
+  LATER_TIERS,
+  MYR_ESTIMATE,
+  TIERS,
+  estimatedMyr,
+  type Tier,
+} from "./pricing-data";
 
 import "./pricing.css";
 
@@ -54,6 +62,10 @@ export default async function PricingPage() {
             someone else running it for you.
           </p>
           <p className="pricing-payment-note">USD · cards &amp; Link · cancel anytime</p>
+          <p className="pricing-payment-note">
+            MYR amounts are estimates as of {MYR_ESTIMATE.asOf}. You’ll be charged in USD; your
+            bank’s exchange rate and fees may vary.
+          </p>
         </div>
       </section>
 
@@ -130,6 +142,9 @@ export default async function PricingPage() {
                 <h3>{tier.name}</h3>
                 <span>{tier.price}</span>
               </div>
+              <p className="pricing-payment-note pricing-myr-estimate">
+                {estimatedMyr(tier.monthlyUsd)}
+              </p>
               <p>{tier.summary}</p>
               <ul>
                 {tier.cells.map((cell) => (
@@ -204,6 +219,9 @@ function PlanCard({ tier, ctaHref, ctaLabel }: { tier: Tier; ctaHref: string; ct
         <span>{tier.price}</span>
         {tier.cadence && <small>{tier.cadence}</small>}
       </div>
+      {tier.monthlyUsd !== null && (
+        <p className="pricing-payment-note pricing-myr-estimate">{estimatedMyr(tier.monthlyUsd)}</p>
+      )}
       <dl className="pricing-capacity">
         {tier.capacity.map((row) => (
           <div key={row.label}>

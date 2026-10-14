@@ -2,10 +2,10 @@ import { prisma } from "../db.ts";
 import { isHosted } from "../env.ts";
 import {
   effectivePlan,
-  limitsFor,
+  limitsForOwner,
   publicCap,
   UNLIMITED,
-  type PlanHolder,
+  type PeoplePlanHolder,
   type PlanLimits,
 } from "./plans.ts";
 import type { Prisma } from "@mokara/db/prisma/generated/client";
@@ -14,7 +14,7 @@ import type { Prisma } from "@mokara/db/prisma/generated/client";
 // lib/container-scope.ts: plain ids in, `{ status, error, message } | null`
 // out, no Hono Context (a standalone exported helper cannot carry the
 // validated-json type through it). Callers do:
-//   const d = await joinDenial(prisma, teamId);
+//   const d = await joinDenial(prisma, teamId, inviteeId);
 //   if (d) return c.json({ error: d.error, message: d.message }, d.status);
 
 export type EntitlementDenial = { status: 404 | 409; error: string; message: string };
@@ -29,27 +29,30 @@ export async function limitsOfTeam(teamId: string): Promise<PlanLimits | null> {
   if (!isHosted) return UNLIMITED;
   const team = await prisma.team.findUnique({
     where: { id: teamId },
-    select: { owner: { select: { plan: true, planOverride: true } } },
+    select: { owner: { select: { plan: true, planOverride: true, peoplePolicy: true } } },
   });
   if (!team) return null;
-  return limitsFor(effectivePlan(team.owner));
+  return limitsForOwner(team.owner);
 }
 
 /** The limits that govern one account (how many teams it may lead, etc). */
-export async function limitsOfUser(userId: string): Promise<PlanLimits> {
+export async function limitsOfUser(
+  userId: string,
+  client: Prisma.TransactionClient = prisma
+): Promise<PlanLimits> {
   if (!isHosted) return UNLIMITED;
-  const user = await prisma.user.findUnique({
+  const user = await client.user.findUnique({
     where: { id: userId },
-    select: { plan: true, planOverride: true },
+    select: { plan: true, planOverride: true, peoplePolicy: true },
   });
-  return limitsFor(effectivePlan(user ?? { plan: "free", planOverride: null }));
+  return limitsForOwner(user ?? { plan: "free", planOverride: null, peoplePolicy: "account" });
 }
 
 /**
  * May one more member join this workspace? Checks the two things a join can
  * break at once:
  *
- *  1. the member cap of the leader's plan, and
+ *  1. Free's workspace cap or the paid owner's shared distinct-people cap, and
  *  2. the leader's TEAM-COUNT cap - a workspace-kind container promotes to
  *     "team" on its first accepted invite (PRD-06, one-way), so a join can
  *     silently create a team the leader is not entitled to. This is what keeps
@@ -57,25 +60,43 @@ export async function limitsOfUser(userId: string): Promise<PlanLimits> {
  *     them later.
  *
  * Both the invite route (friendly early 409) and the accept route (the real
- * gate, which additionally takes a row lock) go through here. `client` is the
+ * gate, which additionally locks the owner, workspace and invitation) go through here. `client` is the
  * transaction client when called from the accept route, plain prisma otherwise.
  */
 export async function joinDenial(
   client: Prisma.TransactionClient,
-  teamId: string
+  teamId: string,
+  inviteeId: string
 ): Promise<EntitlementDenial | null> {
   if (!isHosted) return null;
 
   const team = await client.team.findUnique({
     where: { id: teamId },
-    select: { kind: true, ownerId: true, owner: { select: { plan: true, planOverride: true } } },
+    select: {
+      kind: true,
+      ownerId: true,
+      owner: { select: { plan: true, planOverride: true, peoplePolicy: true } },
+    },
   });
   if (!team) return { status: 404, error: "not_found", message: "team not found" };
 
-  const limits = limitsFor(effectivePlan(team.owner));
+  const limits = limitsForOwner(team.owner);
 
-  const members = await client.teamMember.count({ where: { teamId } });
-  if (members + 1 > limits.members) {
+  if (memberScopeForOwner(team.owner) === "account") {
+    // Existing collaborators use no additional place, including after a downgrade.
+    const existing =
+      inviteeId === team.ownerId ||
+      (await client.teamMember.count({
+        where: { userId: inviteeId, team: { ownerId: team.ownerId } },
+      })) > 0;
+    if (!existing && (await peopleUsedByOwner(team.ownerId, client)) >= limits.members) {
+      return {
+        status: 409,
+        error: "team_full",
+        message: `The workspace owner's plan includes ${limits.members} unique people, including the owner, shared across all owned workspaces. Remove a person from every owned workspace or upgrade to add someone new.`,
+      };
+    }
+  } else if ((await client.teamMember.count({ where: { teamId } })) + 1 > limits.members) {
     return {
       status: 409,
       error: "team_full",
@@ -98,15 +119,40 @@ export async function joinDenial(
   return null;
 }
 
+/** Count identities, not memberships; the owner always occupies one place. */
+export async function peopleUsedByOwner(
+  ownerId: string,
+  client: Prisma.TransactionClient = prisma
+): Promise<number> {
+  const rows = await client.$queryRaw<{ count: number }[]>`
+    SELECT COUNT(*)::int AS count FROM (
+      SELECT ${ownerId}::uuid AS user_id
+      UNION
+      SELECT tm.user_id FROM team_members tm
+      JOIN teams t ON t.id = tm.team_id
+      WHERE t.owner_id = ${ownerId}::uuid
+    ) people`;
+  return rows[0]?.count ?? 1;
+}
+
+export function memberScopeForOwner(owner: PeoplePlanHolder): "account" | "workspace" {
+  return isHosted && owner.peoplePolicy !== "legacy" && effectivePlan(owner) !== "free"
+    ? "account"
+    : "workspace";
+}
+
 /**
  * May this account create one more TEAM container? Solo "workspace"
  * containers are uncapped by design: they hold one member, cost nothing, and
  * the join check above is what gates turning one into a team.
  */
-export async function teamCountDenial(userId: string): Promise<EntitlementDenial | null> {
+export async function teamCountDenial(
+  userId: string,
+  client: Prisma.TransactionClient = prisma
+): Promise<EntitlementDenial | null> {
   if (!isHosted) return null;
-  const limits = await limitsOfUser(userId);
-  const led = await prisma.team.count({ where: { ownerId: userId, kind: "team" } });
+  const limits = await limitsOfUser(userId, client);
+  const led = await client.team.count({ where: { ownerId: userId, kind: "team" } });
   if (led + 1 > limits.teams) {
     return {
       status: 409,
@@ -130,7 +176,7 @@ export async function teamCountDenial(userId: string): Promise<EntitlementDenial
  * instance adds members freely, so printing the plan's number would advertise a
  * limit that nothing enforces. The UI renders a bare count for null.
  */
-export function memberLimitForOwner(owner: PlanHolder): number | null {
+export function memberLimitForOwner(owner: PeoplePlanHolder): number | null {
   if (!isHosted) return null;
-  return publicCap(limitsFor(effectivePlan(owner)).members);
+  return publicCap(limitsForOwner(owner).members);
 }

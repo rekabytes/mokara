@@ -27,14 +27,16 @@ with flat tiers; per-seat pricing would have no reason to cap.
 
 ## 2. Tier ladder (Starter minted; Pro/Ultra PROPOSED)
 
-| Tier    | Price  | Members   | Workspaces        | Storage | Notes                                                   |
-| ------- | ------ | --------- | ----------------- | ------- | ------------------------------------------------------- |
-| Basic   | Free   | 3         | personal + 1 team | 1 GB    | current behaviour                                       |
-| Starter | $4/mo  | 8         | personal + 3      | 10 GB   | small real teams — **minted live on Stripe 2026-09-07** |
-| Pro     | $9/mo  | 25        | personal + 10     | 50 GB   | growing companies — not minted                          |
-| Ultra   | $18/mo | unlimited | unlimited         | 200 GB  | API / MCP / audit log — not minted                      |
+| Tier    | Price  | Members | Workspaces        | Storage | Notes                                                   |
+| ------- | ------ | ------- | ----------------- | ------- | ------------------------------------------------------- |
+| Basic   | Free   | 3       | personal + 1 team | 1 GB    | current behaviour                                       |
+| Starter | $4/mo  | 8       | personal + 3      | 10 GB   | small real teams — **minted live on Stripe 2026-09-07** |
+| Pro     | $15/mo | 25      | personal + 10     | 50 GB   | growing companies — not minted                          |
+| Ultra   | $29/mo | 50      | personal + 20     | 200 GB  | larger teams — not minted                               |
 
-Storage (§5) is the third capacity axis beside members and workspaces.
+The Members column means unique people across all owned workspaces for paid plans, including the owner; Free remains per workspace. Storage (§5) is shared account-wide as well.
+
+Public pricing includes small, display-only MYR estimates on all paid tiers. One manually maintained rate/date in `pricing-data.ts` drives the amounts (initially USD 1 = MYR 4.082, BNM display dated 14 October 2026). The page labels the estimate date and explains that checkout charges USD and bank rates/fees vary. This is not live FX or fixed-MYR billing; Free remains Free.
 
 **Currency (§6.2, DECIDED 2026-09-06): USD base prices.** The ladder is
 international from launch, so prices are set in USD: US-market buyers pay
@@ -59,8 +61,8 @@ Rationale recorded in the brainstorm:
   the price is too close to free to anchor value. Minimum sensible tier $3–4.
 - **Workspaces count as the secondary axis** — otherwise a company shards into
   N free teams of 3.
-- **Ultra "unlimited"** sells the end of thinking about limits; the tier's real
-  monetization is its features (API, MCP, audit log), not seats.
+- **Owner-wide people allowance (2026-10-14)** — owner approved Starter 8, Pro 25 and Ultra 50 unique people, including the owner, across every personal/team workspace that account owns for new registrations and new paid purchases. Existing accounts retain legacy per-workspace allowances, including same-tier renewals; legacy Ultra retains unlimited people/workspaces. A new subscription or paid-tier change permanently adopts the shared policy. Duplicate memberships count once; foreign-owned workspaces do not count. Existing over-cap memberships retain access; new distinct people cannot join while full. Existing collaborators can still join another owned workspace, subject to the team-workspace cap. Free stays at 3 members per workspace; self-hosted remains unlimited. See [account-people.md](account-people.md).
+- **Pro/Ultra pricing revision (2026-10-14)** — public prices are Pro $15/month and Ultra $29/month; Ultra permits 20 team workspaces. Backend entitlements now match these capacity ceilings, including operator grants. Pro/Ultra are still not available through Stripe checkout. Starter price/workspace/storage/file allowances are unchanged.
 
 Annual toggle (2 months free) agreed as a later addition, not launch-blocking.
 
@@ -146,7 +148,7 @@ upsell. Quotas are **per owner account**, shared across every personal and team 
 | --- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
 | 1   | Payment processor             | **DECIDED 2026-09-07: Stripe direct** (live account, recurring proven). Managed Payments stays a later dashboard-side question — same integration shape; third-party MoR (Paddle / LS) dropped                                                 | —            |
 | 2   | Currency                      | **DECIDED 2026-09-06: USD base prices** (global launch; localization deferred — see §2). The "RM + local methods" argument had already been retired by §6.7; reversible later via an RM-anchored base + Adaptive Pricing or `currency_options` | —            |
-| 3   | Final prices + annual Starter | **partly settled** — Starter $4 minted live 2026-09-07; Pro $9 / Ultra $18 PROPOSED, not minted                                                                                                                                                | paid tiers   |
+| 3   | Final prices + annual Starter | **partly settled** — Starter $4 minted live 2026-09-07; Pro $15 / Ultra $29 PROPOSED, not minted                                                                                                                                               | paid tiers   |
 | 4   | Trials                        | **open** — e.g. 14-day Pro trial, or none at launch — config-cheap on the Stripe track (`trial_period_days` / Checkout trial setting), not a build                                                                                             | Phase 2 only |
 | 5   | Grandfathering sentence       | **DECIDED 2026-09-05** — §6.5 default adopted (enforce at join/create; over-cap freezes)                                                                                                                                                       | — (built)    |
 | 6   | Plan holder                   | **DECIDED 2026-09-05** — §6.6 default adopted (plan on the USER; workspace tier = leader's plan)                                                                                                                                               | — (built)    |
@@ -438,7 +440,7 @@ digital-services tax is an accountant question, not code.
 | new | Deploy-mode signal           | `DEPLOY_MODE` env: `hosted` \| `self_hosted` (**default `self_hosted`**). Caps enforce only when `hosted`; `self_hosted` reads unlimited everywhere and billing routes answer `billing_not_configured`                                                           | processor-agnostic — must not depend on decision 1 |
 | 1   | Processor                    | **DECIDED 2026-09-07: Stripe direct** — one live account, recurring proven; Managed Payments stays a later dashboard-side question (same integration shape); Paddle/LS dropped                                                                                   | owner decision                                     |
 | 2   | Currency                     | **DECIDED 2026-09-06: USD base prices** — global launch anchor; MYR/Adaptive-Pricing localization is a data-driven revisit, not a launch requirement (§2)                                                                                                        | owner decision, 2026-09-06                         |
-| 3   | Final prices                 | **partly settled** — Starter $4 MINTED live 2026-09-07; Pro $9 / Ultra $18 remain PROPOSED until those tiers are minted                                                                                                                                          | —                                                  |
+| 3   | Final prices                 | **partly settled** — Starter $4 MINTED live 2026-09-07; Pro $15 / Ultra $29 remain PROPOSED until those tiers are minted                                                                                                                                         | —                                                  |
 | 4   | Trials                       | **open** — "none at launch" is the working assumption; config-cheap if yes (2.1–2.3 recon); gates paid-tier launch polish, not the Starter slice                                                                                                                 | —                                                  |
 
 Two implementation conflicts found during recon and resolved here:

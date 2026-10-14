@@ -180,3 +180,41 @@ test("checkout reconciliation attributes webhook source; no customer makes no in
   await syncBillingForUser(USER);
   assert.equal(state.events.length, 0);
 });
+
+test("legacy subscription renewals preserve the policy while a new purchase adopts shared limits", async () => {
+  state.user.plan = "starter";
+  state.user.peoplePolicy = "legacy";
+  state.user.planOverride = null;
+  await applySubscriptionById("sub_isolated");
+  assert.equal(state.user.peoplePolicy, "legacy");
+  const purchased = subscription();
+  purchased.metadata.people_policy = "account";
+  client.subscriptions.retrieve = async () => purchased;
+  await applySubscriptionById("sub_isolated");
+  assert.equal(state.user.peoplePolicy, "account");
+  client.subscriptions.retrieve = async () => subscription("canceled");
+  await applySubscriptionById("sub_isolated");
+  assert.equal(state.user.peoplePolicy, "account", "canceling never restores legacy allowances");
+});
+test("an existing free account purchasing a new subscription adopts the shared policy", async () => {
+  state.user.plan = "free";
+  state.user.peoplePolicy = "legacy";
+  const purchased = subscription();
+  purchased.metadata.people_policy = "account";
+  client.subscriptions.retrieve = async () => purchased;
+  await applySubscriptionById("sub_isolated");
+  assert.equal(state.user.peoplePolicy, "account");
+});
+
+test("legacy payment recovery after a free fallback does not count as a new purchase", async () => {
+  state.user.plan = "free";
+  state.user.peoplePolicy = "legacy";
+  await applySubscriptionById("sub_isolated");
+  assert.equal(state.user.peoplePolicy, "legacy");
+});
+test("changing a legacy paid tier adopts the shared policy", async () => {
+  state.user.plan = "pro";
+  state.user.peoplePolicy = "legacy";
+  await applySubscriptionById("sub_isolated");
+  assert.equal(state.user.peoplePolicy, "account");
+});

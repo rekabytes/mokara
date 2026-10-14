@@ -74,11 +74,28 @@ export function BillingTile({
               showPitch ? "grid-cols-2" : "grid-cols-2 min-[560px]:grid-cols-4"
             }`}
           >
-            <Stat value={capNum(billing?.caps.members)} label="members / team" />
+            <Stat
+              value={capNum(billing?.caps.members)}
+              label={billing?.people?.scope === "account" ? "people / account" : "members / team"}
+            />
             <Stat value={capNum(billing?.caps.teams)} label="team workspaces" />
             <Stat value={capGb(billing?.caps.storage_bytes)} label="storage / account" />
             <Stat value={capMb(billing?.caps.file_bytes)} label="per file" />
           </div>
+          {billing?.people?.scope === "workspace" && billing.plan !== "free" && (
+            <p className="mb-0 mt-3 text-[0.8rem] leading-relaxed text-[var(--color-ink-muted)]">
+              Legacy allowance: your current plan keeps its per-workspace people limits, including
+              on normal renewals. A new paid subscription or change to another paid tier switches to
+              shared people allowances across your owned workspaces.
+            </p>
+          )}
+          {billing?.people?.scope === "account" && billing.people.used !== null && (
+            <p className="mb-0 mt-3 text-[0.8rem] leading-relaxed text-[var(--color-ink-muted)]">
+              {billing.people.used} of {capNum(billing.people.limit)} people used across all
+              workspaces you own, including you. Each person counts once. Removing someone frees a
+              place only after they leave every workspace you own.
+            </p>
+          )}
           <p className="mb-0 mt-3 text-[0.8rem] leading-relaxed text-[var(--color-ink-muted)]">
             {billing?.storage && <span>{storageUsage(billing.storage.used_bytes)} used. </span>}
             One storage pool across your personal and owned team workspaces. Team members’ uploads

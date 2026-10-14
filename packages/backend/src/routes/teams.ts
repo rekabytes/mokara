@@ -9,6 +9,8 @@ import {
   joinDenial,
   limitsOfUser,
   memberLimitForOwner,
+  memberScopeForOwner,
+  peopleUsedByOwner,
   teamCountDenial,
 } from "../lib/entitlements.ts";
 import { publicCap } from "../lib/plans.ts";
@@ -32,7 +34,7 @@ async function teamPayload(teamId: string) {
   const [team, members] = await Promise.all([
     prisma.team.findUnique({
       where: { id: teamId },
-      include: { owner: { select: { plan: true, planOverride: true } } },
+      include: { owner: { select: { plan: true, planOverride: true, peoplePolicy: true } } },
     }),
     prisma.teamMember.count({ where: { teamId } }),
   ]);
@@ -58,15 +60,27 @@ teamRoutes.post("/", validate("json", createTeamSchema), async (c) => {
     return Boolean(found);
   }, slugify(name));
 
-  const team = await prisma.$transaction(async (tx) => {
-    const t = await tx.team.create({
-      data: { name, slug, ownerId: userId, kind },
-    });
-    await tx.teamMember.create({
-      data: { teamId: t.id, userId, role: "owner" },
-    });
-    return t;
-  });
+  const team = await prisma.$transaction(
+    async (tx) => {
+      // Share the owner lock with invitation promotions; both consume team slots.
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
+      if (kind === "team") {
+        const denial = await teamCountDenial(userId, tx);
+        if (denial) return denial;
+      }
+      const t = await tx.team.create({
+        data: { name, slug, ownerId: userId, kind },
+      });
+      await tx.teamMember.create({
+        data: { teamId: t.id, userId, role: "owner" },
+      });
+      return t;
+    },
+    { isolationLevel: "ReadCommitted" }
+  );
+  if ("error" in team) {
+    return c.json({ error: team.error, message: team.message }, team.status);
+  }
 
   // The creator is the leader, so the creator's plan is the team's cap.
   const limits = await limitsOfUser(userId);
@@ -79,7 +93,11 @@ teamRoutes.get("/", async (c) => {
     where: { userId },
     // The owner's plan rides along in the same join so member_limit costs no
     // extra query per row (PRD-11).
-    include: { team: { include: { owner: { select: { plan: true, planOverride: true } } } } },
+    include: {
+      team: {
+        include: { owner: { select: { plan: true, planOverride: true, peoplePolicy: true } } },
+      },
+    },
     orderBy: { team: { createdAt: "desc" } },
   });
   // One grouped count for the whole list — the switcher needs member_count
@@ -122,7 +140,7 @@ teamRoutes.get("/:id", async (c) => {
 
   const team = await prisma.team.findUnique({
     where: { id: teamId },
-    include: { owner: { select: { plan: true, planOverride: true } } },
+    include: { owner: { select: { plan: true, planOverride: true, peoplePolicy: true } } },
   });
   if (!team) {
     return c.json({ error: "not_found", message: "team not found" }, 404);
@@ -145,6 +163,14 @@ teamRoutes.get("/:id", async (c) => {
 
   return c.json({
     team: toTeam(team, members.length, memberLimitForOwner(team.owner)),
+    people: {
+      scope: memberScopeForOwner(team.owner),
+      used:
+        memberScopeForOwner(team.owner) === "account"
+          ? await peopleUsedByOwner(team.ownerId)
+          : members.length,
+      limit: memberLimitForOwner(team.owner),
+    },
     role,
     members: members.map(toTeamMember),
     invitations: openInvites.map(toInvitation),
@@ -221,7 +247,7 @@ teamRoutes.post("/:id/invitations", validate("json", inviteSchema), async (c) =>
   // PRD-11: the cap is the leader's plan, not a constant. This is the friendly
   // early answer; the accept route re-checks inside a transaction, which is
   // the race-safe gate the dropped Postgres trigger used to be.
-  const denial = await joinDenial(prisma, teamId);
+  const denial = await joinDenial(prisma, teamId, invitee.id);
   if (denial) {
     return c.json({ error: denial.error, message: denial.message }, denial.status);
   }

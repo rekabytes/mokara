@@ -130,6 +130,12 @@
   color: var(--color-ink-muted);
   font-size: 14px;
 }
+.pricing-price:has(+ .pricing-myr-estimate) {
+  margin-bottom: 8px;
+}
+.pricing-plan > .pricing-myr-estimate {
+  margin-bottom: 24px;
+}
 .pricing-capacity > div {
   display: flex;
   justify-content: space-between;
@@ -255,6 +261,9 @@
 }
 .pricing-later-plan .pricing-payment-note {
   margin-top: 24px;
+}
+.pricing-later-plan .pricing-myr-estimate {
+  margin-top: 6px;
 }
 .pricing-faq-list > div {
   padding-block: 22px;

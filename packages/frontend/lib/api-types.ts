@@ -229,6 +229,7 @@ export type PlanCaps = {
 };
 
 export type BillingInfo = {
+  people?: { scope: "account" | "workspace"; used: number | null; limit: number | null };
   /** Optional during rolling deployment; never treat an absent usage read as zero. */
   storage?: { scope: "account"; used_bytes: number };
   plan: string;
@@ -254,9 +255,9 @@ export type Team = {
   // the client builds the same-origin path with teamLogoUrl().
   has_logo: boolean;
   member_count: number;
-  // PRD-11: the cap that applies to this container, from its leader's plan.
-  // null = unlimited (a self-hosted instance, or the top tier) — so no screen
-  // ever prints a hardcoded "3" again.
+  // Owner plan ceiling; paid usage is shared, not this workspace’s count.
+  // TeamDetail.people supplies the scope and actual shared usage.
+  // null = unlimited (self-hosted).
   member_limit: number | null;
   created_at: string;
 };
@@ -265,6 +266,7 @@ export type TeamWithRole = Team & { role: "owner" | "member" };
 
 /** GET /teams/:id — the container page's whole payload in one named type. */
 export type TeamDetail = {
+  people?: { scope: "account" | "workspace"; used: number; limit: number | null };
   team: Team;
   role: "owner" | "member";
   members: TeamMember[];

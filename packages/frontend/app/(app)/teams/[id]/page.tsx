@@ -281,7 +281,7 @@ export default function TeamDetailPage() {
                 <span className="rounded-full bg-[var(--color-accent-soft)] px-2 py-[2px] text-[0.7rem] font-bold text-[var(--color-accent)]">
                   {/* PRD-11: the cap is the leader's plan's, and null means
                       unlimited — a bare count beats a fake "/ ∞". */}
-                  {detail.team.member_limit === null
+                  {detail.people?.scope === "account" || detail.team.member_limit === null
                     ? detail.members.length
                     : `${detail.members.length} / ${detail.team.member_limit}`}
                 </span>
@@ -320,7 +320,8 @@ export default function TeamDetailPage() {
                   </motion.div>
                 ))}
               </div>
-              {(detail.team.member_limit === null ||
+              {(detail.people?.scope === "account" ||
+                detail.team.member_limit === null ||
                 detail.members.length < detail.team.member_limit) && (
                 <>
                   <form onSubmit={invite} className="mt-3 flex gap-2">
@@ -345,9 +346,11 @@ export default function TeamDetailPage() {
                     </button>
                   </form>
                   <p className="mb-0 mt-2 px-1.5 text-[0.72rem] text-[var(--color-ink-faint)]">
-                    {detail.team.member_limit === null
-                      ? "Unlimited seats"
-                      : `${detail.team.member_limit - detail.members.length} seats free`}{" "}
+                    {detail.people?.scope === "account"
+                      ? `${detail.people.used} / ${detail.people.limit} people across the owner’s workspaces, including the owner. Existing teammates use no extra place`
+                      : detail.team.member_limit === null
+                        ? "Unlimited seats"
+                        : `${detail.team.member_limit - detail.members.length} seats free`}{" "}
                     · they join the moment they accept
                   </p>
                 </>

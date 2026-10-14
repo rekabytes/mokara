@@ -6,11 +6,14 @@
 **/.git
 .github
 
-# Secrets. Env values reach the containers as runtime env / build args, never
-# from here. `!` nothing: no .env file is ever wanted in an image.
+# Secrets. Supply credentials through runtime environment, never build args or
+# files in the image. Example templates contain no deployable secrets.
 **/.env
 **/.env.*
 !**/.env.example
+**/*.pem
+**/*.key
+**/*.p12
 
 # Installed or generated elsewhere — every one of these is rebuilt in-image, and
 # copying a host copy is how a stale artifact ships.

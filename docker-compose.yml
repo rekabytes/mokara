@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: mokara_password
       POSTGRES_DB: mokara
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +22,7 @@ services:
     container_name: mokara-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
 
@@ -46,8 +46,8 @@ services:
       MINIO_ROOT_USER: mokaraadmin
       MINIO_ROOT_PASSWORD: mokaramokara
     ports:
-      - "9000:9000" # S3 API  → S3_ENDPOINT
-      - "9001:9001" # web console → http://localhost:9001 (create the bucket here)
+      - "127.0.0.1:9000:9000" # S3 API  → S3_ENDPOINT
+      - "127.0.0.1:9001:9001" # web console → http://localhost:9001 (create the bucket here)
     volumes:
       - minio_data:/data
     healthcheck:

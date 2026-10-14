@@ -33,7 +33,9 @@ pnpm dev                      # migrates + generates, then backend :4700 + front
 
 The browser only ever talks to the frontend at :4701; it proxies `/api/*` to
 the backend, so there is no CORS and no public API URL to configure. Demo data:
-`pnpm db:seed` (users `mira` / `jonas` / `priya`, password `demo-password`).
+`DEMO_SEED_ENABLED=true pnpm db:seed` (users `alice` / `bob` / `charlie`, demo password `password123`). Configure `packages/db/.env` with `ENV=development` and a loopback development database first. Repeat runs preserve existing users’ passwords.
+
+The separate screenshot fixture script uses `mira` / `jonas` / `priya`. It requires explicit development opt-in and a loopback backend origin, refuses redirects and never prints session tokens. See [demo seed safety](development/environment-configuration.md#demo-seed-safety).
 
 > `tsx watch` does **not** reload on `.env` edits — restart the backend after
 > changing env values.

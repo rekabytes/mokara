@@ -7,6 +7,26 @@ if (!connectionString) {
   throw new Error("DATABASE_URL is not set");
 }
 
+// Opt-in and loopback checks run before constructing a database client.
+if (
+  process.env.ENV !== "development" ||
+  process.env.NODE_ENV === "production" ||
+  process.env.DEMO_SEED_ENABLED !== "true"
+) {
+  throw new Error(
+    "Demo seeding requires ENV=development and DEMO_SEED_ENABLED=true, and is forbidden when NODE_ENV=production"
+  );
+}
+const databaseUrl = new URL(connectionString);
+if (
+  !["postgres:", "postgresql:"].includes(databaseUrl.protocol) ||
+  !["localhost", "127.0.0.1", "[::1]"].includes(databaseUrl.hostname)
+) {
+  throw new Error(
+    "Demo seeding requires a loopback PostgreSQL database; remote databases are forbidden"
+  );
+}
+
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString }),
 });
@@ -27,7 +47,7 @@ const DEMO_PASSWORD_HASH = "$2a$10$Fbuiz9jRNBBABRRIBu5DkeeC5A8uvucXoAf0dAaNy59gl
 async function main() {
   const alice = await prisma.user.upsert({
     where: { username: "alice" },
-    update: { passwordHash: DEMO_PASSWORD_HASH },
+    update: {},
     create: {
       username: "alice",
       passwordHash: DEMO_PASSWORD_HASH,
@@ -36,7 +56,7 @@ async function main() {
   });
   const bob = await prisma.user.upsert({
     where: { username: "bob" },
-    update: { passwordHash: DEMO_PASSWORD_HASH },
+    update: {},
     create: {
       username: "bob",
       passwordHash: DEMO_PASSWORD_HASH,
@@ -45,7 +65,7 @@ async function main() {
   });
   const charlie = await prisma.user.upsert({
     where: { username: "charlie" },
-    update: { passwordHash: DEMO_PASSWORD_HASH },
+    update: {},
     create: {
       username: "charlie",
       passwordHash: DEMO_PASSWORD_HASH,

@@ -1,6 +1,7 @@
 import { getPublicMetadata } from "@/lib/seo.server";
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import { cookies } from "next/headers";
 import { AUTH_COOKIE } from "@/lib/cookies";
 import {
@@ -122,6 +123,16 @@ export default async function PricingPage() {
               phone-home, no feature that only exists on our server.
             </p>
             <p className="pricing-payment-note">Docker images · your hardware · your rules</p>
+            <a
+              href="https://github.com/rekabytes/mokara"
+              className="public-button public-button-secondary pricing-repository-link"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Image src="/auth/github.svg" width={18} height={18} alt="" aria-hidden="true" />
+              View on GitHub <span aria-hidden="true">↗</span>
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
           </div>
         </div>
       </section>

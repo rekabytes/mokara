@@ -49,7 +49,7 @@ cp packages/db/.env.example packages/db/.env
 pnpm install                  # installs all workspace deps (incl. backend + db + frontend)
 pnpm db:migrate:deploy        # apply existing migrations to the DB
 pnpm db:generate              # generate the Prisma 7 client into packages/db/prisma/generated
-pnpm db:seed                  # inserts sample users + tasks
+DEMO_SEED_ENABLED=true pnpm db:seed # local demo data; db .env must use ENV=development
 ```
 
 To change the schema: edit `packages/db/prisma/schema.prisma`, then run `pnpm db:migrate` (creates a new migration). For first-time setup of a fresh DB, use `pnpm db:migrate:init` instead of `migrate:deploy`.
@@ -100,6 +100,8 @@ pnpm dev
 
 ## API
 
+Environment templates, production requirements and secret handling: [environment configuration](docs/development/environment-configuration.md). Run `pnpm env:check` to verify template coverage.
+
 All routes are mounted under `/api`. Auth uses an HS256 JWT in the `mokara_token` httpOnly cookie (`__Host-mokara_token` in production; same name the frontend `proxy.ts` route guard reads).
 
 ### Auth
@@ -149,8 +151,8 @@ then commit and tag that version:
 
 ```bash
 pnpm release:bump patch
-git commit -am "chore(release): 0.2.10"
-git tag v0.2.10 && git push origin v0.2.10
+git commit -am "chore(release): 0.2.11"
+git tag v0.2.11 && git push origin v0.2.11
 ```
 
 The tag must equal `version` in the root `package.json` and every workspace
@@ -163,9 +165,9 @@ frontend build · every migration applied to an empty Postgres · synchronized
 release version matches the tag), then publishes:
 
 ```
-ghcr.io/<owner>/mokara-frontend:0.2.10   (+ :0.2, :latest)
-ghcr.io/<owner>/mokara-backend:0.2.10    (+ :0.2, :latest)
-ghcr.io/<owner>/mokara-admin:0.2.10      (+ :0.2, :latest)
+ghcr.io/<owner>/mokara-frontend:0.2.11   (+ :0.2, :latest)
+ghcr.io/<owner>/mokara-backend:0.2.11    (+ :0.2, :latest)
+ghcr.io/<owner>/mokara-admin:0.2.11      (+ :0.2, :latest)
 ```
 
 Coolify runs all three as **Docker Image** services and pulls them. Full design and

@@ -118,7 +118,19 @@ const EnvSchema = z
     message:
       "AUTH_SECRET must be set to at least 32 characters when ENV=production (generate one with: openssl rand -base64 48)",
     path: ["AUTH_SECRET"],
-  });
+  })
+  .refine(
+    (v) =>
+      v.ENV !== "production" ||
+      ![
+        "change-me-to-a-32-byte-random-string-or-longer",
+        "dev-only-insecure-secret-change-me-in-prod-32b!",
+      ].includes(v.AUTH_SECRET),
+    {
+      message: "AUTH_SECRET must be freshly generated, not a published example or development key",
+      path: ["AUTH_SECRET"],
+    }
+  );
 
 export const env = EnvSchema.parse(process.env);
 export const isProd = env.ENV === "production";

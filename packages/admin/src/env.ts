@@ -19,7 +19,7 @@ import { z } from "zod";
 const EnvSchema = z
   .object({
     /** Internal address of the mokara backend (never exposed to the browser). */
-    BACKEND_URL: z.string().min(1, "BACKEND_URL is required").default("http://127.0.0.1:4700"),
+    BACKEND_URL: z.string().url("BACKEND_URL must be an absolute URL"),
     ADMIN_PORT: z.coerce.number().int().positive().default(4702),
     ENV: z.enum(["development", "production"]).default("development"),
     ADMIN_TOKEN_SECRET: z.string().default(""),

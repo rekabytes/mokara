@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Seeds demo data for the landing-page screenshot against a RUNNING dev backend.
 //
-//   node scripts/seed-demo.mjs [baseUrl]      # default http://localhost:4700
+//   ENV=development DEMO_SEED_ENABLED=true node scripts/seed-demo.mjs <localBackendOrigin>
 //
 // Creates (idempotent — safe to re-run):
 //   3 users  mira / jonas / priya   (password: demo-password)
@@ -10,9 +10,33 @@
 //   16 tasks across all four statuses, a few with KPI bindings, one flagged
 //   2 comments on the first task
 //
-// Prints the demo owner's auth token last — the screenshot script needs it.
+// Local-only opt-in tool. Session tokens are never printed.
 
-const BASE = process.argv[2] ?? "http://localhost:4700";
+if (
+  process.env.ENV !== "development" ||
+  process.env.NODE_ENV === "production" ||
+  process.env.DEMO_SEED_ENABLED !== "true"
+) {
+  throw new Error(
+    "Demo seeding requires ENV=development and DEMO_SEED_ENABLED=true, and is forbidden when NODE_ENV=production"
+  );
+}
+if (!process.argv[2]) throw new Error("Pass an explicit local backend origin");
+const target = new URL(process.argv[2]);
+if (
+  !["http:", "https:"].includes(target.protocol) ||
+  !["localhost", "127.0.0.1", "[::1]"].includes(target.hostname) ||
+  target.username ||
+  target.password ||
+  target.pathname !== "/" ||
+  target.search ||
+  target.hash
+) {
+  throw new Error(
+    "Demo seeding requires a loopback HTTP(S) origin without credentials, path, query or fragment"
+  );
+}
+const BASE = target.origin;
 const PASSWORD = "demo-password";
 
 const TEAM = "Atlas Studio";
@@ -26,6 +50,7 @@ const KPIS = ["On-time delivery", "Review turnaround", "Client satisfaction"];
 async function call(path, { method = "GET", body, token } = {}) {
   const res = await fetch(BASE + path, {
     method,
+    redirect: "error",
     headers: {
       "content-type": "application/json",
       ...(token ? { cookie: `mokara_token=${token}` } : {}),
@@ -315,6 +340,5 @@ if (comments.length === 0) {
   console.log(`comments ${comments.length} already present`);
 }
 
-console.log("\n--- screenshot credentials ---");
-console.log(`TOKEN=${mira}`);
+console.log("\nDemo data ready. Sign in through the local frontend for screenshots.");
 console.log(`TEAM_ID=${teamId}`);

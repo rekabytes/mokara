@@ -49,7 +49,7 @@ cp packages/db/.env.example packages/db/.env
 pnpm install                  # installs all workspace deps (incl. backend + db + frontend)
 pnpm db:migrate:deploy        # apply existing migrations to the DB
 pnpm db:generate              # generate the Prisma 7 client into packages/db/prisma/generated
-pnpm db:seed                  # inserts sample users + tasks
+DEMO_SEED_ENABLED=true pnpm db:seed # local demo data; db .env must use ENV=development
 ```
 
 To change the schema: edit `packages/db/prisma/schema.prisma`, then run `pnpm db:migrate` (creates a new migration). For first-time setup of a fresh DB, use `pnpm db:migrate:init` instead of `migrate:deploy`.
@@ -99,6 +99,8 @@ pnpm dev
 | `pnpm db:seed`           | Run `prisma/seed.ts`                                    |
 
 ## API
+
+Environment templates, production requirements and secret handling: [environment configuration](docs/development/environment-configuration.md). Run `pnpm env:check` to verify template coverage.
 
 All routes are mounted under `/api`. Auth uses an HS256 JWT in the `mokara_token` httpOnly cookie (`__Host-mokara_token` in production; same name the frontend `proxy.ts` route guard reads).
 

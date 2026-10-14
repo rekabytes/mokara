@@ -98,11 +98,22 @@ async function writePlan(
   },
   sub: Stripe.Subscription
 ): Promise<void> {
+  // New checkout subscriptions carry an explicit policy marker. Existing
+  // subscriptions renewing the same tier retain their legacy policy; buying
+  // a different mapped paid tier also transitions permanently to account-wide.
+  const current = data.clearGrant
+    ? await prisma.user.findUnique({ where: { id: userId }, select: { plan: true } })
+    : null;
+  const adoptAccountPolicy =
+    data.clearGrant &&
+    (sub.metadata.people_policy === "account" ||
+      (current !== null && current.plan !== "free" && current.plan !== data.plan));
   await prisma.user.update({
     where: { id: userId },
     data: {
       ...(data.plan ? { plan: data.plan } : {}),
       ...(data.clearGrant ? { planOverride: null } : {}),
+      ...(adoptAccountPolicy ? { peoplePolicy: "account" } : {}),
       graceUntil: data.graceUntil,
       periodEnd: data.periodEnd,
       billingStatus: sub.status,
@@ -313,7 +324,9 @@ export async function createCheckoutSession(input: {
     line_items: [{ price: env.STRIPE_PRICE_STARTER, quantity: 1 }],
     // Both hashes carry the user so either webhook path can resolve them.
     metadata: { user_id: input.userId, team_id: input.teamId },
-    subscription_data: { metadata: { user_id: input.userId, team_id: input.teamId } },
+    subscription_data: {
+      metadata: { user_id: input.userId, team_id: input.teamId, people_policy: "account" },
+    },
     success_url: `${input.origin}/settings?checkout=success`,
     cancel_url: `${input.origin}/settings`,
   });

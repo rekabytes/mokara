@@ -71,7 +71,7 @@ export function pitchRows(billing: BillingInfo): string[] {
   const starter: PlanCaps | undefined = billing.plans?.starter;
   const rows: string[] = [];
   if (starter) {
-    rows.push(`${capNum(starter.members)} members per team`);
+    rows.push(`${capNum(starter.members)} people across owned workspaces, including you`);
     rows.push(`${capNum(starter.teams)} team workspaces`);
     rows.push(`${capGb(starter.storage_bytes)} account storage`);
     rows.push(`${capMb(starter.file_bytes)} per file`);

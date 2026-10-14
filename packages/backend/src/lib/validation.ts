@@ -441,3 +441,10 @@ export const libraryFilePatch = z
   .object({ name: libraryName.optional(), folder_id: z.uuid().nullable().optional() })
   .strict()
   .refine((v) => v.name !== undefined || v.folder_id !== undefined, "Choose a change.");
+
+export const adminInvitationQuerySchema = z
+  .object({
+    invitation_page: z.coerce.number().int().min(1).max(100000).default(1),
+    invitation_status: z.enum(["all", "pending", "accepted", "declined", "expired"]).default("all"),
+  })
+  .strict();

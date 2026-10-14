@@ -241,9 +241,13 @@ app.get("/api/workspaces/:id", sessionRequired, async (c) => {
     return c.json({ error: "not_found", message: "workspace not found" }, 404);
   return mirror(
     c,
-    await backend("GET", `/api/admin/workspaces/${encodeURIComponent(id)}`, {
-      token: sessionToken(c),
-    })
+    await backend(
+      "GET",
+      `/api/admin/workspaces/${encodeURIComponent(id)}?${new URLSearchParams({ invitation_page: c.req.query("invitation_page") ?? "1", invitation_status: c.req.query("invitation_status") ?? "all" })}`,
+      {
+        token: sessionToken(c),
+      }
+    )
   );
 });
 
@@ -258,9 +262,13 @@ app.get("/api/users/:id", sessionRequired, async (c) => {
   }
   return mirror(
     c,
-    await backend("GET", `/api/admin/users/${encodeURIComponent(id)}`, {
-      token: sessionToken(c),
-    })
+    await backend(
+      "GET",
+      `/api/admin/users/${encodeURIComponent(id)}?${new URLSearchParams({ invitation_page: c.req.query("invitation_page") ?? "1", invitation_status: c.req.query("invitation_status") ?? "all" })}`,
+      {
+        token: sessionToken(c),
+      }
+    )
   );
 });
 

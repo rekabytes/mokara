@@ -79,6 +79,8 @@ main#app { min-width: 0; padding: 40px 0 64px; }
 .admin-stats .stat-long dd { font-size: clamp(21px, 2.1vw, 29px); line-height: 1.3; }
 .panel-layout { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); align-items: start; gap: 24px; }
 .section-stack { display: grid; gap: 24px; }
+.section-stack > .relationship-panel { grid-column: 1 / -1; }
+.invitation-filters { margin-bottom: 20px; }
 .panel, .card { min-width: 0; padding: 26px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
 .card { margin-bottom: 24px; }
 .panel-layout > .panel { grid-column: span 6; }
@@ -486,12 +488,17 @@ export const ADMIN_JS = `
           const sections = { "Service health": "service-panel", "Needs attention": "attention-panel", "Usage": "usage-panel", "GitHub": "github-panel", "API & billing · 60 min": "metrics-panel" };
           if (sections[node.textContent]) panel.className += " " + sections[node.textContent];
         }
+        if (["Current workspace memberships", "Invitation history"].includes(node.textContent)) panel.className += " relationship-panel";
         panel.setAttribute("aria-label", node.textContent);
         if (app.dataset.view === "overview" && node.textContent === "Usage") panel.className += " panel-wide";
         panel.append(node);
         if (toolbar && !layout.children.length) panel.append(toolbar);
         layout.append(panel);
       } else if (panel) panel.append(node);
+    }
+    if (app.dataset.view === "user") {
+      const panels = Array.from(layout.children);
+      for (const panel of [...panels.filter(item => item.className.includes("relationship-panel")), ...panels.filter(item => !item.className.includes("relationship-panel"))]) layout.append(panel);
     }
     if (layout.children.length) content.append(layout);
     if (app.dataset.view === "overview") for (const section of Array.from(layout.children)) {
@@ -706,10 +713,29 @@ export const ADMIN_JS = `
     groupSections();
   }
 
+  function invitationParams() {
+    const params = new URL(window.location.href).searchParams;
+    return new URLSearchParams({ invitation_page: params.get("invitation_page") || "1", invitation_status: params.get("invitation_status") || "all" });
+  }
+  function invitationSection(data, path, workspaceView = false) {
+    heading("Invitation history");
+    if (!data) { content.append(emptyState("Invitation information is unavailable. Update the backend and refresh.")); return; }
+    const form = document.createElement("form"); form.method = "GET"; form.action = path; form.className = "filter-form invitation-filters";
+    const label = document.createElement("label"); label.textContent = "Status ";
+    const select = document.createElement("select"); select.name = "invitation_status";
+    for (const status of ["all", "pending", "accepted", "declined", "expired"]) { const option = document.createElement("option"); option.value = status; option.textContent = status === "all" ? "All invitations" : status.charAt(0).toUpperCase() + status.slice(1); option.selected = status === data.status; select.append(option); }
+    label.append(select); const submit = document.createElement("button"); submit.type = "submit"; submit.className = "btn btn-secondary btn-sm"; submit.textContent = "Filter";
+    const clear = link(path, "Clear filters"); clear.className = "btn btn-secondary btn-sm"; form.append(label, submit, clear); content.append(form);
+    content.append(dataNote("Invitation status and current membership are separate. An accepted invitation may belong to a previous membership. Pending invitations past their expiry are shown as expired. Missing historical records are not inferred from the workspace owner."));
+    content.append(expandableTable(workspaceView ? ["User", "Invited by", "Status", "Membership"] : ["Workspace", "Owner", "Invited by", "Status"], data.items.map(invite => ({ label: invite.invitee.username + " invitation to " + invite.workspace.name, values: workspaceView ? [link("/users/" + invite.invitee.id, invite.invitee.username), link("/users/" + invite.inviter.id, invite.inviter.username), invite.status, invite.currently_member ? "Current member" : "Not a member"] : [recordLink("/workspaces/" + invite.workspace.id, invite.workspace.name), link("/users/" + invite.owner.id, invite.owner.username), link("/users/" + invite.inviter.id, invite.inviter.username), invite.status], details: [["Invited user", invite.invitee.username], ["Workspace owner", invite.owner.username], ["Current membership", invite.currently_member ? "Current member" : "Not a member"], ["Sent", when(invite.created_at)], ["Responded", invite.responded_at ? when(invite.responded_at) : "No response"], ["Expires", when(invite.expires_at)]] }))));
+    if (!data.items.length) content.append(emptyState("No recorded invitations match this filter."));
+    pagination(data, path, "invitation_page");
+  }
+
   async function loadWorkspace(id) {
     loading("Loading workspace support…");
     let data;
-    try { data = await getJSON("/api/workspaces/" + encodeURIComponent(id)); }
+    try { data = await getJSON("/api/workspaces/" + encodeURIComponent(id) + "?" + invitationParams()); }
     catch { unavailable("Workspace details unavailable.", () => loadWorkspace(id)); return; }
     content.textContent = "";
     setNotice("");
@@ -729,6 +755,7 @@ export const ADMIN_JS = `
     card.append(grid); content.append(card);
     heading("Members");
     content.append(table(["User", "Role", "Joined"], workspace.members.map(member => [link("/users/" + member.id, member.username), String(member.role), when(member.joined_at)])));
+    invitationSection(workspace.invitations, "/workspaces/" + id, true);
     heading("Task activity");
     content.append(table(["Status", "Count"], workspace.task_statuses.map(row => [row.status, count(row.count)])));
     heading("Workspace GitHub links");
@@ -880,7 +907,7 @@ export const ADMIN_JS = `
     loading("Loading profile…");
     let data;
     try {
-      data = await getJSON("/api/users/" + encodeURIComponent(id));
+      data = await getJSON("/api/users/" + encodeURIComponent(id) + "?" + invitationParams());
     } catch {
       unavailable("Account details unavailable.", () => loadUser(id));
       return;
@@ -893,7 +920,7 @@ export const ADMIN_JS = `
     back.className = "back";
     content.append(back);
 
-    statCards([["Workspaces", data.total_workspaces], ["Active repositories", user.github ? user.github.active_repositories : 0], ["Links needing attention", user.github_issue_links_needing_attention], ["Operator grants", user.plan_override == null ? "0 / 1" : "1 / 1"]]);
+    statCards([["Memberships", Array.isArray(data.memberships) ? data.memberships.length : null], ["Active repositories", user.github ? user.github.active_repositories : 0], ["Links needing attention", user.github_issue_links_needing_attention], ["Operator grants", user.plan_override == null ? "0 / 1" : "1 / 1"]]);
     pageToolbar(() => loadUser(id), data.checked_at, [], "", "Plan includes operator grants. GitHub repository counts describe activated repositories, not provider-wide access. Revoke never cancels a subscription.");
     const card = document.createElement("section");
     card.className = "card profile-card";
@@ -973,7 +1000,13 @@ export const ADMIN_JS = `
     content.append(planRow);
 
     const wsHeading = document.createElement("h2");
-    wsHeading.textContent = "Workspaces";
+    heading("Current workspace memberships");
+    if (Array.isArray(data.memberships)) {
+      content.append(table(["Workspace", "Owner", "Role", "Joined"], data.memberships.map(member => [recordLink("/workspaces/" + member.workspace.id, member.workspace.name), link("/users/" + member.owner.id, member.owner.username), member.role, when(member.joined_at)])));
+      if (!data.memberships.length) content.append(emptyState("No current workspace memberships."));
+    } else content.append(emptyState("Membership information is unavailable. Update the backend and refresh."));
+    invitationSection(data.invitations, "/users/" + id);
+    wsHeading.textContent = "Owned workspaces";
     content.append(wsHeading);
     if (workspaces.length === 0) {
       const empty = document.createElement("p");

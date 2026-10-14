@@ -1,3 +1,4 @@
+import { invitationHistory } from "./admin-relationships.ts";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { Prisma } from "@mokara/db/prisma/generated/client";
@@ -6,19 +7,24 @@ import { isHosted, billingConfigured } from "../env.ts";
 import { adminRequired } from "../middleware/admin.ts";
 import { validate } from "../lib/validate.ts";
 import {
+  adminInvitationQuerySchema,
   adminSupportQuerySchema,
   adminBillingQuerySchema,
   adminUserParamSchema,
   adminAuditQuerySchema,
 } from "../lib/validation.ts";
-import { effectivePlan, limitsFor, UNLIMITED, publicCap } from "../lib/plans.ts";
+import { effectivePlan, limitsForOwner, UNLIMITED, publicCap } from "../lib/plans.ts";
 import { usedBytes } from "../lib/quota.ts";
 import { safeMetricCode } from "../lib/operational-metrics.ts";
 import { ADMIN_PAGE_SIZE } from "./admin-monitoring.ts";
 
 export const adminSupportRoutes = new Hono();
-export function supportCaps(owner: { plan: string; planOverride: string | null }) {
-  const limits = isHosted ? limitsFor(effectivePlan(owner)) : UNLIMITED;
+export function supportCaps(owner: {
+  plan: string;
+  planOverride: string | null;
+  peoplePolicy: string;
+}) {
+  const limits = isHosted ? limitsForOwner(owner) : UNLIMITED;
   return {
     members: publicCap(limits.members),
     teams: publicCap(limits.teams),
@@ -105,7 +111,15 @@ adminSupportRoutes.get(
           slug: true,
           kind: true,
           logoBytes: true,
-          owner: { select: { id: true, username: true, plan: true, planOverride: true } },
+          owner: {
+            select: {
+              id: true,
+              username: true,
+              plan: true,
+              planOverride: true,
+              peoplePolicy: true,
+            },
+          },
           _count: {
             select: { members: true, tasks: true, attachments: true, workspaceFiles: true },
           },
@@ -161,6 +175,7 @@ adminSupportRoutes.get(
   "/workspaces/:id",
   adminRequired,
   validate("param", adminUserParamSchema),
+  validate("query", adminInvitationQuerySchema),
   async (c) => {
     const { id } = c.req.valid("param");
     const team = await prisma.team.findUnique({
@@ -177,6 +192,7 @@ adminSupportRoutes.get(
             username: true,
             plan: true,
             planOverride: true,
+            peoplePolicy: true,
             githubConnection: { select: { status: true, verifiedAt: true } },
           },
         },
@@ -198,6 +214,7 @@ adminSupportRoutes.get(
         _count: { _all: true },
       }),
     ]);
+    const invitations = await invitationHistory({ teamId: id }, c.req.valid("query"));
     const counts = new Map(statuses.map((row) => [row.status, row._count._all]));
     return c.json({
       checked_at: new Date().toISOString(),
@@ -216,6 +233,7 @@ adminSupportRoutes.get(
         tasks: team._count.tasks,
         files: team._count.attachments + team._count.workspaceFiles,
         owner_team_count: ownedTeams,
+        invitations,
         members: team.members.map((member) => ({
           id: member.user.id,
           username: member.user.username,
@@ -264,6 +282,7 @@ adminSupportRoutes.get(
             username: true,
             plan: true,
             planOverride: true,
+            peoplePolicy: true,
             stripeCustomerId: true,
             periodEnd: true,
             graceUntil: true,

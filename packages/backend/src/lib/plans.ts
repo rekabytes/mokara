@@ -12,7 +12,7 @@ export const PLAN_IDS = ["free", "starter", "pro", "ultra"] as const;
 export type Plan = (typeof PLAN_IDS)[number];
 
 export type PlanLimits = {
-  /** Members one workspace may hold. */
+  /** Free: members per workspace. Paid: unique people across all owned workspaces, including owner. */
   members: number;
   /** Team-kind workspaces one account may lead (personal containers are free). */
   teams: number;
@@ -49,8 +49,8 @@ const STARTER: PlanLimits = {
 };
 const PRO: PlanLimits = { members: 25, teams: 10, storageBytes: 50 * GiB, maxFileBytes: 250 * MiB };
 const ULTRA: PlanLimits = {
-  members: Infinity,
-  teams: Infinity,
+  members: 50,
+  teams: 20,
   storageBytes: 200 * GiB,
   maxFileBytes: 1 * GiB,
 };
@@ -86,6 +86,16 @@ export function limitsFor(plan: string): PlanLimits {
  * enforcement and display resolving a different switch than each other.
  */
 export type PlanHolder = { plan: string; planOverride: string | null };
+export type PeoplePlanHolder = PlanHolder & { peoplePolicy: string };
+
+/** Preserve the complete legacy membership/workspace allowance, including Ultra. */
+export function limitsForOwner(holder: PeoplePlanHolder): PlanLimits {
+  const plan = effectivePlan(holder);
+  const limits = limitsFor(plan);
+  return holder.peoplePolicy === "legacy" && plan === "ultra"
+    ? { ...limits, members: Infinity, teams: Infinity }
+    : limits;
+}
 
 /**
  * The tier that actually applies: an operator grant wins over what Stripe says.

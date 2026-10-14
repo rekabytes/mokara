@@ -1,4 +1,8 @@
 import {
+  fileListSchema,
+  workspaceFileResultSchema,
+  workspaceFolderResultSchema,
+  fileActionSchema,
   mcpRepositoriesSchema,
   mcpActivitySchema,
   mcpConsentSchema,
@@ -54,7 +58,7 @@ const BASE = "/api";
 // `import { type Task } from "@/lib/api"` keeps working untouched.
 // `export type` (not `export`) because isolatedModules is on.
 import type {
-  Attachment,
+  FileQuery,
   BindingDraft,
   ContainerScope,
   TaskPatch,
@@ -215,11 +219,13 @@ function isErrorBody(v: unknown): v is { error: string; message?: unknown } {
  * Failures reject with the same `{ error, message, status }` shape `req()`
  * throws, so `useAsyncError`'s `run()` normalises them identically.
  */
-function uploadViaXhr(
+function uploadViaXhr<T>(
+  schema: z.ZodType<T>,
   path: string,
   file: File,
-  onProgress?: (fraction: number) => void
-): Promise<{ attachment: Attachment }> {
+  onProgress?: (fraction: number) => void,
+  signal?: AbortSignal
+): Promise<T> {
   return new Promise((resolve, reject) => {
     const form = new FormData();
     form.append("file", file);
@@ -229,11 +235,20 @@ function uploadViaXhr(
     xhr.upload.onprogress = (e) => {
       if (onProgress && e.lengthComputable) onProgress(e.loaded / e.total);
     };
+    const abort = () => xhr.abort();
+    xhr.onloadend = () => signal?.removeEventListener("abort", abort);
+    xhr.onabort = () => reject(new DOMException("Upload cancelled", "AbortError"));
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) {
+      signal.removeEventListener("abort", abort);
+      reject(new DOMException("Upload cancelled", "AbortError"));
+      return;
+    }
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           const body: unknown = JSON.parse(xhr.responseText);
-          resolve(parseResponse(uploadSchema, body));
+          resolve(parseResponse(schema, body));
         } catch {
           reject({ error: "invalid_response", message: "upload failed", status: 502 });
         }
@@ -262,6 +277,59 @@ function uploadViaXhr(
 }
 
 export const api = {
+  listFiles: (teamId: string, query: FileQuery = {}, signal?: AbortSignal) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query))
+      if (value !== undefined) params.set(key, String(value));
+    return req(fileListSchema, `/teams/${teamId}/files?${params}`, { signal, cache: "no-store" });
+  },
+  uploadWorkspaceFile: (
+    teamId: string,
+    folderId: string | null,
+    uploadId: string,
+    file: File,
+    onProgress?: (fraction: number) => void,
+    signal?: AbortSignal
+  ) => {
+    const params = new URLSearchParams({ upload_id: uploadId });
+    if (folderId) params.set("folder_id", folderId);
+    return uploadViaXhr(
+      workspaceFileResultSchema,
+      `/teams/${teamId}/files?${params}`,
+      file,
+      onProgress,
+      signal
+    );
+  },
+  createFolder: (teamId: string, name: string, parentId: string | null) =>
+    req(workspaceFolderResultSchema, `/teams/${teamId}/folders`, {
+      method: "POST",
+      body: JSON.stringify({ name, parent_id: parentId }),
+    }),
+  updateFolder: (teamId: string, id: string, data: { name?: string; parent_id?: string | null }) =>
+    req(workspaceFolderResultSchema, `/teams/${teamId}/folders/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  updateFile: (teamId: string, id: string, data: { name?: string; folder_id?: string | null }) =>
+    req(workspaceFileResultSchema, `/teams/${teamId}/files/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  manageFileItem: (
+    teamId: string,
+    kind: "files" | "folders",
+    id: string,
+    action: "trash" | "restore" | "delete"
+  ) =>
+    req(
+      fileActionSchema,
+      `/teams/${teamId}/${kind}/${id}${action === "delete" ? "" : `/${action}`}`,
+      { method: action === "delete" ? "DELETE" : "POST" }
+    ),
+  workspaceFileUrl: (teamId: string, id: string, action: "preview" | "download") =>
+    `${BASE}/teams/${teamId}/files/${id}/${action}`,
+
   mcpConsent: (request: string, signal?: AbortSignal) =>
     req(mcpConsentSchema, `/mcp/oauth/consent?request=${encodeURIComponent(request)}`, { signal }),
   approveMcp: (
@@ -554,7 +622,7 @@ export const api = {
     req(attachmentsSchema, `/tasks/${taskId}/attachments`, { signal }),
   deleteAttachment: (id: string) => req(emptySchema, `/attachments/${id}`, { method: "DELETE" }),
   uploadAttachment: (taskId: string, file: File, onProgress?: (fraction: number) => void) =>
-    uploadViaXhr(`/tasks/${taskId}/attachments`, file, onProgress),
+    uploadViaXhr(uploadSchema, `/tasks/${taskId}/attachments`, file, onProgress),
   /**
    * Download is a navigation, not a fetch: the backend answers it with the
    * bytes and `Content-Disposition: attachment`. Going through the address bar
@@ -570,7 +638,7 @@ export const api = {
     commentId: string,
     file: File,
     onProgress?: (fraction: number) => void
-  ) => uploadViaXhr(`/comments/${commentId}/attachments`, file, onProgress),
+  ) => uploadViaXhr(uploadSchema, `/comments/${commentId}/attachments`, file, onProgress),
 
   // ---- Workspace logo (PRD-11 Phase 1.4) ----
   setTeamLogo: (teamId: string, file: File) => {

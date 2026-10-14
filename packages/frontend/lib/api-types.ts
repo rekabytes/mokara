@@ -363,3 +363,48 @@ export type McpConnection = {
   scopes: string[];
   repository_ids: string[];
 };
+
+export type WorkspaceFolder = {
+  id: string;
+  parent_id: string | null;
+  name: string;
+  creator_name: string;
+  created_at: string;
+  trashed_at: string | null;
+  can_manage: boolean;
+};
+export type WorkspaceFile = {
+  id: string;
+  folder_id: string | null;
+  name: string;
+  uploader_name: string;
+  size_bytes: number;
+  content_type: string;
+  created_at: string;
+  trashed_at: string | null;
+  can_manage: boolean;
+};
+export type FileList = {
+  folders: WorkspaceFolder[];
+  files: WorkspaceFile[];
+  total: number;
+  page: number;
+  page_size: number;
+  role: string;
+  storage_configured: boolean;
+  trash_days: number;
+  usage: {
+    account_used_bytes: number;
+    account_limit_bytes: number | null;
+    workspace_used_bytes: number;
+    file_limit_bytes: number | null;
+  };
+};
+export type FileQuery = {
+  folder_id?: string;
+  q?: string;
+  view?: "files" | "trash";
+  type?: "all" | "images" | "pdf";
+  sort?: "newest" | "oldest" | "name" | "largest";
+  page?: number;
+};

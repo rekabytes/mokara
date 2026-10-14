@@ -70,6 +70,8 @@ model User {
   notifications     Notification[]
   createdTasks      Task[]                   @relation("TaskCreator")
   assignedTasks     Task[]                   @relation("TaskAssignee")
+  workspaceFolders WorkspaceFolder[] @relation("WorkspaceFolderCreator")
+  workspaceFiles WorkspaceFile[] @relation("WorkspaceFileUploader")
   attachments       Attachment[]
   adminAuditEvents  AdminAuditEvent[]
   githubConnection  GitHubAccountConnection?
@@ -150,6 +152,8 @@ model Team {
   taskEvents     TaskEvent[]
   projects       Project[]
   kpis           Kpi[]
+  workspaceFolders WorkspaceFolder[]
+  workspaceFiles WorkspaceFile[]
   attachments    Attachment[]
 
   @@map("teams")
@@ -639,4 +643,69 @@ model McpOperation {
   @@unique([connectionId, requestId])
   @@index([userId, createdAt])
   @@map("mcp_operations")
+}
+
+
+model WorkspaceFolder {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId String @map("team_id") @db.Uuid
+  parentId String? @map("parent_id") @db.Uuid
+  name String
+  createdById String? @map("created_by_id") @db.Uuid
+  creatorName String @map("creator_name")
+  trashedAt DateTime? @map("trashed_at") @db.Timestamptz(3)
+  trashBatchId String? @map("trash_batch_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  creator User? @relation("WorkspaceFolderCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  parent WorkspaceFolder? @relation("WorkspaceFolderTree", fields: [parentId, teamId], references: [id, teamId], onDelete: Cascade)
+  children WorkspaceFolder[] @relation("WorkspaceFolderTree")
+  files WorkspaceFile[]
+  @@unique([id, teamId])
+  @@index([teamId, parentId, trashedAt])
+  @@index([trashedAt])
+  @@map("workspace_folders")
+}
+
+model WorkspaceFile {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId String @map("team_id") @db.Uuid
+  folderId String? @map("folder_id") @db.Uuid
+  name String
+  uploadedById String? @map("uploaded_by_id") @db.Uuid
+  uploaderName String @map("uploader_name")
+  sizeBytes Int @map("size_bytes")
+  contentType String @map("content_type")
+  contentHash String @map("content_hash")
+  uploadId String @unique @map("upload_id") @db.Uuid
+  storageKey String @unique @map("storage_key")
+  trashedAt DateTime? @map("trashed_at") @db.Timestamptz(3)
+  trashBatchId String? @map("trash_batch_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  uploader User? @relation("WorkspaceFileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  folder WorkspaceFolder? @relation(fields: [folderId, teamId], references: [id, teamId], onDelete: Cascade)
+  @@index([teamId, folderId, trashedAt])
+  @@index([trashedAt])
+  @@map("workspace_files")
+}
+
+// Durable cleanup survives removal of file metadata (and of its workspace).
+// Queued bytes remain charged until object deletion succeeds.
+model FileObjectDeletion {
+  uploadId String? @unique @map("upload_id") @db.Uuid
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerId String @map("owner_id") @db.Uuid
+  teamId String @map("team_id") @db.Uuid
+  storageKey String @unique @map("storage_key")
+  sizeBytes Int @map("size_bytes")
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  @@index([nextAttemptAt])
+  @@index([ownerId])
+  @@index([teamId])
+  @@map("file_object_deletions")
 }

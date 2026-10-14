@@ -74,6 +74,7 @@ export async function putObject(input: {
   key: string;
   body: Uint8Array<ArrayBuffer>;
   contentType: string;
+  signal?: AbortSignal;
 }): Promise<void> {
   await s3().send(
     new PutObjectCommand({
@@ -81,7 +82,8 @@ export async function putObject(input: {
       Key: input.key,
       Body: input.body,
       ContentType: input.contentType,
-    })
+    }),
+    { abortSignal: input.signal }
   );
 }
 
@@ -151,4 +153,25 @@ export async function deleteObject(key: string): Promise<void> {
   } catch (e) {
     log.error(`could not delete stored object ${key}`, e);
   }
+}
+
+/** Streaming private library reads; ranges keep native PDF viewing efficient. */
+export async function getObjectStream(key: string, range?: string, signal?: AbortSignal) {
+  const response = await s3().send(
+    new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: key, Range: range }),
+    { abortSignal: signal }
+  );
+  if (!response.Body) throw new Error("Object body unavailable");
+  return {
+    body: response.Body.transformToWebStream(),
+    contentLength: response.ContentLength,
+    contentRange: response.ContentRange,
+  };
+}
+
+/** Durable file cleanup must observe failure instead of dropping its job. */
+export async function deleteObjectStrict(key: string, signal?: AbortSignal): Promise<void> {
+  await s3().send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: key }), {
+    abortSignal: signal,
+  });
 }

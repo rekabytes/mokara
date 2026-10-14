@@ -69,6 +69,8 @@ async function databaseSnapshot(now: Date) {
     statuses,
     files,
     logos,
+    library,
+    pendingFiles,
     plans,
     grants,
     connections,
@@ -92,6 +94,8 @@ async function databaseSnapshot(now: Date) {
     prisma.task.groupBy({ by: ["status"], _count: { _all: true } }),
     prisma.attachment.aggregate({ _sum: { sizeBytes: true }, _count: { _all: true } }),
     prisma.team.aggregate({ _sum: { logoBytes: true } }),
+    prisma.workspaceFile.aggregate({ _sum: { sizeBytes: true }, _count: { _all: true } }),
+    prisma.fileObjectDeletion.aggregate({ _sum: { sizeBytes: true } }),
     prisma.user.groupBy({ by: ["plan", "planOverride"], _count: { _all: true } }),
     prisma.user.count({ where: { planOverride: { not: null } } }),
     prisma.gitHubAccountConnection.count({ where: { status: "active" } }),
@@ -132,8 +136,12 @@ async function databaseSnapshot(now: Date) {
       signups_7d: signups,
       workspaces,
       tasks,
-      attachments: files._count._all,
-      storage_bytes: (files._sum.sizeBytes ?? 0) + (logos._sum.logoBytes ?? 0),
+      attachments: files._count._all + library._count._all,
+      storage_bytes:
+        (files._sum.sizeBytes ?? 0) +
+        (logos._sum.logoBytes ?? 0) +
+        (library._sum.sizeBytes ?? 0) +
+        (pendingFiles._sum.sizeBytes ?? 0),
       task_statuses: ["todo", "in_progress", "done", "canceled"].map((status) => ({
         status,
         count: statusCounts.get(status) ?? 0,

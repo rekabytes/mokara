@@ -396,3 +396,43 @@ export const mcpActivitySchema = z.object({
     })
   ),
 });
+
+export const workspaceFolderSchema = z.object({
+  id: z.string(),
+  parent_id: z.string().nullable(),
+  name: z.string(),
+  creator_name: z.string(),
+  created_at: z.string(),
+  trashed_at: z.string().nullable(),
+  can_manage: z.boolean(),
+});
+export const workspaceFileSchema = z.object({
+  id: z.string(),
+  folder_id: z.string().nullable(),
+  name: z.string(),
+  uploader_name: z.string(),
+  size_bytes: z.number().int().positive(),
+  content_type: z.enum(["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf"]),
+  created_at: z.string(),
+  trashed_at: z.string().nullable(),
+  can_manage: z.boolean(),
+});
+export const workspaceFileResultSchema = z.object({ file: workspaceFileSchema });
+export const workspaceFolderResultSchema = z.object({ folder: workspaceFolderSchema });
+export const fileActionSchema = z.object({ ok: z.literal(true) });
+export const fileListSchema = z.object({
+  folders: z.array(workspaceFolderSchema),
+  files: z.array(workspaceFileSchema),
+  total: z.number().int().nonnegative(),
+  page: z.number().int().positive(),
+  page_size: z.number().int().positive(),
+  role: z.string(),
+  storage_configured: z.boolean(),
+  trash_days: z.number().int().positive(),
+  usage: z.object({
+    account_used_bytes: z.number().nonnegative(),
+    account_limit_bytes: z.number().nullable(),
+    workspace_used_bytes: z.number().nonnegative(),
+    file_limit_bytes: z.number().nullable(),
+  }),
+});

@@ -15,6 +15,14 @@ const GiB = 1024 ** 3;
 let state;
 const sum = (values) => values.reduce((a, b) => a + b, 0);
 const prisma = {
+  workspaceFile: {
+    aggregate: async () => ({ _sum: { sizeBytes: 0 }, _count: { _all: 0 } }),
+    groupBy: async () => [],
+  },
+  fileObjectDeletion: {
+    aggregate: async () => ({ _sum: { sizeBytes: 0 } }),
+    groupBy: async () => [],
+  },
   team: {
     findUnique: async ({ where }) => {
       const t = state.teams.get(where.id);

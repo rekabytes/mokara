@@ -123,7 +123,51 @@ const mcpConnection = {
   scopes: ["mokara:read"],
   repository_ids: [],
 };
+const libraryFolder = {
+  id: "f",
+  parent_id: null,
+  name: "Project",
+  creator_name: "Kai",
+  created_at: date.toISOString(),
+  trashed_at: null,
+  can_manage: true,
+};
+const libraryFile = {
+  id: "file",
+  folder_id: null,
+  name: "Plan.pdf",
+  uploader_name: "Kai",
+  size_bytes: 100,
+  content_type: "application/pdf",
+  created_at: date.toISOString(),
+  trashed_at: null,
+  can_manage: true,
+};
 const cases = [
+  [
+    "listFiles",
+    ["w"],
+    {
+      files: [libraryFile],
+      folders: [libraryFolder],
+      total: 1,
+      page: 1,
+      page_size: 40,
+      role: "owner",
+      storage_configured: true,
+      trash_days: 30,
+      usage: {
+        account_used_bytes: 100,
+        account_limit_bytes: 1024,
+        workspace_used_bytes: 100,
+        file_limit_bytes: 500,
+      },
+    },
+  ],
+  ["createFolder", ["w", "Project", null], { folder: libraryFolder }],
+  ["updateFolder", ["w", "f", { name: "Project" }], { folder: libraryFolder }],
+  ["updateFile", ["w", "file", { name: "Plan.pdf" }], { file: libraryFile }],
+  ["manageFileItem", ["w", "files", "file", "trash"], { ok: true }],
   ["listMcpRepositories", [], { repositories: [] }],
   ["listMcpActivity", [], { activity: [] }],
   [
@@ -289,6 +333,8 @@ test("every JSON RPC rejects malformed success bodies and accepts its backend re
     response === undefined ? new Response(null, { status: 204 }) : Response.json(response)
   );
   const excluded = new Set([
+    "uploadWorkspaceFile",
+    "workspaceFileUrl",
     "attachmentDownloadUrl",
     "teamLogoUrl",
     "uploadAttachment",

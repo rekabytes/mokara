@@ -46,6 +46,51 @@ export type ErrorRule = {
 
 /** Every code the backend can emit, plus the client-only ones. */
 export const ERROR_RULES: Record<string, ErrorRule> = {
+  file_owner_only: {
+    kind: "permission",
+    action: "inline",
+    message: "Only the creator or workspace owner can manage this item.",
+  },
+  file_folder_contains_others: {
+    kind: "permission",
+    action: "inline",
+    message: "This folder contains another member’s items. Ask the workspace owner to manage it.",
+  },
+  file_folder_unavailable: {
+    kind: "conflict",
+    action: "inline",
+    message: "The destination folder is unavailable. Choose another folder.",
+  },
+  file_folder_cycle: {
+    kind: "input",
+    action: "inline",
+    message: "A folder cannot be moved inside itself.",
+  },
+  file_folder_limit: {
+    kind: "input",
+    action: "inline",
+    message: "The workspace folder count or nesting limit has been reached.",
+  },
+  file_upload_conflict: {
+    kind: "conflict",
+    action: "inline",
+    message: "This upload identifier is already in use. Select the file again.",
+  },
+  file_upload_pending: {
+    kind: "conflict",
+    action: "retry",
+    message: "This upload is still processing or being cleaned up. Retry shortly.",
+  },
+  file_upload_expired: {
+    kind: "conflict",
+    action: "retry",
+    message: "The upload expired. Wait for cleanup, then retry.",
+  },
+  file_restore_expired: {
+    kind: "conflict",
+    action: "inline",
+    message: "The 30-day recovery period has ended.",
+  },
   // --- session / credentials ---
   username_already_claimed: {
     kind: "conflict",

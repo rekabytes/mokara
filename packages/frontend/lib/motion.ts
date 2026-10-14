@@ -196,3 +196,10 @@ export const taskDrawerVariants: Variants = {
   closed: { width: "0%", marginLeft: 0, opacity: 0 },
   open: { width: "40%", marginLeft: 16, opacity: 1 },
 };
+
+/** Quiet modal alternative: no movement or scale for reduced-motion readers. */
+export const reducedSheetVariants: Variants = {
+  hidden: { opacity: 0, transition: noMotion },
+  visible: { opacity: 1, transition: noMotion },
+  exit: { opacity: 0, transition: noMotion },
+};

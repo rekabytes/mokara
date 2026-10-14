@@ -252,9 +252,14 @@ function existing(teamId, sizeBytes, extra = {}) {
   state.files.push(row);
   return row;
 }
-function upload(path = `/tasks/${TASK}/attachments`, size = 6, method = "POST") {
+function upload(
+  path = `/tasks/${TASK}/attachments`,
+  size = 6,
+  method = "POST",
+  type = "image/png"
+) {
   const body = new FormData();
-  body.set("file", new File([new Uint8Array(size)], "file.png", { type: "image/png" }));
+  body.set("file", new File([new Uint8Array(size)], "file", { type }));
   return app.request(path, { method, body });
 }
 
@@ -412,4 +417,23 @@ test("a workspace removed while an object is uploading leaves no file metadata o
   assert.equal((await upload()).status, 404);
   assert.equal(state.files.length, 0);
   assert.equal(state.objects.size, 0);
+});
+
+test("task/comment images enforce the 3 MB boundary on every plan; PDFs retain plan limits", async () => {
+  const cap = 3 * 1024 ** 2;
+  for (const plan of ["free", "starter", "pro", "ultra"]) {
+    state.users.get(OWNER).plan = plan;
+    for (const path of [`/tasks/${TASK}/attachments`, `/comments/${COMMENT}/attachments`]) {
+      const puts = state.puts.length;
+      const rejected = await upload(path, cap + 1);
+      assert.equal(rejected.status, 400);
+      const body = await rejected.json();
+      assert.equal(body.error, "file_too_large");
+      assert.match(body.message, /3 MB/);
+      assert.equal(state.puts.length, puts, "Reject oversized images before uploading to storage");
+      assert.equal((await upload(path, cap)).status, 201);
+      assert.equal((await upload(path, cap + 1, "POST", "application/pdf")).status, 201);
+    }
+    state.files = [];
+  }
 });

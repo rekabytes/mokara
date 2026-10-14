@@ -17,6 +17,8 @@ Every current workspace member can browse, upload, preview and download. Members
 
 Files, existing task/comment attachments, logos, Trash, upload reservations and pending object cleanup use the workspace owner's **one account-wide storage allowance**. Joining a workspace does not charge the member's account. Existing plan limits remain authoritative in `plans.ts`; creating more workspaces does not add storage. Over-quota accounts can still download, restore and remove existing files.
 
+Images attached directly to tasks or comments have a fixed 3 MB per-file cap across all plans. PDF attachments and all mDrive uploads retain the workspace owner’s package-based per-file limit. Existing larger attachments are retained and remain downloadable.
+
 Folders have a limit of 1,000 per workspace and 20 nesting levels. File formats are checked against actual signatures as well as MIME declarations; HTML and SVG are excluded. This is format validation, not a malware scanner or a guarantee about document contents.
 
 ## Architecture and reliability

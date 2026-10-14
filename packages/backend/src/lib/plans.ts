@@ -29,6 +29,9 @@ const KiB = 1024;
 const MiB = 1024 * KiB;
 const GiB = 1024 * MiB;
 
+/** Fixed image cap for task/comment attachments, independent of plan. */
+export const IMAGE_ATTACHMENT_MAX_BYTES = 3 * MiB;
+
 /** Infinity = no cap. Every row is Infinity in every column. */
 export const UNLIMITED: PlanLimits = {
   members: Infinity,

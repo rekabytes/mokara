@@ -514,3 +514,11 @@ test("expired crash reservations are charged until cleanup; active leases cannot
   assert.equal(state.jobs[0].storageKey, "active");
   assert.equal(await usedBytesOfOwner(OWNER), 40);
 });
+
+test("mDrive images larger than 3 MB retain the package per-file allowance", async () => {
+  const bytes = Buffer.alloc(3 * 1024 ** 2 + 1);
+  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes);
+  const result = await upload({ bytes, name: "Large.png", type: "image/png" });
+  assert.equal(result.status, 201);
+  assert.equal((await result.json()).file.size_bytes, bytes.length);
+});

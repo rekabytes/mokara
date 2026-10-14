@@ -52,3 +52,7 @@ MCP clients cannot use cookie auth. Ships with a PAT system:
 - Writing an MCP client inside Mokara (the user brings their own AI).
 - Real-time WS transport; streamable HTTP only.
 - Any of this before PRD-11 exists.
+
+## mDrive extension
+
+The mDrive extension adds six tools (47 total) with separate `mokara:drive:read` and `mokara:drive:upload` scopes. Existing connections receive no new permissions automatically. See [mcp-mdrive.md](mcp-mdrive.md) for the tool inventory, bounded PDF/image reads, MCP upload limits, permission migration and acceptance checklist.

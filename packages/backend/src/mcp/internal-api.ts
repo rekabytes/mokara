@@ -19,25 +19,6 @@ export async function domainResponse(
     select: { username: true },
   });
   if (!user) throw new McpFailure("mcp_not_authenticated", "Account unavailable.", 401);
-  const [
-    { taskRoutes },
-    { subtaskRoutes },
-    { commentRoutes },
-    { projectRoutes },
-    { kpiRoutes },
-    { attachmentRoutes },
-    { githubRoutes },
-    { analyticsRoutes },
-  ] = await Promise.all([
-    import("../routes/tasks.ts"),
-    import("../routes/subtasks.ts"),
-    import("../routes/comments.ts"),
-    import("../routes/projects.ts"),
-    import("../routes/kpis.ts"),
-    import("../routes/attachments.ts"),
-    import("../routes/github.ts"),
-    import("../routes/analytics.ts"),
-  ]);
   const app = new Hono<{ Variables: Vars }>();
   app.onError(
     () =>
@@ -55,17 +36,41 @@ export async function domainResponse(
     c.set("jti", principal.connectionId);
     await next();
   });
-  for (const routes of [
-    taskRoutes,
-    subtaskRoutes,
-    commentRoutes,
-    projectRoutes,
-    kpiRoutes,
-    attachmentRoutes,
-    githubRoutes,
-    analyticsRoutes,
-  ])
-    app.route("/", routes);
+  if (/^\/teams\/[^/]+\/(?:files|folders)(?:[/?]|$)/.test(path)) {
+    const { fileRoutes } = await import("../routes/files.ts");
+    app.route("/", fileRoutes);
+  } else {
+    const [
+      { taskRoutes },
+      { subtaskRoutes },
+      { commentRoutes },
+      { projectRoutes },
+      { kpiRoutes },
+      { attachmentRoutes },
+      { githubRoutes },
+      { analyticsRoutes },
+    ] = await Promise.all([
+      import("../routes/tasks.ts"),
+      import("../routes/subtasks.ts"),
+      import("../routes/comments.ts"),
+      import("../routes/projects.ts"),
+      import("../routes/kpis.ts"),
+      import("../routes/attachments.ts"),
+      import("../routes/github.ts"),
+      import("../routes/analytics.ts"),
+    ]);
+    for (const routes of [
+      taskRoutes,
+      subtaskRoutes,
+      commentRoutes,
+      projectRoutes,
+      kpiRoutes,
+      attachmentRoutes,
+      githubRoutes,
+      analyticsRoutes,
+    ])
+      app.route("/", routes);
+  }
   return app.request(path, {
     method,
     ...(body instanceof FormData

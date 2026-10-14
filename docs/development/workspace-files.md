@@ -41,4 +41,4 @@ Validation includes isolated Hono authorization/upload/cleanup tests, API contra
 
 Owner acceptance: create nested folders, upload several images/PDFs, navigate/search/filter/sort, preview/download on desktop and mobile, retry a failed upload, switch workspace during an upload, verify a second member's permissions, restore nested Trash and check shared owner usage across workspaces. Check private PDF rendering through the actual deployed proxy and object storage, including a larger document.
 
-Phase 2 remains separate: attaching an existing library file to a task, version history, public sharing, folder-specific permissions, document editing and MCP library tools are not part of Phase 1.
+Phase 2 remains separate: attaching an existing library file to a task, version history, public sharing, folder-specific permissions, document editing are not part of Phase 1. mDrive MCP reading and uploads are covered by the separate [MCP extension](mcp-mdrive.md).

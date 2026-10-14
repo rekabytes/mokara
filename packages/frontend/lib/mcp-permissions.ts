@@ -3,9 +3,23 @@ export const MCP_SCOPES = [
   "mokara:write",
   "mokara:delete",
   "mokara:github",
+  "mokara:drive:read",
+  "mokara:drive:upload",
 ] as const;
 export type McpScope = (typeof MCP_SCOPES)[number];
 export const MCP_PERMISSIONS = [
+  {
+    scope: "mokara:drive:read",
+    title: "Read mDrive files",
+    description:
+      "Browse and search folders, read PDF text, and view images in selected workspaces. File contents may contain private team information.",
+  },
+  {
+    scope: "mokara:drive:upload",
+    title: "Upload to mDrive",
+    description:
+      "Create folders and upload images or PDFs to selected workspaces using the owner’s shared storage. Does not permit moving or deleting files.",
+  },
   {
     scope: "mokara:read",
     title: "Read workspace data",

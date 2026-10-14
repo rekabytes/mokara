@@ -11,6 +11,23 @@ const workspace = randomUUID(),
   connectionId = randomUUID();
 let connection, member, eligible, operations, calls, failure, saveFailure, linked, gate;
 const prisma = {
+  workspaceFile: {
+    findFirst: async ({ where }) =>
+      where.teamId === workspace && where.id === taskId
+        ? {
+            id: taskId,
+            name: "Image.png",
+            folderId: null,
+            uploadedById: userId,
+            uploaderName: "Kai",
+            contentType: "image/png",
+            sizeBytes: 6,
+            createdAt: new Date(),
+            trashedAt: null,
+            storageKey: "private-key",
+          }
+        : null,
+  },
   mcpConnection: { findUnique: async () => connection },
   teamMember: { findUnique: async () => (member ? { role: "member" } : null) },
   task: {
@@ -443,4 +460,33 @@ test("publishing for an existing task never creates a replacement task", async (
   assert.equal(result.structuredContent.github_issue.issue_number, 42);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].path, `/tasks/${taskId}/github-issue`);
+});
+
+test("mDrive tools require explicit scopes and return native MCP image content", async () => {
+  let names = (await rpc("tools/list")).result.tools.map((t) => t.name);
+  assert.equal(names.includes("read_drive_file"), false);
+  connection.scopes.push("mokara:drive:read", "mokara:drive:upload");
+  const listed = (await rpc("tools/list")).result.tools;
+  assert.equal(
+    listed.filter((t) =>
+      [
+        "list_drive_items",
+        "search_drive_items",
+        "get_drive_file",
+        "read_drive_file",
+        "create_drive_folder",
+        "upload_drive_file",
+      ].includes(t.name)
+    ).length,
+    6
+  );
+  assert.equal(listed.find((t) => t.name === "read_drive_file").annotations.readOnlyHint, true);
+  assert.equal(listed.find((t) => t.name === "upload_drive_file").annotations.readOnlyHint, false);
+  const result = await tool("read_drive_file", { workspace_id: workspace, file_id: taskId });
+  assert.equal(result.isError, undefined);
+  assert.equal(result.content[1].type, "image");
+  assert.equal(result.content[1].mimeType, "image/png");
+  assert.equal(result.content[1].data, Buffer.from("abcdef").toString("base64"));
+  assert.equal(result.structuredContent.image, undefined);
+  assert.equal(JSON.stringify(result).includes("private-key"), false);
 });

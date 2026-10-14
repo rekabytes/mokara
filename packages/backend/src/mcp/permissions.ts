@@ -3,6 +3,8 @@ export const MCP_SCOPES = [
   "mokara:write",
   "mokara:delete",
   "mokara:github",
+  "mokara:drive:read",
+  "mokara:drive:upload",
 ] as const;
 export type McpScope = (typeof MCP_SCOPES)[number];
 export function validScopes(scopes: string[]) {

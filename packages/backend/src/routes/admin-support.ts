@@ -1,3 +1,4 @@
+import { invitationHistory } from "./admin-relationships.ts";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { Prisma } from "@mokara/db/prisma/generated/client";
@@ -6,6 +7,7 @@ import { isHosted, billingConfigured } from "../env.ts";
 import { adminRequired } from "../middleware/admin.ts";
 import { validate } from "../lib/validate.ts";
 import {
+  adminInvitationQuerySchema,
   adminSupportQuerySchema,
   adminBillingQuerySchema,
   adminUserParamSchema,
@@ -161,6 +163,7 @@ adminSupportRoutes.get(
   "/workspaces/:id",
   adminRequired,
   validate("param", adminUserParamSchema),
+  validate("query", adminInvitationQuerySchema),
   async (c) => {
     const { id } = c.req.valid("param");
     const team = await prisma.team.findUnique({
@@ -198,6 +201,7 @@ adminSupportRoutes.get(
         _count: { _all: true },
       }),
     ]);
+    const invitations = await invitationHistory({ teamId: id }, c.req.valid("query"));
     const counts = new Map(statuses.map((row) => [row.status, row._count._all]));
     return c.json({
       checked_at: new Date().toISOString(),
@@ -216,6 +220,7 @@ adminSupportRoutes.get(
         tasks: team._count.tasks,
         files: team._count.attachments + team._count.workspaceFiles,
         owner_team_count: ownedTeams,
+        invitations,
         members: team.members.map((member) => ({
           id: member.user.id,
           username: member.user.username,

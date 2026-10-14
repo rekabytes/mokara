@@ -116,3 +116,11 @@ Owner acceptance after deployment:
 ## Deferred
 
 Historical API incident storage/alerts, live storage inventories, complete invoice/payment history, last-login/retention analytics, suspension and retry controls remain separate follow-ups. They are not implied by zero counters or by the current configuration indicators.
+
+## Workspace membership and invitations
+
+User profiles show all current workspace memberships with owner, role, join date and links to workspace/owner details. This is separate from the retained owned-workspaces table; the summary card counts memberships. Invitation history shows the actual inviter separately from the current workspace owner. Workspace details retain the member list and add the same invitation history with invitee, inviter, status and current membership.
+
+History supports All/Pending/Accepted/Declined/Expired filters and 25 records per page, preserving filters during pagination and refresh. Expand Details for sent/responded/expiry dates and membership context. Pending records past their expiry display as expired without writing to the database. Accepted invitations remain historical observations even when someone has left. No invitation-to-membership provenance is fabricated: membership and recorded invitation history are presented separately. Missing history is not evidence that the owner invited someone. An older backend without these fields shows an explicit unavailable message.
+
+The existing protected detail APIs accept `invitation_page` and `invitation_status`; the admin proxy forwards only those query fields. Current memberships use stable user IDs; incoming invitations use the existing case-insensitive invitee username relation. All existing profile facts, plan actions, owned workspaces, member and task/GitHub data remain available. This change adds no schema migration, environment settings or membership/invitation mutations. Backend and admin should deploy together.

@@ -1,3 +1,4 @@
+import { invitationHistory, userMemberships } from "./admin-relationships.ts";
 import { Hono } from "hono";
 import { prisma } from "../db.ts";
 import { adminConfigured, env } from "../env.ts";
@@ -6,6 +7,7 @@ import { log } from "../lib/logger.ts";
 import { effectivePlan } from "../lib/plans.ts";
 import { validate } from "../lib/validate.ts";
 import {
+  adminInvitationQuerySchema,
   adminLoginSchema,
   adminPlanSchema,
   adminPageSchema,
@@ -137,97 +139,109 @@ adminRoutes.get("/users", adminRequired, async (c) => {
 // GET /users/:id — profile detail: the effective plan with BOTH of its inputs
 // (what Stripe says, any operator grant), the billing context that explains
 // them, and every workspace this user created with member counts.
-adminRoutes.get("/users/:id", adminRequired, validate("param", adminUserParamSchema), async (c) => {
-  const { id } = c.req.valid("param");
-  const user = await prisma.user.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      username: true,
-      displayName: true,
-      plan: true,
-      planOverride: true,
-      createdAt: true,
-      stripeCustomerId: true,
-      periodEnd: true,
-      graceUntil: true,
-      githubConnection: {
-        select: {
-          status: true,
-          verifiedAt: true,
-          _count: {
-            select: {
-              repositories: {
-                where: {
-                  enabled: true,
-                  repository: { active: true, installation: { status: "active" } },
+adminRoutes.get(
+  "/users/:id",
+  adminRequired,
+  validate("param", adminUserParamSchema),
+  validate("query", adminInvitationQuerySchema),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        plan: true,
+        planOverride: true,
+        createdAt: true,
+        stripeCustomerId: true,
+        periodEnd: true,
+        graceUntil: true,
+        githubConnection: {
+          select: {
+            status: true,
+            verifiedAt: true,
+            _count: {
+              select: {
+                repositories: {
+                  where: {
+                    enabled: true,
+                    repository: { active: true, installation: { status: "active" } },
+                  },
                 },
               },
             },
           },
         },
-      },
-      _count: {
-        select: {
-          githubIssueLinks: {
-            where: { OR: [{ status: "failed" }, { syncStatus: { in: ["failed", "paused"] } }] },
+        _count: {
+          select: {
+            githubIssueLinks: {
+              where: { OR: [{ status: "failed" }, { syncStatus: { in: ["failed", "paused"] } }] },
+            },
           },
         },
       },
-    },
-  });
-  if (!user) {
-    return c.json({ error: "not_found", message: "user not found" }, 404);
+    });
+    if (!user) {
+      return c.json({ error: "not_found", message: "user not found" }, 404);
+    }
+    const workspaces = await prisma.team.findMany({
+      where: { ownerId: id },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        kind: true,
+        createdAt: true,
+        _count: { select: { members: true } },
+      },
+    });
+    const [memberships, invitations] = await Promise.all([
+      userMemberships(id),
+      invitationHistory({ inviteeUsername: user.username }, c.req.valid("query")),
+    ]);
+    return c.json({
+      memberships,
+      invitations,
+      user: {
+        id: user.id,
+        username: user.username,
+        display_name: user.displayName,
+        plan: effectivePlan(user),
+        stripe_plan: user.plan,
+        plan_override: user.planOverride,
+        created_at: user.createdAt.toISOString(),
+        // Read-only billing context, so an operator can see whether a plan came
+        // from a subscription before granting over it.
+        has_stripe_customer: user.stripeCustomerId !== null,
+        period_end: user.periodEnd ? user.periodEnd.toISOString() : null,
+        grace_until: user.graceUntil ? user.graceUntil.toISOString() : null,
+        github: user.githubConnection
+          ? {
+              status: user.githubConnection.status,
+              verified_at: user.githubConnection.verifiedAt.toISOString(),
+              active_repositories: user.githubConnection._count.repositories,
+              reauthorization_required:
+                Date.now() - user.githubConnection.verifiedAt.getTime() >
+                GITHUB_USER_VERIFICATION_TTL_MS,
+            }
+          : null,
+        github_issue_links_needing_attention: user._count.githubIssueLinks,
+      },
+      total_workspaces: workspaces.length,
+      workspaces: workspaces.map((t) => ({
+        id: t.id,
+        name: t.name,
+        slug: t.slug,
+        kind: t.kind,
+        members: t._count.members,
+        created_at: t.createdAt.toISOString(),
+      })),
+    });
   }
-  const workspaces = await prisma.team.findMany({
-    where: { ownerId: id },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      kind: true,
-      createdAt: true,
-      _count: { select: { members: true } },
-    },
-  });
-  return c.json({
-    user: {
-      id: user.id,
-      username: user.username,
-      display_name: user.displayName,
-      plan: effectivePlan(user),
-      stripe_plan: user.plan,
-      plan_override: user.planOverride,
-      created_at: user.createdAt.toISOString(),
-      // Read-only billing context, so an operator can see whether a plan came
-      // from a subscription before granting over it.
-      has_stripe_customer: user.stripeCustomerId !== null,
-      period_end: user.periodEnd ? user.periodEnd.toISOString() : null,
-      grace_until: user.graceUntil ? user.graceUntil.toISOString() : null,
-      github: user.githubConnection
-        ? {
-            status: user.githubConnection.status,
-            verified_at: user.githubConnection.verifiedAt.toISOString(),
-            active_repositories: user.githubConnection._count.repositories,
-            reauthorization_required:
-              Date.now() - user.githubConnection.verifiedAt.getTime() >
-              GITHUB_USER_VERIFICATION_TTL_MS,
-          }
-        : null,
-      github_issue_links_needing_attention: user._count.githubIssueLinks,
-    },
-    total_workspaces: workspaces.length,
-    workspaces: workspaces.map((t) => ({
-      id: t.id,
-      name: t.name,
-      slug: t.slug,
-      kind: t.kind,
-      members: t._count.members,
-      created_at: t.createdAt.toISOString(),
-    })),
-  });
-});
+);
 
 // PATCH /users/:id/plan — the operator GRANT, and the only writer of
 // `users.plan_override`. It never touches `users.plan`: that column belongs to

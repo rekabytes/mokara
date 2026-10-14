@@ -89,6 +89,21 @@ function matchesJob(job, where) {
   return true;
 }
 const db = {
+  teamMember: {
+    findMany: async ({ where }) =>
+      where.userId ? (state.memberships ?? []) : (state.invitationMembers ?? []),
+  },
+  teamInvitation: {
+    count: async ({ where }) => {
+      state.invitationWhere = where;
+      return (state.invitations ?? []).length;
+    },
+    findMany: async ({ where, skip, take, select }) => {
+      state.invitationWhere = where;
+      state.invitationSelect = select;
+      return (state.invitations ?? []).slice(skip, skip + take);
+    },
+  },
   workspaceFile: {
     aggregate: async () => ({ _sum: { sizeBytes: 0 }, _count: { _all: 0 } }),
     groupBy: async () => [],
@@ -821,4 +836,94 @@ test("browser monitoring failure reports unavailability and expired sessions", a
   const { nodes } = await render("overview", {}, 401);
   assert.ok(nodes.notice.textContent.includes("Session expired"));
   assert.ok(nodes.content.textContent.includes("Monitoring unavailable"));
+});
+
+test("admin user profile shows joined workspaces and real inviters separately from owners", async () => {
+  const inviter = { id: "00000000-0000-4000-8000-000000000003", username: "inviting-member" };
+  state.memberships = [
+    {
+      role: "member",
+      joinedAt: new Date(),
+      team: { id: TEAM, name: "Joined team", owner: { id: USER, username: "workspace-owner" } },
+    },
+  ];
+  state.invitations = [
+    {
+      id: TEAM,
+      status: "accepted",
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 86400000),
+      respondedAt: new Date(),
+      inviter,
+      invitee: { id: USER, username: state.user.username },
+      team: { id: TEAM, name: "Joined team", owner: { id: USER, username: "workspace-owner" } },
+    },
+  ];
+  state.invitationMembers = [{ teamId: TEAM, userId: USER }];
+  const body = await (await app.request(`/api/admin/users/${USER}`, authorized())).json();
+  assert.equal(body.memberships[0].role, "member");
+  assert.equal(body.memberships[0].owner.username, "workspace-owner");
+  assert.equal(body.invitations.items[0].inviter.username, "inviting-member");
+  assert.equal(body.invitations.items[0].currently_member, true);
+  assert.equal(state.invitationWhere.AND[0].inviteeUsername, state.user.username);
+  assert.equal(state.invitationSelect.invitee.select.passwordHash, undefined);
+  assert.equal(body.workspaces.length, 1, "Preserve existing owned-workspace data");
+});
+test("workspace history preserves acceptance independently from membership and derives expired pending invites", async () => {
+  const person = { id: USER, username: "test-user" };
+  state.invitations = [
+    {
+      id: TEAM,
+      status: "pending",
+      createdAt: new Date(0),
+      expiresAt: new Date(1),
+      respondedAt: null,
+      inviter: person,
+      invitee: person,
+      team: { id: TEAM, name: "Team", owner: person },
+    },
+  ];
+  const body = await (
+    await app.request(`/api/admin/workspaces/${TEAM}?invitation_status=expired`, authorized())
+  ).json();
+  assert.equal(body.workspace.invitations.items[0].status, "expired");
+  assert.equal(body.workspace.invitations.items[0].currently_member, false);
+  assert.equal(body.workspace.invitations.items[0].responded_at, null);
+  assert.equal(state.invitationWhere.AND[0].teamId, TEAM);
+  assert.ok(state.invitationWhere.AND[1].OR.some((row) => row.expiresAt));
+  assert.equal(
+    (await app.request(`/api/admin/users/${USER}?invitation_page=0`, authorized())).status,
+    400
+  );
+  assert.equal(
+    (await app.request(`/api/admin/workspaces/${TEAM}?invitation_status=unknown`, authorized()))
+      .status,
+    400
+  );
+});
+
+test("invitation history is paginated without dropping current memberships or owned workspaces", async () => {
+  const person = { id: USER, username: state.user.username };
+  state.invitations = Array.from({ length: 26 }, (_, i) => ({
+    id: String(i),
+    status: "accepted",
+    createdAt: new Date(),
+    expiresAt: new Date(Date.now() + 86400000),
+    respondedAt: new Date(),
+    inviter: person,
+    invitee: person,
+    team: { id: TEAM, name: "Team", owner: person },
+  }));
+  const response = await app.request(
+    `/api/admin/users/${USER}?invitation_page=2&invitation_status=accepted`,
+    authorized()
+  );
+  const body = await response.json();
+  assert.equal(body.invitations.total, 26);
+  assert.equal(body.invitations.page, 2);
+  assert.equal(body.invitations.items.length, 1);
+  assert.equal(body.invitations.items[0].id, "25");
+  assert.equal(state.invitationWhere.AND[1].status, "accepted");
+  assert.deepEqual(body.memberships, []);
+  assert.equal(body.workspaces.length, 1);
 });

@@ -8,6 +8,7 @@ export const SOCIAL_IMAGE = {
   path: "/social/mokara-preview.jpg",
   width: 1200,
   height: 630,
+  type: "image/jpeg",
   alt: "Mokara — Good work. Less busywork. A preview of the task workspace.",
 };
 
@@ -103,6 +104,8 @@ function getSocialMetadata(title: string, description: string, path?: string): M
             images: [
               {
                 url: image,
+                ...(origin?.protocol === "https:" ? { secureUrl: image } : {}),
+                type: SOCIAL_IMAGE.type,
                 width: SOCIAL_IMAGE.width,
                 height: SOCIAL_IMAGE.height,
                 alt: SOCIAL_IMAGE.alt,

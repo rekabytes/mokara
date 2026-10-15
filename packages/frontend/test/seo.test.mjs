@@ -38,12 +38,22 @@ test("canonical and share URLs follow runtime configuration across deployments",
       assert.equal(metadata.alternates.canonical, new URL(path, origin).href);
       assert.equal(metadata.openGraph.url, metadata.alternates.canonical);
       assert.equal(metadata.openGraph.images[0].url, `${origin}/social/mokara-preview.jpg`);
+      assert.equal(metadata.openGraph.images[0].secureUrl, metadata.openGraph.images[0].url);
+      assert.equal(metadata.openGraph.images[0].type, "image/jpeg");
       assert.equal(metadata.twitter.images[0].url, metadata.openGraph.images[0].url);
       assert.equal(metadata.twitter.card, "summary_large_image");
       assert.equal(metadata.openGraph.title, metadata.title.absolute);
       assert.equal(metadata.openGraph.description, metadata.description);
     }
   }
+});
+
+test("HTTP deployments never advertise an invented secure image URL", (t) => {
+  environment(t, "http://localhost:4701", "false");
+  const image = getPublicMetadata("/").openGraph.images[0];
+  assert.equal(image.url, "http://localhost:4701/social/mokara-preview.jpg");
+  assert.equal(image.secureUrl, undefined);
+  assert.equal(image.type, "image/jpeg");
 });
 
 test("development is excluded by default; indexing requires an explicit valid configuration", (t) => {
@@ -132,5 +142,8 @@ test("every advertised icon and social image exists and PNG icons have their dec
   const ico = await readFile(new URL("favicon.ico", root));
   assert.equal(ico.readUInt16LE(2), 1);
   assert.equal(ico.readUInt16LE(4), 3);
-  assert.ok((await stat(new URL("social/mokara-preview.jpg", root))).size > 1000);
+  const socialImage = new URL("social/mokara-preview.jpg", root);
+  const jpeg = await readFile(socialImage);
+  assert.deepEqual([...jpeg.subarray(0, 3)], [255, 216, 255]);
+  assert.ok((await stat(socialImage)).size > 1000);
 });

@@ -164,7 +164,7 @@ export function TaskDetailDrawer({
       // animating wrapper) + ml-auto pins the card to the wrapper's right
       // edge, so as the wrapper's width animates 0 → full the card slides
       // in from the right instead of squishing. Body is flex-1 +
-      // overflow-hidden + line-clamped title/description — the drawer
+      // overflow-hidden + a scrollable content body — the drawer
       // keeps its own scrollable body. Visual card look (bg,
       // border, radius, shadow) comes from the wrapper.
       className="task-detail ml-auto flex h-full w-[min(40cqw,640px)] shrink-0 flex-col overflow-hidden"
@@ -190,8 +190,7 @@ export function TaskDetailDrawer({
 
       {/* Body — flex column: fixed title/description/chips/checklist up top,
           comments take the remaining height (shrink-0 on the checklist keeps
-          that true however many steps exist). Title/description stay
-          line-clamped. */}
+          that true however many steps exist). Descriptions render in full; the outer body scrolls when the brief grows. */}
       <div className="task-detail-body flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">
         {/* Title — double-click to rename inline */}
         {titleEditing ? (

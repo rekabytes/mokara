@@ -3,6 +3,7 @@
 import { PaperclipIcon, PencilIcon, ReplyIcon, TrashIcon } from "./icons";
 import { avatarClass, formatBytes, isImage, timeAgo, wasEdited } from "./task-format";
 import { api, type Attachment, type Comment } from "@/lib/api";
+import { TaskMarkdown } from "./TaskMarkdown";
 import { cn } from "@/lib/cn";
 import { useState } from "react";
 // One comment in the drawer thread: avatar, author, relative timestamp, body,
@@ -154,7 +155,8 @@ export function CommentRow({
                   commitEdit();
                 }
               }}
-              rows={2}
+              aria-label="Edit comment (Markdown supported)"
+              rows={4}
               className="w-full resize-none rounded-md border border-[var(--color-border-soft)] bg-white px-2 py-1.5 text-[0.83rem] leading-[1.5] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
             />
             <div className="mt-1 flex gap-2">
@@ -189,9 +191,9 @@ export function CommentRow({
                 <span className="font-medium text-[var(--color-accent)]">@{replyToUsername}</span>
               </p>
             )}
-            <p className="mt-0.5 whitespace-pre-wrap break-words text-[0.83rem] leading-[1.5] text-[var(--color-ink)]">
-              {comment.body}
-            </p>
+            <div className="mt-0.5 text-[0.83rem] leading-[1.5] text-[var(--color-ink)]">
+              <TaskMarkdown>{comment.body}</TaskMarkdown>
+            </div>
             {comment.attachments.length > 0 && (
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {comment.attachments.map((a) =>

@@ -5,7 +5,7 @@ import { env } from "../env.ts";
 // API call is proxied: the console attaches the Bearer token server-side and
 // mirrors the answer back.
 
-export type BackendAnswer = { status: number; json: unknown };
+export type BackendAnswer = { status: number; json: unknown; retryAfter?: number };
 
 const TIMEOUT_MS = 15_000;
 
@@ -46,7 +46,13 @@ export async function backend(
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     const text = await res.text();
-    return { status: res.status, json: text === "" ? null : safeParse(text) };
+    const retry = res.headers.get("retry-after");
+    const seconds = retry !== null && /^\d+$/.test(retry) ? Number(retry) : NaN;
+    return {
+      status: res.status,
+      json: text === "" ? null : safeParse(text),
+      ...(Number.isSafeInteger(seconds) && seconds > 0 ? { retryAfter: seconds } : {}),
+    };
   } catch {
     // Unreachable, timed out, or answered with something that is not HTTP: the
     // console says so instead of hanging or pretending the backend answered.

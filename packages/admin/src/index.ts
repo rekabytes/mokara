@@ -1,16 +1,15 @@
 import { serve, type ServerType } from "@hono/node-server";
 import { Hono } from "hono";
 import type { Context, Next } from "hono";
-import { deleteCookie, getCookie, setCookie } from "hono/cookie";
-import { ADMIN_TOKEN_TTL_S, COOKIE_NAME, adminConfigured, env, isProd } from "./env.ts";
+import { deleteCookie, getCookie } from "hono/cookie";
+import { COOKIE_NAME, adminConfigured, env, isProd } from "./env.ts";
 import { verifyAdminToken } from "./lib/admin-token.ts";
-import { safeEqual } from "./lib/safe-equal.ts";
 import { securityHeaders } from "./lib/security.ts";
-import { backend, messageFrom, tokenFrom } from "./lib/backend.ts";
+import { backend } from "./lib/backend.ts";
+import { mountAdminLoginRoutes } from "./routes/login.ts";
 import { ADMIN_CSS, ADMIN_JS } from "./assets.ts";
 import { ADMIN_FONTS } from "./fonts.ts";
 import {
-  loginPage,
   signedOutPage,
   userPage,
   usersPage,
@@ -69,73 +68,7 @@ for (const font of ADMIN_FONTS) {
   app.get(font.path, (c) => c.body(font.data, 200, { "content-type": "font/woff2" }));
 }
 
-// ---- login ----------------------------------------------------------------
-
-app.get("/login", (c) => {
-  if (!adminConfigured) return c.body("Not found", 404);
-  const key = c.req.query("key") ?? "";
-  // Same answer for a missing and a wrong key: this route must not become a
-  // key oracle.
-  if (!safeEqual(key, env.ADMIN_URL_KEY)) return c.body("Not found", 404);
-  return c.html(loginPage(key));
-});
-
-app.post("/login", async (c) => {
-  if (!adminConfigured) return c.body("Not found", 404);
-  const fields = await c.req.parseBody();
-  const username = typeof fields.username === "string" ? fields.username : "";
-  const password = typeof fields.password === "string" ? fields.password : "";
-  const key = typeof fields.url_key === "string" ? fields.url_key : "";
-  // Checked here AND by the backend. The form only renders for a correct key,
-  // but the POST is reachable without ever having seen it.
-  if (!safeEqual(key, env.ADMIN_URL_KEY)) return c.body("Not found", 404);
-
-  const answer = await backend("POST", "/api/admin/login", {
-    body: { username, password, url_key: key },
-  });
-
-  if (answer.status === 200) {
-    const token = tokenFrom(answer.json);
-    if (token === null) {
-      return c.html(loginPage(key, "The backend returned no token."), 502);
-    }
-    // The second half of "verify the token from the admin .env against the
-    // backend .env": never serve a page for a token this app cannot verify with
-    // its own copy of ADMIN_TOKEN_SECRET.
-    if (!(await verifyAdminToken(token))) {
-      return c.html(
-        loginPage(
-          key,
-          "The backend's token failed verification here — ADMIN_TOKEN_SECRET differs between the two .env files."
-        ),
-        502
-      );
-    }
-    setCookie(c, COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: "Lax",
-      path: "/",
-      maxAge: ADMIN_TOKEN_TTL_S,
-    });
-    return c.redirect("/overview");
-  }
-
-  if (answer.status === 401) {
-    return c.html(loginPage(key, "Invalid username or password."), 401);
-  }
-  if (answer.status === 404) {
-    return c.html(
-      loginPage(
-        key,
-        "The backend has no admin console configured — set ADMIN_USERNAME, ADMIN_PASSWORD, ADMIN_TOKEN_SECRET and ADMIN_URL_KEY in its .env."
-      ),
-      502
-    );
-  }
-  const detail = messageFrom(answer.json);
-  return c.html(loginPage(key, detail ?? `The backend answered ${answer.status}.`), 502);
-});
+mountAdminLoginRoutes(app);
 
 // POST /logout — clears the console cookie and nothing else. Deliberately NOT
 // behind sessionRequired: an expired session must still be able to sign out

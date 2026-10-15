@@ -1,6 +1,7 @@
 import { createPrivateKey } from "node:crypto";
 import { SignJWT } from "jose";
 import { env, githubConfigured } from "../env.ts";
+import { closingIssueNumbers } from "./github-issue-references.ts";
 
 const API = "https://api.github.com";
 const OAUTH = "https://github.com";
@@ -484,8 +485,8 @@ export async function githubBranchExists(
   }
 }
 
-// GitHub's explicit PR/issue links, not an arbitrary number mentioned in text.
-// Repository-scoped tokens deliberately exclude cross-repository links.
+// GitHub omits closingIssuesReferences when a PR targets a non-default branch.
+// Combine its explicit links with same-repository closing intent in the PR body.
 export async function getGitHubPullRequest(
   repository: GitHubCoordinates,
   number: number
@@ -505,7 +506,7 @@ export async function getGitHubPullRequest(
   ) {
     throw new GitHubError(502, "github_unavailable", "GitHub returned an invalid pull request");
   }
-  const issueNumbers: number[] = [];
+  const issueNumbers = new Set(closingIssueNumbers(string(row?.body) ?? "", repository));
   let cursor: string | null = null;
   do {
     const result = object(
@@ -540,7 +541,7 @@ export async function getGitHubPullRequest(
         BigInt(repositoryId) === repository.repositoryId &&
         issueNumber !== null
       )
-        issueNumbers.push(issueNumber);
+        issueNumbers.add(issueNumber);
     }
     const page = object(references.pageInfo);
     cursor = page?.hasNextPage === true ? string(page.endCursor) : null;
@@ -551,7 +552,7 @@ export async function getGitHubPullRequest(
         "GitHub omitted the next issue-reference page"
       );
   } while (cursor);
-  return { id: BigInt(id), number, state, updatedAt, branch, issueNumbers };
+  return { id: BigInt(id), number, state, updatedAt, branch, issueNumbers: [...issueNumbers] };
 }
 
 export async function listGitHubIssues(

@@ -111,7 +111,7 @@ export function LogoCard({
         <input
           ref={inputRef}
           type="file"
-          accept="image/*"
+          accept="image/png,image/jpeg,image/gif,image/webp"
           className="hidden"
           onChange={(e) => {
             void upload(e.target.files?.[0]);

@@ -23,6 +23,7 @@ import {
 import { publicCap } from "../lib/plans.ts";
 import { storageReady, putObject, getObjectStream } from "../lib/storage.ts";
 import { enqueueFileDeletion } from "../lib/file-cleanup.ts";
+import { detectFileType } from "../lib/file-types.ts";
 import {
   fileDenial,
   fileDto,
@@ -31,7 +32,6 @@ import {
   descendants,
   validDestination,
   canManage,
-  detectFileType,
   safeLibraryFilename,
   downloadDisposition,
   byteRange,

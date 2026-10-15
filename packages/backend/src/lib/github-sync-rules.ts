@@ -75,7 +75,7 @@ export function validGitHubSignature(
 
 /** Only documented issue-number branch names, never arbitrary numbers in a name. */
 export function branchIssueNumber(ref: string): number | null {
-  const match = /^(?:issue-)?([1-9]\d*)(?:[-/].+)?$/.exec(ref);
+  const match = /^(?:(?:[^/]+\/)*issue-)?([1-9]\d*)(?:[-/].+)?$/.exec(ref);
   if (!match?.[1]) return null;
   const number = Number(match[1]);
   return Number.isSafeInteger(number) && number <= 2_147_483_647 ? number : null;

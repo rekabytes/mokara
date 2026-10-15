@@ -439,11 +439,21 @@ test("signature checks authenticate exact raw bytes and reject malformed headers
 });
 
 test("branch associations only accept explicit issue-number conventions", () => {
-  for (const ref of ["issue-123-fix", "123-fix", "issue-123", "123/fix"])
+  for (const ref of [
+    "issue-123-fix",
+    "123-fix",
+    "issue-123",
+    "123/fix",
+    "codex/issue-123-fix",
+    "feature/team/issue-123",
+  ])
     assert.equal(rules.branchIssueNumber(ref), 123);
   for (const ref of [
     "main",
     "feature-123",
+    "codex/123-fix",
+    "feature/123/fix",
+    "codex/issue-123abc",
     "issue-0-fix",
     "issue-123abc",
     "issue-9999999999999999999-fix",
@@ -562,6 +572,88 @@ for (const merged of [true, false])
     assert.equal(state.events.length, 1);
     assert.equal(state.pullRequests.size, 1);
   });
+
+for (const base of ["dev", "release/next"])
+  test(`closing intent completes a merged ${base} PR without GitHub native issue links`, async () => {
+    state.prNumbers = [];
+    state.remotePr.base = { ref: base };
+    state.remotePr.body = "## Summary\n\nCloses #123";
+    state.remotePr.state = "closed";
+    state.remotePr.merged = true;
+    await processGitHubJob("webhook", prEvent("closed"));
+    await drainGitHubSyncJobs();
+    assert.equal(state.task.status, "done");
+    assert.equal(state.remoteIssue.state, "closed");
+    assert.equal(state.events.length, 1);
+    assert.equal(state.pullRequests.size, 1);
+    // Duplicate webhook delivery cannot duplicate completion or remote writes.
+    const writes = patches().length;
+    await processGitHubJob("webhook", prEvent("closed"));
+    await drainGitHubSyncJobs();
+    assert.equal(state.events.length, 1);
+    assert.equal(patches().length, writes);
+  });
+
+test("dev PR creation starts work and its association survives description removal on reopening", async () => {
+  state.prNumbers = [];
+  state.remotePr.base = { ref: "dev" };
+  state.remotePr.body = "Fixes test/repository#123";
+  await processGitHubJob("webhook", prEvent("opened"));
+  assert.equal(state.task.status, "in_progress");
+  assert.equal(state.remoteIssue.state, "open");
+  state.remotePr.state = "closed";
+  state.remotePr.updated_at = new Date(Date.now() + 4000).toISOString();
+  await processGitHubJob("webhook", prEvent("closed"));
+  await drainGitHubSyncJobs();
+  assert.equal(state.task.status, "done");
+  state.remotePr.body = "";
+  state.remotePr.state = "open";
+  state.remotePr.updated_at = new Date(Date.now() + 7000).toISOString();
+  await processGitHubJob("webhook", prEvent("reopened"));
+  await drainGitHubSyncJobs();
+  assert.equal(state.task.status, "in_progress");
+  assert.equal(state.remoteIssue.state, "open");
+});
+
+test("prefixed issue branches associate a dev PR when its body has no closing reference", async () => {
+  state.prNumbers = [];
+  state.remotePr.head.ref = "codex/issue-123-fix";
+  state.remotePr.state = "closed";
+  state.remotePr.base = { ref: "dev" };
+  await processGitHubJob("webhook", prEvent("closed"));
+  await drainGitHubSyncJobs();
+  assert.equal(state.task.status, "done");
+  assert.equal(state.remoteIssue.state, "closed");
+});
+
+test("dev PR mentions, quoted examples and another repository's closing references do not complete work", async () => {
+  state.prNumbers = [];
+  state.remotePr.body =
+    "Related to #123\n\n`Closes #123`\n\n<!-- Closes #123 -->\n\nFixes other/repository#123";
+  state.remotePr.state = "closed";
+  state.remotePr.base = { ref: "dev" };
+  await processGitHubJob("webhook", prEvent("closed"));
+  await drainGitHubSyncJobs();
+  assert.equal(state.task.status, "todo");
+  assert.equal(state.remoteIssue.state, "open");
+  assert.equal(patches().length, 0);
+});
+
+test("body and native references are combined without duplicate issue numbers", async () => {
+  state.remotePr.body = "Closes #123, fixes #124";
+  state.prNumbers = [123];
+  const { getGitHubPullRequest } = await import("../src/lib/github.ts");
+  const result = await getGitHubPullRequest(
+    {
+      installationId: 10n,
+      repositoryId: 100n,
+      owner: "test",
+      name: "repository",
+    },
+    456
+  );
+  assert.deepEqual(result.issueNumbers, [123, 124]);
+});
 
 test("reopening a linked PR reopens its issue and task; remembered association survives body edits", async () => {
   state.remotePr.state = "closed";

@@ -153,7 +153,7 @@ export function SubtasksSection({ task }: { task: Task }) {
 
       <fieldset
         disabled={busy}
-        className="mt-1.5 min-w-0 max-h-[9rem] overflow-y-auto border-0 p-0 pr-1"
+        className="task-checklist-scroll mt-1.5 min-w-0 max-h-[9rem] overflow-y-auto border-0 p-0 pr-1"
       >
         <AnimatePresence initial={false}>
           {items.map((item, index) => (

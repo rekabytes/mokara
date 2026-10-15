@@ -1,9 +1,18 @@
 import { prisma } from "../db.ts";
+import { ensureGitHubAccess } from "../lib/github-access.ts";
+import { GitHubError } from "../lib/github.ts";
 import { GITHUB_USER_VERIFICATION_TTL_MS } from "../lib/github-repositories.ts";
 import { McpFailure } from "./errors.ts";
 import { requireScope, type McpPrincipal } from "./access.ts";
 
 export async function eligibleRepositories(userId: string) {
+  try {
+    await ensureGitHubAccess(userId);
+  } catch (error) {
+    if (error instanceof GitHubError)
+      throw new McpFailure(error.code, error.message, error.status === 409 ? 409 : 503);
+    throw error;
+  }
   return prisma.gitHubRepository.findMany({
     where: {
       active: true,

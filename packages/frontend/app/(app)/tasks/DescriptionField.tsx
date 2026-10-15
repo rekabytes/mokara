@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { cn } from "@/lib/cn";
+import { TaskMarkdown } from "./TaskMarkdown";
 
 export function DescriptionField({
   value,
@@ -48,27 +48,56 @@ export function DescriptionField({
             commit();
           }
         }}
-        rows={3}
+        aria-label="Task description (Markdown supported)"
+        rows={8}
         placeholder="Add description…"
-        className="mt-3 w-full resize-none rounded-md border border-[var(--color-border-soft)] bg-white px-2.5 py-2 text-[0.92rem] leading-[1.5] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+        className="mt-3 min-h-[10rem] shrink-0 w-full resize-y rounded-md border border-[var(--color-border-soft)] bg-white px-2.5 py-2 text-[0.92rem] leading-[1.5] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
       />
     );
   }
 
   return (
-    <div
-      onClick={startEdit}
+    <section
+      className="mt-3 shrink-0 min-w-0"
       data-tour="drawer-description"
-      // line-clamp-3 keeps a long description from pushing the compact
-      // drawer taller than its content-allocated height (no internal scroll).
-      // whitespace-pre-wrap keeps the newlines typed in the textarea — HTML
-      // collapses them to spaces otherwise, so a 3-line note rendered as one.
-      className={cn(
-        "mt-3 min-h-[2.25rem] cursor-text rounded-md px-2.5 py-1.5 -mx-2 whitespace-pre-wrap break-words text-[0.92rem] leading-[1.5] transition-colors duration-150 hover:bg-[var(--color-surface-2)] line-clamp-3",
-        value ? "text-[var(--color-ink)]" : "text-[var(--color-ink-faint)]"
-      )}
+      aria-label="Description"
     >
-      {value || "Add description…"}
-    </div>
+      {value ? (
+        <div
+          onClick={(event) => {
+            // Links and read-only Markdown checkboxes keep their own behavior.
+            if (
+              event.target instanceof Element &&
+              event.target.closest("a, button, input, pre, .task-markdown-table")
+            )
+              return;
+            startEdit();
+          }}
+          className="-mx-2 cursor-text rounded-md px-2 py-1.5 text-[0.92rem] leading-[1.6] text-[var(--color-ink)] hover:bg-[var(--color-surface-2)]"
+        >
+          <TaskMarkdown>{value}</TaskMarkdown>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={startEdit}
+          className="text-[0.92rem] text-[var(--color-ink-faint)]"
+        >
+          Add description…
+        </button>
+      )}
+      <div className="mt-1 flex items-center gap-2 text-[0.7rem] text-[var(--color-ink-muted)]">
+        {value && (
+          <button
+            type="button"
+            onClick={startEdit}
+            className="cursor-pointer rounded px-1 py-0.5 hover:text-[var(--color-accent)] focus-visible:outline-2 focus-visible:outline-[var(--color-accent)]"
+          >
+            Edit description
+          </button>
+        )}
+        <span>Markdown supported</span>
+      </div>
+    </section>
   );
 }

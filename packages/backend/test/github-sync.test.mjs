@@ -11,6 +11,7 @@ process.env.GITHUB_APP_ID = "1";
 process.env.GITHUB_APP_SLUG = "test-app";
 process.env.GITHUB_APP_CLIENT_ID = "test-client";
 process.env.GITHUB_APP_CLIENT_SECRET = "test-client-secret";
+process.env.GITHUB_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
 process.env.GITHUB_APP_PRIVATE_KEY_BASE64 = Buffer.from(
   generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({
     type: "pkcs8",

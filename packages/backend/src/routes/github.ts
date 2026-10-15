@@ -1,22 +1,16 @@
 import { Hono, type Context } from "hono";
 import { prisma } from "../db.ts";
-import type { Prisma } from "@mokara/db/prisma/generated/client";
 import { env, githubConfigured, githubWebhookConfigured } from "../env.ts";
 import {
   GitHubError,
   exchangeGitHubCode,
-  getGitHubUser,
+  revokeGitHubUserToken,
   githubAuthorizeUrl,
   githubInstallUrl,
-  listUserInstallationRepositories,
-  listUserInstallations,
-  revokeGitHubUserToken,
   createGitHubIssue,
   getGitHubIssue,
   findIssueByMarker,
-  type GitHubInstallationInfo,
   type GitHubIssueInfo,
-  type GitHubRepositoryInfo,
 } from "../lib/github.ts";
 import { consumeGitHubState, createGitHubState } from "../lib/github-state.ts";
 import { isUniqueViolation } from "../lib/db-error.ts";
@@ -31,104 +25,32 @@ import {
   GITHUB_USER_VERIFICATION_TTL_MS,
 } from "../lib/github-repositories.ts";
 import { enqueueGitHubTaskSync, resumeGitHubSync } from "../lib/github-sync.ts";
+import {
+  ensureGitHubAccess,
+  readGitHubIdentity,
+  persistGitHubAccess,
+} from "../lib/github-access.ts";
+import { encryptGitHubCredentials, decryptGitHubCredentials } from "../lib/github-credentials.ts";
 import type { Vars } from "../middleware/auth.ts";
 
 export const githubRoutes = new Hono<{ Variables: Vars }>();
 
-// Without persisting a GitHub user token, periodic OAuth re-verification is the
-// only honest way to notice that a person lost access to an organization while
-// the App installation itself remains active.
 const USER_VERIFICATION_TTL_MS = GITHUB_USER_VERIFICATION_TTL_MS;
 
 function settingsRedirect(c: Context<{ Variables: Vars }>, result: string) {
   return c.redirect(`/settings?github=${encodeURIComponent(result)}`, 302);
 }
 
-async function verifiedGitHubIdentity(code: string) {
-  const token = await exchangeGitHubCode(code);
-  try {
-    const [user, installations] = await Promise.all([
-      getGitHubUser(token),
-      listUserInstallations(token),
-    ]);
-    const verifiedInstallations = await Promise.all(
-      installations.map(async (info) => ({
-        info,
-        repositories: await listUserInstallationRepositories(token, info.id),
-      }))
-    );
-    return { user, installations: verifiedInstallations };
-  } finally {
-    await revokeGitHubUserToken(token).catch(() => {
-      log.warn("temporary GitHub user token could not be revoked");
-    });
-  }
-}
-
-async function persistInstallation(
-  client: Prisma.TransactionClient,
-  connectionId: string,
-  info: GitHubInstallationInfo,
-  repositories: GitHubRepositoryInfo[]
-) {
-  const now = new Date();
-  const installation = await client.gitHubInstallation.upsert({
-    where: { githubInstallationId: info.id },
-    create: {
-      githubInstallationId: info.id,
-      accountId: info.accountId,
-      accountLogin: info.accountLogin,
-      accountType: info.accountType,
-      status: "active",
-      lastVerifiedAt: now,
-    },
-    update: {
-      accountId: info.accountId,
-      accountLogin: info.accountLogin,
-      accountType: info.accountType,
-      status: "active",
-      lastVerifiedAt: now,
-    },
-  });
-  await client.gitHubAccountInstallation.upsert({
-    where: {
-      connectionId_installationId: { connectionId, installationId: installation.id },
-    },
-    create: { connectionId, installationId: installation.id, verifiedAt: now },
-    update: { verifiedAt: now },
-  });
-  for (const repository of repositories) {
-    const row = await client.gitHubRepository.upsert({
-      where: { githubRepositoryId: repository.id },
-      create: {
-        installationId: installation.id,
-        githubRepositoryId: repository.id,
-        ownerLogin: repository.ownerLogin,
-        name: repository.name,
-        fullName: repository.fullName,
-        private: repository.private,
-        active: true,
-        lastVerifiedAt: now,
-      },
-      update: {
-        installationId: installation.id,
-        ownerLogin: repository.ownerLogin,
-        name: repository.name,
-        fullName: repository.fullName,
-        private: repository.private,
-        active: true,
-        lastVerifiedAt: now,
-      },
-    });
-    await client.gitHubAccountRepository.upsert({
-      where: { connectionId_repositoryId: { connectionId, repositoryId: row.id } },
-      create: { connectionId, repositoryId: row.id, verifiedAt: now },
-      update: { verifiedAt: now },
-    });
-  }
-}
-
 async function integrationPayload(userId: string) {
+  let verificationError: string | null = null;
+  if (githubConfigured) {
+    try {
+      await ensureGitHubAccess(userId);
+    } catch (error) {
+      if (!(error instanceof GitHubError)) throw error;
+      verificationError = error.code;
+    }
+  }
   const connection = await prisma.gitHubAccountConnection.findUnique({
     where: { userId },
     include: {
@@ -139,7 +61,9 @@ async function integrationPayload(userId: string) {
     },
   });
   const needsReauthorization = connection
-    ? Date.now() - connection.verifiedAt.getTime() > USER_VERIFICATION_TTL_MS
+    ? connection.status !== "active" ||
+      verificationError === "github_reauthorization_required" ||
+      !connection.credentialsEncrypted
     : false;
   return {
     configured: githubConfigured,
@@ -150,13 +74,17 @@ async function integrationPayload(userId: string) {
           github_login: connection.githubLogin,
           status: connection.status,
           reauthorization_required: needsReauthorization,
+          verification_error: needsReauthorization ? null : verificationError,
           repositories: connection.repositories.map(({ repository, enabled }) => ({
             id: repository.id,
             full_name: repository.fullName,
             private: repository.private,
             installation_account: repository.installation.accountLogin,
             enabled,
-            available: repository.active && repository.installation.status === "active",
+            available:
+              connection.status === "active" &&
+              repository.active &&
+              repository.installation.status === "active",
           })),
         }
       : null,
@@ -189,7 +117,16 @@ githubRoutes.put(
               ? `Activate at most ${GITHUB_REPOSITORY_LIMIT} repositories`
               : "Repository selection could not be saved",
         },
-        error === "github_repository_forbidden" ? 403 : 409
+        error === "github_repository_forbidden"
+          ? 403
+          : [
+                "github_unavailable",
+                "github_verification_pending",
+                "github_credentials_unavailable",
+                "github_rate_limited",
+              ].includes(error)
+            ? 503
+            : 409
       );
     await resumeGitHubSync(c.get("userId"));
     return c.json(await integrationPayload(c.get("userId")));
@@ -241,8 +178,13 @@ githubRoutes.get("/integrations/github/callback", async (c) => {
   const code = c.req.query("code") ?? "";
   if (!code) return settingsRedirect(c, "failed");
 
+  let unusedToken: string | null = null;
   try {
-    const { user: githubUser, installations } = await verifiedGitHubIdentity(code);
+    const credentials = await exchangeGitHubCode(code);
+    unusedToken = credentials.accessToken;
+    const identity = await readGitHubIdentity(credentials.accessToken);
+    const { user: githubUser, installations } = identity;
+    const credentialsEncrypted = encryptGitHubCredentials(state.userId, credentials);
     if (
       state.pendingInstallationId &&
       !installations.some((row) => row.info.id.toString() === state.pendingInstallationId)
@@ -264,62 +206,44 @@ githubRoutes.get("/integrations/github/callback", async (c) => {
             githubLogin: githubUser.login,
             status: "active",
             verifiedAt: new Date(),
+            credentialsEncrypted,
+            verificationRetryAt: null,
+            refreshLeaseId: null,
+            refreshLeaseUntil: null,
           },
           update: {
             githubUserId: githubUser.id,
             githubLogin: githubUser.login,
             status: "active",
             verifiedAt: new Date(),
+            credentialsEncrypted,
+            verificationRetryAt: null,
+            refreshLeaseId: null,
+            refreshLeaseUntil: null,
           },
         });
 
-        const verifiedIds = installations.map((installation) => installation.info.id);
-        await tx.gitHubAccountInstallation.deleteMany({
-          where: {
-            connectionId: connection.id,
-            ...(verifiedIds.length
-              ? { installation: { githubInstallationId: { notIn: verifiedIds } } }
-              : {}),
-          },
-        });
-        // Preserve explicit activation across refresh, but remove lost access.
-        // Switching GitHub identities must never inherit the old user's choices.
-        const visibleIds = installations.flatMap((row) =>
-          row.repositories.map((repository) => repository.id)
+        await persistGitHubAccess(
+          tx,
+          connection.id,
+          identity,
+          previous !== null && previous.githubUserId !== githubUser.id
         );
-        await tx.gitHubAccountRepository.deleteMany({
-          where: {
-            connectionId: connection.id,
-            ...(previous && previous.githubUserId !== githubUser.id
-              ? {}
-              : { repository: { githubRepositoryId: { notIn: visibleIds } } }),
-          },
-        });
-        for (const installation of installations) {
-          await persistInstallation(
-            tx,
-            connection.id,
-            installation.info,
-            installation.repositories
-          );
-        }
-        await tx.gitHubIssueLink.updateMany({
-          where: {
-            connectionId: connection.id,
-            status: "linked",
-            repository: { connections: { none: { connectionId: connection.id, enabled: true } } },
-          },
-          data: { syncStatus: "paused", syncErrorCode: "github_repository_inactive" },
-        });
       },
       { timeout: 30_000 }
     );
+    unusedToken = null;
     await resumeGitHubSync(state.userId);
     return settingsRedirect(c, "connected");
   } catch (error) {
     const code = error instanceof GitHubError ? error.code : "github_unavailable";
     log.warn(`GitHub connection failed for user ${state.userId}: ${code}`);
     return settingsRedirect(c, "failed");
+  } finally {
+    if (unusedToken)
+      await revokeGitHubUserToken(unusedToken).catch(() =>
+        log.warn("unused GitHub token could not be revoked")
+      );
   }
 });
 
@@ -330,23 +254,42 @@ githubRoutes.post("/me/integrations/github/refresh", async (c) => {
       409
     );
   }
-  // Refresh is OAuth again, not an App-token repository read: only GitHub's
-  // user endpoint can preserve the per-user permission intersection for a
-  // shared organization installation.
-  const state = await createGitHubState({ userId: c.get("userId"), purpose: "oauth" });
-  return c.json({ url: githubAuthorizeUrl(state) });
+  try {
+    await ensureGitHubAccess(c.get("userId"), true);
+    await resumeGitHubSync(c.get("userId"));
+    return c.json(await integrationPayload(c.get("userId")));
+  } catch (error) {
+    if (error instanceof GitHubError)
+      return c.json(
+        { error: error.code, message: error.message },
+        error.status === 409 ? 409 : 503
+      );
+    throw error;
+  }
 });
 
 githubRoutes.delete("/me/integrations/github", async (c) => {
   const userId = c.get("userId");
+  let discardedCredentials: string | null = null;
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
+    const connection = await tx.gitHubAccountConnection.findUnique({ where: { userId } });
+    discardedCredentials = connection?.credentialsEncrypted ?? null;
     await tx.gitHubIssueLink.updateMany({
       where: { connection: { userId } },
       data: { syncStatus: "paused", syncErrorCode: "github_connection_required" },
     });
     await tx.gitHubAccountConnection.deleteMany({ where: { userId } });
   });
+  if (discardedCredentials) {
+    try {
+      await revokeGitHubUserToken(
+        decryptGitHubCredentials(userId, discardedCredentials).accessToken
+      );
+    } catch {
+      log.warn("disconnected GitHub token could not be revoked remotely");
+    }
+  }
   return c.body(null, 204);
 });
 
@@ -479,6 +422,17 @@ githubRoutes.post("/tasks/:id/github-issue", validate("json", githubIssueSchema)
   if (!task) return c.json({ error: "not_found", message: "task not found" }, 404);
   if (!(await getTeamRole(userId, task.teamId))) {
     return c.json({ error: "forbidden", message: "not a member of this task's team" }, 403);
+  }
+
+  try {
+    await ensureGitHubAccess(userId);
+  } catch (error) {
+    if (error instanceof GitHubError)
+      return c.json(
+        { error: error.code, message: error.message },
+        error.status === 409 ? 409 : 503
+      );
+    throw error;
   }
 
   const repository = await prisma.gitHubRepository.findFirst({

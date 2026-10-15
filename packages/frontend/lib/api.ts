@@ -458,7 +458,8 @@ export const api = {
     req(githubIntegrationSchema, "/me/integrations/github", { signal }),
   connectGitHub: () => req(navigationSchema, "/me/integrations/github/connect", { method: "POST" }),
   installGitHub: () => req(navigationSchema, "/me/integrations/github/install", { method: "POST" }),
-  refreshGitHub: () => req(navigationSchema, "/me/integrations/github/refresh", { method: "POST" }),
+  refreshGitHub: () =>
+    req(githubIntegrationSchema, "/me/integrations/github/refresh", { method: "POST" }),
   disconnectGitHub: () => req(emptySchema, "/me/integrations/github", { method: "DELETE" }),
   setGitHubRepositories: (repositoryIds: string[]) =>
     req(githubIntegrationSchema, "/me/integrations/github/repositories", {

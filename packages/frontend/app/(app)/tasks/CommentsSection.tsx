@@ -58,7 +58,10 @@ export function CommentsSection({
   }, [count]);
 
   return (
-    <section className="task-comments mt-5 flex min-h-0 flex-1 flex-col" aria-label="Comments">
+    <section
+      className="task-comments mt-5 flex min-h-[16rem] flex-1 flex-col"
+      aria-label="Comments"
+    >
       <div className="flex items-center gap-2">
         <h3 className="text-[0.74rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-muted)]">
           Comments
@@ -70,11 +73,13 @@ export function CommentsSection({
         )}
       </div>
 
-      {/* The tall scroll region — the discussion can grow without bound while
-          title/description/chips stay fixed above. (The checklist above has its
-          own capped scroller since PRD-11; this is still the only region that
-          grows with content.) */}
-      <div ref={listRef} className="mt-2 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+      {/* The thread keeps its own scroll region beneath the brief and checklist.
+          A minimum section height keeps it usable when a long Markdown brief
+          makes the outer drawer body scroll. */}
+      <div
+        ref={listRef}
+        className="task-comment-list mt-2 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1"
+      >
         {loadError && (
           <div className="text-[0.8rem] text-[var(--color-ink-faint)]">
             <ErrorBanner message={loadError.message} />

@@ -102,6 +102,17 @@ async function githubFetch(
       }
     }
     if (!res.ok) {
+      const oauthError = string(object(body)?.error);
+      if (url === `${OAUTH}/login/oauth/access_token` && oauthError) {
+        const reauthorize = ["bad_refresh_token", "invalid_grant", "expired_token"].includes(
+          oauthError
+        );
+        throw new GitHubError(
+          reauthorize ? 409 : 503,
+          reauthorize ? "github_reauthorization_required" : "github_unavailable",
+          "GitHub authorization could not be renewed"
+        );
+      }
       const message = string(object(body)?.message) ?? `GitHub answered ${res.status}`;
       const rateLimited = res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0";
       throw new GitHubError(
@@ -141,21 +152,60 @@ export function githubInstallUrl(state: string): string {
   return url.toString();
 }
 
-export async function exchangeGitHubCode(code: string): Promise<string> {
+export type GitHubCredentials = {
+  accessToken: string;
+  refreshToken: string | null;
+  expiresAt: number | null;
+  refreshExpiresAt: number | null;
+};
+
+async function exchangeCredentials(fields: Record<string, string>): Promise<GitHubCredentials> {
   configured();
-  const body = await githubFetch(`${OAUTH}/login/oauth/access_token`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      client_id: env.GITHUB_APP_CLIENT_ID,
-      client_secret: env.GITHUB_APP_CLIENT_SECRET,
-      code,
-      redirect_uri: env.GITHUB_CALLBACK_URL,
-    }),
-  });
-  const token = string(object(body)?.access_token);
-  if (!token) throw new GitHubError(502, "github_unavailable", "GitHub omitted the access token");
-  return token;
+  const body = object(
+    await githubFetch(`${OAUTH}/login/oauth/access_token`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        client_id: env.GITHUB_APP_CLIENT_ID,
+        client_secret: env.GITHUB_APP_CLIENT_SECRET,
+        ...fields,
+      }),
+    })
+  );
+  const error = string(body?.error);
+  if (error) {
+    const reauthorize = ["bad_refresh_token", "invalid_grant", "expired_token"].includes(error);
+    throw new GitHubError(
+      reauthorize ? 409 : 503,
+      reauthorize ? "github_reauthorization_required" : "github_unavailable",
+      "GitHub authorization could not be renewed"
+    );
+  }
+  const accessToken = string(body?.access_token);
+  const expires = integer(body?.expires_in);
+  const refreshExpires = integer(body?.refresh_token_expires_in);
+  const refreshToken = string(body?.refresh_token);
+  if (
+    !accessToken ||
+    (expires !== null && expires <= 0) ||
+    (refreshExpires !== null && refreshExpires <= 0) ||
+    (expires !== null && (!refreshToken || refreshExpires === null))
+  )
+    throw new GitHubError(502, "github_unavailable", "GitHub returned invalid credentials");
+  return {
+    accessToken,
+    refreshToken,
+    expiresAt: expires === null ? null : Date.now() + expires * 1000,
+    refreshExpiresAt: refreshExpires === null ? null : Date.now() + refreshExpires * 1000,
+  };
+}
+
+export async function exchangeGitHubCode(code: string): Promise<GitHubCredentials> {
+  return exchangeCredentials({ code, redirect_uri: env.GITHUB_CALLBACK_URL });
+}
+
+export async function refreshGitHubUserToken(refreshToken: string): Promise<GitHubCredentials> {
+  return exchangeCredentials({ grant_type: "refresh_token", refresh_token: refreshToken });
 }
 
 export async function revokeGitHubUserToken(token: string): Promise<void> {

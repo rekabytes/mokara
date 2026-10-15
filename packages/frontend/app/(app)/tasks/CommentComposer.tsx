@@ -107,6 +107,7 @@ export function CommentComposer({
             cancelReply();
           }
         }}
+        aria-label="Comment (Markdown supported)"
         rows={2}
         placeholder={replyTo ? `Reply to @${replyTo.author.username}…` : "Add a comment…"}
         className="w-full resize-none rounded-md border border-[var(--color-border-soft)] bg-white px-2.5 py-2 text-[0.85rem] leading-[1.5] text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-faint)] focus:border-[var(--color-accent)]"
@@ -132,8 +133,8 @@ export function CommentComposer({
           ))}
         </div>
       )}
-      <div className="mt-1.5 flex items-center justify-between">
-        <span className="flex items-center gap-2 text-[0.7rem] text-[var(--color-ink-faint)]">
+      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+        <span className="flex min-w-0 flex-wrap items-center gap-2 text-[0.7rem] text-[var(--color-ink-faint)]">
           {/* PRD-11: images and PDFs ride along with the text; the route
               rejects anything else, so the picker narrows the obvious paths
               and the server stays the only judge. */}
@@ -151,7 +152,7 @@ export function CommentComposer({
             <kbd className="rounded border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-1 font-mono text-[0.66rem]">
               ⌘
             </kbd>
-            +Enter to post
+            +Enter to post · Markdown supported
           </span>
         </span>
         <input

@@ -79,12 +79,13 @@ const EnvSchema = z
     // Optional GitHub App integration. All required values act as one switch;
     // a partial set disables only GitHub and produces an actionable warning.
     // The private key is base64 so deployment env parsers never have to retain
-    // PEM newlines. User and installation access tokens are never persisted.
+    // PEM newlines. User credentials are encrypted; installation tokens are ephemeral.
     GITHUB_APP_ID: z.string().default(""),
     GITHUB_APP_SLUG: z.string().default(""),
     GITHUB_APP_CLIENT_ID: z.string().default(""),
     GITHUB_APP_CLIENT_SECRET: z.string().default(""),
     GITHUB_APP_PRIVATE_KEY_BASE64: z.string().default(""),
+    GITHUB_TOKEN_ENCRYPTION_KEY: z.string().default(""),
     GITHUB_CALLBACK_URL: z.string().default(""),
     GITHUB_PUBLIC_APP_URL: z.string().default(""),
     GITHUB_WEBHOOK_SECRET: z.string().default(""),
@@ -166,6 +167,7 @@ const githubRequired = [
   { name: "GITHUB_APP_CLIENT_SECRET", value: env.GITHUB_APP_CLIENT_SECRET },
   { name: "GITHUB_APP_PRIVATE_KEY_BASE64", value: env.GITHUB_APP_PRIVATE_KEY_BASE64 },
   { name: "GITHUB_CALLBACK_URL", value: env.GITHUB_CALLBACK_URL },
+  { name: "GITHUB_TOKEN_ENCRYPTION_KEY", value: env.GITHUB_TOKEN_ENCRYPTION_KEY },
 ];
 
 /** Empty means enabled or intentionally off; otherwise each string is actionable. */
@@ -174,6 +176,11 @@ export const githubConfigIssues: string[] = (() => {
   if (missing.length === githubRequired.length) return [];
   if (missing.length > 0)
     return [`all GitHub App values are needed together — missing ${missing.join(", ")}`];
+  if (
+    !/^[A-Za-z0-9+/]{43}=$/.test(env.GITHUB_TOKEN_ENCRYPTION_KEY) ||
+    Buffer.from(env.GITHUB_TOKEN_ENCRYPTION_KEY, "base64").length !== 32
+  )
+    return ["GITHUB_TOKEN_ENCRYPTION_KEY must be 32 random bytes encoded as base64"];
   try {
     const callback = new URL(env.GITHUB_CALLBACK_URL);
     if (isProd && callback.protocol !== "https:")

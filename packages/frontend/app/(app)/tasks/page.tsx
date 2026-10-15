@@ -1,6 +1,7 @@
 "use client";
 
 import "./tasks-mobile.css";
+import "./task-content.css";
 
 import { useState, useMemo } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";

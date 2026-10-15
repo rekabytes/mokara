@@ -245,7 +245,7 @@ const cases = [
   ["getGitHubIntegration", [], integration],
   ["connectGitHub", [], url],
   ["installGitHub", [], url],
-  ["refreshGitHub", [], url],
+  ["refreshGitHub", [], integration],
   ["disconnectGitHub", [], undefined],
   ["setGitHubRepositories", [[]], integration],
   ["retryGitHubSync", ["t"], task],

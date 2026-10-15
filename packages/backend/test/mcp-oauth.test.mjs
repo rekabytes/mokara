@@ -128,9 +128,13 @@ db.$transaction = (fn) => {
   queue = result.catch(() => {});
   return result;
 };
+mock.module("../src/lib/github-access.ts", {
+  namedExports: { ensureGitHubAccess: async () => {} },
+});
 mock.module("../src/db.ts", { namedExports: { prisma: db } });
 mock.module("../src/env.ts", {
   namedExports: {
+    githubConfigured: false,
     env: {
       ENV: "production",
       AUTH_PUBLIC_URL: origin,

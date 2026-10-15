@@ -17,6 +17,7 @@ import {
   githubInboundSchema,
   type GitHubInboundEvent,
 } from "./github-sync-rules.ts";
+import { ensureGitHubAccess, refreshDueGitHubConnections } from "./github-access.ts";
 import { GITHUB_USER_VERIFICATION_TTL_MS } from "./github-repositories.ts";
 import { TASK_INCLUDE, taskResponse } from "./task-response.ts";
 import { publishToTeam } from "./events.ts";
@@ -150,19 +151,49 @@ async function pauseReason(
 // reject stale results; a raced external write queues a corrective latest-state
 // outbox. Local task edits stay usable during a slow/unavailable GitHub request.
 async function syncLink(linkId: string, event?: IssueEvent | DevelopmentEvent): Promise<void> {
-  const snapshot = await prisma.gitHubIssueLink.findUnique({
+  const initialSnapshot = await prisma.gitHubIssueLink.findUnique({
     where: { id: linkId },
     include: LINK_INCLUDE,
   });
   if (
-    !snapshot ||
-    snapshot.status !== "linked" ||
-    snapshot.issueNumber === null ||
-    snapshot.githubIssueId === null
+    !initialSnapshot ||
+    initialSnapshot.status !== "linked" ||
+    initialSnapshot.issueNumber === null ||
+    initialSnapshot.githubIssueId === null
   )
     return;
   let statusChanged = false;
+  let snapshot = initialSnapshot;
   try {
+    if (snapshot.connection?.status === "active") {
+      try {
+        await ensureGitHubAccess(snapshot.connection.userId);
+      } catch (error) {
+        if (
+          !(error instanceof GitHubError) ||
+          !["github_reauthorization_required", "github_connection_required"].includes(error.code)
+        )
+          throw error;
+        await prisma.gitHubIssueLink.updateMany({
+          where: { id: linkId, syncRevision: snapshot.syncRevision },
+          data: { syncStatus: "paused", syncErrorCode: error.code },
+        });
+        await emitTask(snapshot.taskId);
+        return;
+      }
+      const refreshed = await prisma.gitHubIssueLink.findUnique({
+        where: { id: linkId },
+        include: LINK_INCLUDE,
+      });
+      if (
+        !refreshed ||
+        refreshed.status !== "linked" ||
+        refreshed.issueNumber === null ||
+        refreshed.githubIssueId === null
+      )
+        return;
+      snapshot = refreshed;
+    }
     const paused = await pauseReason(prisma, snapshot);
     if (paused) {
       await prisma.gitHubIssueLink.updateMany({
@@ -178,7 +209,9 @@ async function syncLink(linkId: string, event?: IssueEvent | DevelopmentEvent): 
       owner: snapshot.repository.ownerLogin,
       name: snapshot.repository.name,
     };
-    let remote = await getGitHubIssue(repository, snapshot.issueNumber);
+    const issueNumber = snapshot.issueNumber;
+    if (issueNumber === null) return;
+    let remote = await getGitHubIssue(repository, issueNumber);
     if (remote.id !== snapshot.githubIssueId)
       throw new GitHubError(409, "github_issue_mismatch", "Linked issue identity changed");
     if (
@@ -208,7 +241,7 @@ async function syncLink(linkId: string, event?: IssueEvent | DevelopmentEvent): 
       }
       const desired = desiredGitHubState(snapshot.task.status);
       if (remote.state !== desired) {
-        remote = await setGitHubIssueState(repository, snapshot.issueNumber, desired);
+        remote = await setGitHubIssueState(repository, issueNumber, desired);
         wroteRemote = true;
       }
     }
@@ -336,7 +369,12 @@ async function processLifecycle(event: GitHubInboundEvent, receivedAt: Date): Pr
       const connection = { githubUserId: BigInt(event.userId), verifiedAt: { lte: receivedAt } };
       await tx.gitHubAccountConnection.updateMany({
         where: connection,
-        data: { status: "revoked" },
+        data: {
+          status: "revoked",
+          credentialsEncrypted: null,
+          refreshLeaseId: null,
+          refreshLeaseUntil: null,
+        },
       });
       await tx.gitHubAccountRepository.updateMany({
         where: { connection },
@@ -597,6 +635,7 @@ export function startGitHubSyncWorker(): () => Promise<void> {
   let running = Promise.resolve();
   const tick = async () => {
     try {
+      await refreshDueGitHubConnections();
       await drainGitHubSyncJobs();
     } catch (error) {
       log.error("GitHub sync queue unavailable", error);

@@ -199,7 +199,7 @@ Stable `error` codes for the frontend to switch on:
 
 ## 8. Auth Details
 
-- **Password rules:** min 8 chars, no other complexity requirement.
+- **Password rules:** new passwords require at least 8 Unicode code points and at most 72 UTF-8 bytes, with no composition requirement. Existing login credentials retain compatibility; see `auth-protection.md`.
 - **Username rules:** 3–20 chars, `[a-z0-9_]+`. Stored as citext; uniqueness
   is case-insensitive. Cannot be changed in v2.
 - **Hashing:** bcrypt cost 10 (≈100 ms on dev hardware).

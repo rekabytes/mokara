@@ -91,7 +91,7 @@ function LoginForm() {
             type="password"
             autoComplete="current-password"
             required
-            minLength={8}
+            minLength={1}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Your password"
@@ -101,7 +101,7 @@ function LoginForm() {
         <button
           type="submit"
           className="btn-base btn-primary mt-1 min-h-12 w-full justify-between text-sm font-medium"
-          disabled={loading || !username.trim() || password.length < 8}
+          disabled={loading || !username.trim() || !password}
         >
           {loading ? "Signing in…" : "Sign in"}
           <svg

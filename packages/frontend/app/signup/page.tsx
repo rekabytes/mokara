@@ -4,6 +4,12 @@ import { Suspense, useCallback, useState, useRef, type FormEvent } from "react";
 import { authReturnPath } from "@/lib/auth-return-path";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
+import { manualError } from "@/lib/errors";
+import {
+  newPasswordError,
+  PASSWORD_GUIDANCE,
+  PASSWORD_MIN_CHARACTERS,
+} from "@/lib/password-policy";
 import { setSessionUser } from "@/lib/session";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -39,12 +45,17 @@ function SignupForm() {
   );
 
   const usernameValid = /^[a-z0-9_]{3,20}$/.test(username);
-  const passwordValid = password.length >= 8;
+  const passwordError = newPasswordError(password);
+  const passwordValid = passwordError === null;
   const canSubmit = usernameValid && passwordValid && verification.ready && !loading;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (passwordError) {
+      setError(manualError(passwordError));
+      return;
+    }
     if (!canSubmit) return;
     if (pending.current) return;
     pending.current = true;
@@ -134,16 +145,22 @@ function SignupForm() {
             type="password"
             autoComplete="new-password"
             required
-            minLength={8}
+            minLength={PASSWORD_MIN_CHARACTERS}
+            aria-describedby="signup-password-guidance signup-password-error"
+            aria-invalid={password.length > 0 && !passwordValid}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="At least 8 characters"
           />
-          {password.length > 0 && !passwordValid && (
-            <span className="text-[0.78rem] text-[var(--color-ink-muted)]">
-              At least 8 characters.
-            </span>
-          )}
+          <span
+            id="signup-password-guidance"
+            className="text-[0.78rem] text-[var(--color-ink-muted)]"
+          >
+            {PASSWORD_GUIDANCE}
+          </span>
+          <span id="signup-password-error" role="status" className="text-[0.78rem] text-red-600">
+            {password.length > 0 ? passwordError : null}
+          </span>
         </label>
 
         <SignupVerification key={verificationAttempt} onChange={onVerificationChange} />

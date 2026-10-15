@@ -4,6 +4,11 @@ import { motion } from "framer-motion";
 import { useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { manualError } from "@/lib/errors";
+import {
+  newPasswordError,
+  PASSWORD_GUIDANCE,
+  PASSWORD_MIN_CHARACTERS,
+} from "@/lib/password-policy";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { tileIn } from "@/lib/motion";
 import { LockIcon, TILE, TileHeader } from "./settings-chrome";
@@ -20,11 +25,16 @@ export function PasswordTile({ run, clearError, setError, passwordLoginEnabled }
   const passwordPending = useRef(false);
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordSaved, setPasswordSaved] = useState(false);
+  const passwordError = newPasswordError(newPassword);
 
   const onPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (passwordPending.current) return;
     setPasswordSaved(false);
+    if (passwordError) {
+      setError(manualError(passwordError));
+      return;
+    }
     if (newPassword !== confirmPassword) {
       setError(manualError("The new passwords don't match."));
       return;
@@ -79,12 +89,27 @@ export function PasswordTile({ run, clearError, setError, passwordLoginEnabled }
               disabled={passwordBusy}
               type="password"
               required
-              minLength={8}
+              minLength={PASSWORD_MIN_CHARACTERS}
               autoComplete="new-password"
+              aria-describedby="settings-password-guidance settings-password-error"
+              aria-invalid={newPassword.length > 0 && passwordError !== null}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               className="field"
             />
+            <span
+              id="settings-password-guidance"
+              className="text-[0.78rem] text-[var(--color-ink-muted)]"
+            >
+              {PASSWORD_GUIDANCE}
+            </span>
+            <span
+              id="settings-password-error"
+              role="status"
+              className="text-[0.78rem] text-red-600"
+            >
+              {newPassword.length > 0 ? passwordError : null}
+            </span>
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[0.84rem] font-semibold text-[var(--color-ink-muted)]">
@@ -94,7 +119,7 @@ export function PasswordTile({ run, clearError, setError, passwordLoginEnabled }
               disabled={passwordBusy}
               type="password"
               required
-              minLength={8}
+              minLength={PASSWORD_MIN_CHARACTERS}
               autoComplete="new-password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}

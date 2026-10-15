@@ -28,11 +28,17 @@ Mokara does not merge, close or reopen PRs itself. A completed task is never dow
 
 ### Branch and PR association
 
-- Use an exact issue-number prefix: `issue-123-fix-login`, `123-fix-login`, or `123/fix-login`. Arbitrary numbers elsewhere in branch names are not associations.
-- For PRs, use GitHub's explicit issue linkage, such as `Closes #123` targeting the repository's default branch, or a head branch following the convention above. GitHub's `closingIssuesReferences` is authoritative; unrelated textual mentions are not parsed as links.
+- Use an exact issue-number prefix: `issue-123-fix-login`, `123-fix-login`, or `123/fix-login`. A named prefix is supported when followed by an explicit `issue-` segment, such as `codex/issue-123-fix-login`. Arbitrary numbers elsewhere in branch names are not associations.
+- For PRs, use explicit closing intent such as `Closes #123`, `Fixes owner/repository#123`, or `Resolves https://github.com/owner/repository/issues/123` in the description, or a head branch following the convention above. Each issue needs its own closing keyword. Markdown links to a supported issue URL are accepted; code, block quotes, hidden comments, struck-out text, image labels and unrelated mentions are ignored.
+- Mokara combines these description references with GitHub's native issue links. This works for PRs targeting `dev`, release branches and the default branch. GitHub itself only provides automatic closing links for default-branch PRs; on other branches Mokara's existing webhook/outbox flow completes the task and closes its linked issue. Active access, workspace membership and the existing status/race checks still apply.
 - Only issues in the PR's base repository are supported. Cross-repository references are intentionally excluded from repository-scoped App tokens.
 - Once observed, PR-to-issue associations are remembered so later PR-body/branch edits do not sever status synchronization.
 - Tags, arbitrary branches, unknown issues, wrong installations, and PR-shaped `issues` events are ignored.
+
+After deploying this change, test with a new PR targeting `dev` and an explicit
+closing reference to a linked issue. Previously processed deliveries are
+deduplicated and are not automatically replayed by this update. Native GitHub
+completion on the default branch remains unchanged.
 
 ## Operator setup
 

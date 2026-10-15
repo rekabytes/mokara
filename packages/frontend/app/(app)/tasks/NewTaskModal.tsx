@@ -1,4 +1,5 @@
 "use client";
+import { TASK_TITLE_MAX_CHARACTERS, TASK_DESCRIPTION_MAX_CHARACTERS } from "./task-content";
 
 import { useDialogFocus } from "@/hooks/use-dialog-focus";
 import { PRIORITY_IDS, STATUS_IDS, STATUS_LABEL, containerMembersAtom } from "./board-model";
@@ -197,15 +198,28 @@ export function NewTaskModal({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Task title"
+                aria-describedby="new-task-content-guidance"
+                aria-invalid={title.trim().length > TASK_TITLE_MAX_CHARACTERS}
                 className="w-full rounded-lg border-0 bg-transparent text-[1.05rem] font-medium text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-faint)] focus:bg-transparent focus:shadow-none"
               />
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Add description…"
+                aria-describedby="new-task-content-guidance"
+                aria-invalid={description.trim().length > TASK_DESCRIPTION_MAX_CHARACTERS}
                 rows={3}
                 className="mt-1 w-full resize-none rounded-lg border-0 bg-transparent text-[0.9rem] text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-faint)]"
               />
+              <p
+                id="new-task-content-guidance"
+                role="status"
+                className="mt-1 text-[0.7rem] text-[var(--color-ink-muted)]"
+              >
+                Title: {title.trim().length.toLocaleString()} / {TASK_TITLE_MAX_CHARACTERS} ·
+                Description: {description.trim().length.toLocaleString()} /{" "}
+                {TASK_DESCRIPTION_MAX_CHARACTERS.toLocaleString()} characters
+              </p>
             </div>
 
             {/* Chip row: status, priority, due date, more */}
@@ -478,7 +492,12 @@ export function NewTaskModal({
                   data-tour="task-submit"
                   className="btn-base btn-primary"
                   style={{ padding: "0.45rem 0.95rem", fontSize: "0.82rem" }}
-                  disabled={!title.trim() || creating}
+                  disabled={
+                    !title.trim() ||
+                    creating ||
+                    title.trim().length > TASK_TITLE_MAX_CHARACTERS ||
+                    description.trim().length > TASK_DESCRIPTION_MAX_CHARACTERS
+                  }
                 >
                   {creating ? "Creating…" : "Create task"}
                 </button>

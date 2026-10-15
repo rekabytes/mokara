@@ -7,6 +7,7 @@ import { AssigneeChip, KpiChip, ProjectChip } from "./chips";
 import { ChipShell, Dropdown, MenuItem, PriorityBars } from "./chrome";
 import { CommentsSection } from "./CommentsSection";
 import { DescriptionField } from "./DescriptionField";
+import { TASK_TITLE_MAX_CHARACTERS } from "./task-content";
 import { DatePicker } from "./DatePicker";
 import {
   CalendarIcon,
@@ -128,6 +129,7 @@ export function TaskDetailDrawer({
   }
 
   function commitRename() {
+    if (titleDraft.trim().length > TASK_TITLE_MAX_CHARACTERS) return;
     setTitleEditing(false);
     const t = titleDraft.trim();
     if (!t || t === task.title) {
@@ -194,16 +196,29 @@ export function TaskDetailDrawer({
       <div className="task-detail-body flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">
         {/* Title — double-click to rename inline */}
         {titleEditing ? (
-          <input
-            ref={titleInputRef}
-            autoFocus
-            onFocus={(event) => event.currentTarget.select()}
-            value={titleDraft}
-            onChange={(e) => setTitleDraft(e.target.value)}
-            onBlur={commitRename}
-            onKeyDown={onTitleKey}
-            className="block w-full rounded-md border border-[var(--color-border-soft)] bg-white px-2 py-1.5 text-[1.3rem] font-semibold tracking-[-0.012em] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
-          />
+          <>
+            <input
+              ref={titleInputRef}
+              autoFocus
+              onFocus={(event) => event.currentTarget.select()}
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              aria-label="Task title"
+              aria-describedby="task-title-limit"
+              aria-invalid={titleDraft.trim().length > TASK_TITLE_MAX_CHARACTERS}
+              onBlur={commitRename}
+              onKeyDown={onTitleKey}
+              className="block w-full rounded-md border border-[var(--color-border-soft)] bg-white px-2 py-1.5 text-[1.3rem] font-semibold tracking-[-0.012em] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+            />
+            <p
+              id="task-title-limit"
+              role="status"
+              className="mt-1 text-[0.7rem] text-[var(--color-ink-muted)]"
+            >
+              {titleDraft.trim().length.toLocaleString()} / {TASK_TITLE_MAX_CHARACTERS} characters.
+              Shorten the title to save if it exceeds the limit.
+            </p>
+          </>
         ) : (
           <h2
             data-tour="drawer-title"

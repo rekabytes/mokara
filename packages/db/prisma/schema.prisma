@@ -225,6 +225,7 @@ model Task {
   githubIssueLink GitHubIssueLink?
 
   @@index([teamId, status])
+  @@index([teamId, createdAt, id])
   @@index([status])
   @@index([projectId])
   @@index([assigneeId])
@@ -425,6 +426,7 @@ model Comment {
   attachments Attachment[]
 
   @@index([taskId, createdAt])
+  @@index([taskId, createdAt, id])
   @@index([parentId])
   @@map("comments")
 }

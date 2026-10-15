@@ -157,3 +157,28 @@ After configuring credentials and deploying the migration, manually verify both
 providers: new-user completion, returning login, Settings linking, cancellation,
 expired callbacks, username conflicts and sign-out/revocation. This live provider
 check requires the operator's provider accounts and is not replaced by mocks.
+
+## Live-update access
+
+The authenticated SSE endpoint carries verified session claims from middleware.
+Before each event and heartbeat it reads current account/workspace membership
+from Postgres and rechecks Redis session revocation. No membership or revocation
+cache grants ongoing access. Removal from a subscribed workspace closes the
+stream; the existing EventSource reconnect path subscribes to current workspaces
+and lets consumers refetch missed updates. New memberships are still picked up
+on reconnect.
+
+Idle streams revalidate every 25 seconds. Token expiry has a separate deadline
+timer. Database/Redis check failures, subscriber disconnects and aborted clients
+close the stream and release subscriptions/timers. Work waiting behind a slow
+reader is serialized and capped at 32 pending frames; overload closes the stream
+for reconnection rather than growing the backlog. Already transmitted frames
+cannot be recalled. Responses use `Cache-Control: private, no-store`.
+
+This extends the existing session denylist and issued-at floor rules; it does not
+change token issuance or general session revocation semantics. No migration or
+new environment variable is needed. `test:auth` includes isolated real-Hono SSE
+tests with mocked storage and controlled timers. Live acceptance: keep a member's
+tab open, remove their membership, then update a task in that workspace; verify
+no further workspace updates arrive. Also test remote device sign-out, token
+expiry and reconnection for a still-authorized member.

@@ -152,13 +152,17 @@ const actualStorage = await import("../src/lib/storage.ts");
 mock.module("../src/lib/storage.ts", {
   namedExports: {
     ...actualStorage,
-    putObject: async ({ key, body }) => {
+    putObject: async ({ key, body, contentType }) => {
       if (state.failPut) throw Error("storage unavailable");
       state.puts.push(key);
       state.objects.set(key, body);
+      state.contentTypes.set(key, contentType);
       await state.onPut?.();
     },
-    getObjectBytes: async () => ({ body: new Uint8Array([1]), contentType: "application/pdf" }),
+    getObjectBytes: async (key) => ({
+      body: state.objects.get(key) ?? new Uint8Array([1]),
+      contentType: state.contentTypes.get(key) ?? "application/pdf",
+    }),
     deleteObject: async (key) => {
       state.removed.push(key);
       state.objects.delete(key);
@@ -190,6 +194,7 @@ beforeEach(() => {
     puts: [],
     removed: [],
     objects: new Map(),
+    contentTypes: new Map(),
     users: new Map([
       [
         OWNER,
@@ -256,10 +261,15 @@ function upload(
   path = `/tasks/${TASK}/attachments`,
   size = 6,
   method = "POST",
-  type = "image/png"
+  type = "image/jpeg"
 ) {
   const body = new FormData();
-  body.set("file", new File([new Uint8Array(size)], "file", { type }));
+  // Small signature fixtures preserve the exact quota arithmetic in these tests.
+  const bytes = new Uint8Array(size);
+  const signature =
+    type === "application/pdf" ? Buffer.from("%PDF-") : Buffer.from([255, 216, 255]);
+  bytes.set(signature.subarray(0, Math.min(size, signature.length)));
+  body.set("file", new File([bytes], "file", { type }));
   return app.request(path, { method, body });
 }
 
@@ -436,4 +446,154 @@ test("task/comment images enforce the 3 MB boundary on every plan; PDFs retain p
     }
     state.files = [];
   }
+});
+
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jN1kAAAAASUVORK5CYII=",
+  "base64"
+);
+function rawUpload(path, bytes, type, method = "POST") {
+  const body = new FormData();
+  body.set("file", new File([bytes], "image.png", { type }));
+  return app.request(path, { method, body });
+}
+
+test("new task/comment/logo uploads reject active content and spoofed image labels before object writes", async () => {
+  state.actor = OWNER;
+  Object.assign(state.teams.get(TEAM), {
+    logoKey: "old-logo",
+    logoBytes: 10,
+    logoType: "image/png",
+  });
+  state.objects.set("old-logo", PNG);
+  const invalid = [
+    [
+      Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>test()</script></svg>'),
+      "image/svg+xml",
+    ],
+    [Buffer.from("<svg></svg>"), "image/png"],
+    [Buffer.from("<html><script>test()</script></html>"), "image/jpeg"],
+    [Buffer.from("<?xml version='1.0'?><svg/>"), ""],
+    [PNG, "image/jpeg"],
+    [Buffer.from("%PDF-1.7"), "image/png"],
+    [Buffer.from("not an image"), "image/gif"],
+    [new Uint8Array(), "image/png"],
+  ];
+  for (const [path, method] of [
+    [`/tasks/${TASK}/attachments`, "POST"],
+    [`/comments/${COMMENT}/attachments`, "POST"],
+    [`/teams/${TEAM}/logo`, "PUT"],
+  ]) {
+    for (const [bytes, type] of invalid) {
+      const response = await rawUpload(path, bytes, type, method);
+      assert.equal(response.status, 400);
+      assert.equal((await response.json()).error, "unsupported_type");
+    }
+  }
+  assert.equal(state.puts.length, 0);
+  assert.equal(state.files.length, 0);
+  assert.equal(state.teams.get(TEAM).logoKey, "old-logo");
+  assert.deepEqual([...state.objects.keys()], ["old-logo"]);
+});
+
+test("supported image signatures store a canonical type across all upload surfaces", async () => {
+  state.actor = OWNER;
+  const fixtures = [
+    [PNG, "image/png"],
+    [Buffer.from([255, 216, 255, 224]), "image/jpeg"],
+    [Buffer.from("GIF89a"), "image/gif"],
+    [Buffer.from("RIFF0000WEBP"), "image/webp"],
+  ];
+  for (const [path, method] of [
+    [`/tasks/${TASK}/attachments`, "POST"],
+    [`/comments/${COMMENT}/attachments`, "POST"],
+    [`/teams/${TEAM}/logo`, "PUT"],
+  ]) {
+    for (const [bytes, type] of fixtures) {
+      const response = await rawUpload(path, bytes, type, method);
+      assert.equal(response.status, method === "PUT" ? 200 : 201);
+      assert.equal(state.contentTypes.get(state.puts.at(-1)), type);
+      if (method === "PUT") assert.equal(state.teams.get(TEAM).logoType, type);
+      else assert.equal((await response.json()).attachment.content_type, type);
+    }
+  }
+});
+
+test("missing MIME labels are inferred from content and cannot bypass the image size cap", async () => {
+  state.actor = OWNER;
+  assert.equal((await rawUpload(`/teams/${TEAM}/logo`, PNG, "", "PUT")).status, 200);
+  const oversized = new Uint8Array(3 * 1024 ** 2 + 1);
+  oversized.set(PNG);
+  for (const path of [`/tasks/${TASK}/attachments`, `/comments/${COMMENT}/attachments`]) {
+    const accepted = await rawUpload(path, PNG, "");
+    assert.equal(accepted.status, 201);
+    assert.equal((await accepted.json()).attachment.content_type, "image/png");
+    const puts = state.puts.length;
+    const rejected = await rawUpload(path, oversized, "");
+    assert.equal(rejected.status, 400);
+    assert.equal((await rejected.json()).error, "file_too_large");
+    assert.equal(state.puts.length, puts);
+    assert.equal((await rawUpload(path, oversized, "application/pdf")).status, 400);
+  }
+});
+
+test("PDF signatures remain accepted for attachments but never for logos", async () => {
+  state.actor = OWNER;
+  for (const path of [`/tasks/${TASK}/attachments`, `/comments/${COMMENT}/attachments`]) {
+    const response = await rawUpload(path, Buffer.from("%PDF-1.7"), "application/pdf");
+    assert.equal(response.status, 201);
+    assert.equal((await response.json()).attachment.content_type, "application/pdf");
+    assert.equal((await rawUpload(path, PNG, "application/pdf")).status, 400);
+  }
+  assert.equal(
+    (await rawUpload(`/teams/${TEAM}/logo`, Buffer.from("%PDF-1.7"), "application/pdf", "PUT"))
+      .status,
+    400
+  );
+});
+
+test("legacy active/unsupported logos are blocked regardless of database or object MIME labels", async () => {
+  Object.assign(state.teams.get(TEAM), { logoKey: "legacy-logo", logoType: "image/png" });
+  state.contentTypes.set("legacy-logo", "image/png");
+  for (const bytes of [
+    Buffer.from("<svg><script>test()</script></svg>"),
+    Buffer.from("<html>active</html>"),
+    Buffer.from("%PDF-1.7"),
+    new Uint8Array(),
+  ]) {
+    state.objects.set("legacy-logo", bytes);
+    const response = await app.request(`/teams/${TEAM}/logo`);
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error, "unsupported_type");
+  }
+  assert.equal(state.teams.get(TEAM).logoKey, "legacy-logo", "No destructive legacy migration");
+});
+
+test("logo reads derive passive MIME from bytes and set safe serving headers", async () => {
+  Object.assign(state.teams.get(TEAM), { logoKey: "legacy-logo", logoType: "text/html" });
+  state.objects.set("legacy-logo", PNG);
+  state.contentTypes.set("legacy-logo", "image/svg+xml");
+  const response = await app.request(`/teams/${TEAM}/logo`);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "image/png");
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(response.headers.get("content-security-policy"), "default-src 'none'; sandbox");
+  assert.equal(response.headers.get("cache-control"), "private, no-cache");
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), PNG);
+});
+
+test("legacy attachment downloads remain forced downloads with safe serving headers", async () => {
+  const attachment = existing(TEAM, 24, {
+    contentType: "image/svg+xml",
+    filename: "old.svg",
+    storageKey: "old.svg",
+  });
+  const bytes = Buffer.from("<svg><script>test()</script></svg>");
+  state.objects.set(attachment.storageKey, bytes);
+  const response = await app.request(`/attachments/${attachment.id}/download`);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-disposition"), /^attachment;/);
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(response.headers.get("content-security-policy"), "default-src 'none'; sandbox");
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes);
 });

@@ -160,7 +160,7 @@ export function CommentComposer({
           type="file"
           disabled={busy}
           multiple
-          accept="image/*,application/pdf"
+          accept="image/png,image/jpeg,image/gif,image/webp,application/pdf"
           className="hidden"
           onChange={(e) => {
             const picked = e.target.files;

@@ -5,6 +5,7 @@ import { createTeamSchema, inviteSchema } from "../lib/validation.ts";
 import { validate } from "../lib/validate.ts";
 import { slugify, ensureUniqueSlug } from "../lib/slug.ts";
 import { getTeamRole } from "../lib/team-membership.ts";
+import { detectImageType, isRasterImageType } from "../lib/file-types.ts";
 import {
   joinDenial,
   limitsOfUser,
@@ -307,10 +308,12 @@ teamRoutes.put("/:id/logo", async (c) => {
   if (!(file instanceof File)) {
     return c.json({ error: "invalid_input", message: "a file is required" }, 400);
   }
-  // Images only: this renders in an <img> in the sidebar, so anything else is
-  // either a mistake or an attempt to get bytes served under our own origin.
-  if (!file.type.startsWith("image/")) {
-    return c.json({ error: "invalid_input", message: "the logo must be an image" }, 400);
+  const declaredType = file.type === "application/octet-stream" ? "" : file.type;
+  if (declaredType && !isRasterImageType(declaredType)) {
+    return c.json(
+      { error: "unsupported_type", message: "Upload a PNG, JPEG, GIF or WebP logo." },
+      400
+    );
   }
 
   const team = await prisma.team.findUnique({
@@ -324,12 +327,23 @@ teamRoutes.put("/:id/logo", async (c) => {
   const denial = await storageUploadDenial(account, file.size, team.logoBytes ?? 0);
   if (denial) return c.json({ error: denial.error, message: denial.message }, denial.status);
 
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const contentType = detectImageType(bytes);
+  if (!contentType || (declaredType && declaredType !== contentType)) {
+    return c.json(
+      {
+        error: "unsupported_type",
+        message: "Upload a PNG, JPEG, GIF or WebP logo with matching file content.",
+      },
+      400
+    );
+  }
   const key = teamLogoKey(teamId);
   try {
     await putObject({
       key,
-      body: new Uint8Array(await file.arrayBuffer()),
-      contentType: file.type,
+      body: bytes,
+      contentType,
     });
   } catch {
     return c.json(
@@ -353,7 +367,7 @@ teamRoutes.put("/:id/logo", async (c) => {
     if (finalDenial) return finalDenial;
     await client.team.update({
       where: { id: teamId },
-      data: { logoKey: key, logoBytes: file.size, logoType: file.type },
+      data: { logoKey: key, logoBytes: file.size, logoType: contentType },
     });
     return { previousKey: current.logoKey };
   }).catch(async (error: unknown) => {
@@ -426,9 +440,22 @@ teamRoutes.get("/:id/logo", async (c) => {
       503
     );
   }
+  // Reclassify stored bytes too: older uploads and stored metadata are untrusted.
+  const contentType = detectImageType(bytes.body);
+  if (!contentType) {
+    return c.json(
+      {
+        error: "unsupported_type",
+        message: "Replace this logo with a PNG, JPEG, GIF or WebP image.",
+      },
+      400
+    );
+  }
   return c.body(bytes.body, 200, {
-    "Content-Type": team.logoType || bytes.contentType,
+    "Content-Type": contentType,
     "Content-Length": String(bytes.body.byteLength),
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "default-src 'none'; sandbox",
     // no-cache (not no-store): the browser may keep it but must revalidate, so a
     // replaced logo shows up on the next load instead of lurking for a session.
     "Cache-Control": "private, no-cache",

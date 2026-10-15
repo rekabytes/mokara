@@ -10,6 +10,7 @@ import {
   storageReady,
 } from "../lib/storage.ts";
 import { IMAGE_ATTACHMENT_MAX_BYTES } from "../lib/plans.ts";
+import { detectFileType, isRasterImageType } from "../lib/file-types.ts";
 import { toAttachment } from "../lib/types.ts";
 import type { Vars } from "../middleware/auth.ts";
 
@@ -33,11 +34,6 @@ const uploaderInclude = {
 } as const;
 
 const MAX_FILENAME = 200;
-
-/** Comment attachments are an allowlist, not a free-for-all. */
-function commentFileTypeOk(type: string): boolean {
-  return type.startsWith("image/") || type === "application/pdf";
-}
 
 // The stored name is display text, not a path: the object key is server-minted
 // from the row id, so none of this reaches the bucket. Stripping directory
@@ -74,6 +70,22 @@ async function commentTaskId(commentId: string): Promise<string | null> {
 
 type Denial = { status: 404 | 403 | 409 | 400 | 503; error: string; message: string };
 
+const unsupportedFile: Denial = {
+  status: 400,
+  error: "unsupported_type",
+  message: "Upload a PNG, JPEG, GIF, WebP image or PDF with matching file content.",
+};
+
+function imageSizeDenial(type: string, size: number): Denial | null {
+  if (!isRasterImageType(type) || size <= IMAGE_ATTACHMENT_MAX_BYTES) return null;
+  return {
+    status: 400,
+    error: "file_too_large",
+    message:
+      "Images attached to tasks or comments must be 3 MB or smaller. Use mDrive for larger images.",
+  };
+}
+
 /**
  * The whole upload pipeline the task and comment routes share: storage
  * configured? → file present? → plan caps → quota → put → row. `scope` and
@@ -85,7 +97,7 @@ async function storeUpload(
     get: (k: "userId") => string;
     req: { parseBody: () => Promise<Record<string, string | File>> };
   },
-  input: { teamId: string; scope: "tasks" | "comments"; scopeId: string; allowlist?: boolean }
+  input: { teamId: string; scope: "tasks" | "comments"; scopeId: string }
 ): Promise<{ attachment: ReturnType<typeof toAttachment> } | Denial> {
   const userId = c.get("userId");
 
@@ -108,23 +120,12 @@ async function storeUpload(
   const account = await storageAccountForTeam(input.teamId);
   if (!account) return { status: 404, error: "not_found", message: "team not found" };
 
-  const contentType = file.type || "application/octet-stream";
-  if (input.allowlist && !commentFileTypeOk(contentType)) {
-    return {
-      status: 400,
-      error: "unsupported_type",
-      message: "comments accept images and PDFs only",
-    };
-  }
-
-  if (contentType.startsWith("image/") && file.size > IMAGE_ATTACHMENT_MAX_BYTES) {
-    return {
-      status: 400,
-      error: "file_too_large",
-      message:
-        "Images attached to tasks or comments must be 3 MB or smaller. Use mDrive for larger images.",
-    };
-  }
+  // Browsers use octet-stream when no useful type is available; infer it below.
+  const declaredType = file.type === "application/octet-stream" ? "" : file.type;
+  if (declaredType && !isRasterImageType(declaredType) && declaredType !== "application/pdf")
+    return unsupportedFile;
+  const declaredSizeDenial = imageSizeDenial(declaredType, file.size);
+  if (declaredSizeDenial) return declaredSizeDenial;
 
   // Preflight avoids an unnecessary object upload; the transactional check below
   // enforces the shared account cap when other uploads finish concurrently.
@@ -132,6 +133,11 @@ async function storeUpload(
   if (denial) return denial;
 
   const bytes = new Uint8Array(await file.arrayBuffer());
+  const contentType = detectFileType(bytes);
+  if (!contentType || (declaredType && declaredType !== contentType)) return unsupportedFile;
+  // Inferred images must obey the cap even if the client omitted its MIME type.
+  const detectedSizeDenial = imageSizeDenial(contentType, file.size);
+  if (detectedSizeDenial) return detectedSizeDenial;
   const id = crypto.randomUUID();
   const key = storageKey({
     teamId: input.teamId,
@@ -217,7 +223,6 @@ attachmentRoutes.post("/tasks/:id/attachments", async (c) => {
     teamId,
     scope: "tasks",
     scopeId: taskId,
-    allowlist: true,
   });
   if ("error" in result)
     return c.json({ error: result.error, message: result.message }, result.status);
@@ -259,7 +264,6 @@ attachmentRoutes.post("/comments/:id/attachments", async (c) => {
     teamId,
     scope: "comments",
     scopeId: commentId,
-    allowlist: true,
   });
   if ("error" in result)
     return c.json({ error: result.error, message: result.message }, result.status);
@@ -300,6 +304,8 @@ attachmentRoutes.get("/attachments/:id/download", async (c) => {
     "Content-Length": String(body.body.byteLength),
     "Content-Disposition": contentDisposition(file.filename),
     "Cache-Control": "private, no-store",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "default-src 'none'; sandbox",
   });
 });
 

@@ -182,14 +182,9 @@ mock.module("../src/lib/storage.ts", {
 const { fileRoutes } = await import("../src/routes/files.ts");
 const { drainFileDeletions, expireFileTrash } = await import("../src/lib/file-cleanup.ts");
 const { usedBytesOfOwner } = await import("../src/lib/quota.ts");
-const {
-  descendants,
-  folderChain,
-  byteRange,
-  detectFileType,
-  downloadDisposition,
-  safeLibraryFilename,
-} = await import("../src/lib/workspace-files.ts");
+const { descendants, folderChain, byteRange, downloadDisposition, safeLibraryFilename } =
+  await import("../src/lib/workspace-files.ts");
+const { detectFileType } = await import("../src/lib/file-types.ts");
 const app = new Hono();
 app.use("*", async (c, next) => {
   c.set("userId", caller);

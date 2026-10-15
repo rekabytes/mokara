@@ -448,7 +448,7 @@ export function NewTaskModal({
                   ref={fileRef}
                   type="file"
                   multiple
-                  accept="image/*,application/pdf"
+                  accept="image/png,image/jpeg,image/gif,image/webp,application/pdf"
                   className="hidden"
                   onChange={(e) => {
                     const picked = e.target.files;

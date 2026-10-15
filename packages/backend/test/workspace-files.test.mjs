@@ -185,6 +185,7 @@ const { usedBytesOfOwner } = await import("../src/lib/quota.ts");
 const { descendants, folderChain, byteRange, downloadDisposition, safeLibraryFilename } =
   await import("../src/lib/workspace-files.ts");
 const { detectFileType } = await import("../src/lib/file-types.ts");
+const { MULTIPART_OVERHEAD_BYTES } = await import("../src/lib/upload-body.ts");
 const app = new Hono();
 app.use("*", async (c, next) => {
   c.set("userId", caller);
@@ -280,6 +281,38 @@ test("all file routes check membership before exposing workspace contents", asyn
   }
   assert.equal((await request("/folders", "POST", { name: "../bad" })).status, 400);
 });
+test("mDrive checks access and package body size before parsing or reserving storage", async () => {
+  for (const member of [false, true]) {
+    state.member = member;
+    let pulls = 0;
+    const body = new ReadableStream(
+      {
+        pull(c) {
+          pulls++;
+          c.error(new Error("Must not read"));
+        },
+      },
+      { highWaterMark: 0 }
+    );
+    const input = new Request(`https://api.invalid/teams/${TEAM}/files?upload_id=${randomUUID()}`, {
+      method: "POST",
+      body,
+      duplex: "half",
+      headers: {
+        "content-type": "multipart/form-data; boundary=test",
+        "content-length": String(25 * 1024 ** 2 + MULTIPART_OVERHEAD_BYTES + 1),
+      },
+    });
+    const result = await app.request(input);
+    assert.equal(result.status, member ? 413 : 403);
+    assert.equal(pulls, 0);
+    if (!member) await input.body.cancel();
+  }
+  assert.equal(state.jobs.length, 0);
+  assert.equal(state.files.length, 0);
+  assert.equal(state.objects.size, 0);
+});
+
 test("uploads reserve owner storage, validate bytes, and retry idempotently after a lost response", async () => {
   const id = randomUUID();
   const first = await upload({ id });

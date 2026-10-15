@@ -175,6 +175,7 @@ const { billingRoutes } = await import("../src/routes/billing.ts");
 const { usedBytesOfOwner, storageAccountForTeam, storageUploadDenial } =
   await import("../src/lib/quota.ts");
 const { UNLIMITED } = await import("../src/lib/plans.ts");
+const { MULTIPART_OVERHEAD_BYTES } = await import("../src/lib/upload-body.ts");
 const app = new Hono();
 app.use("*", async (c, next) => {
   c.set("userId", state.actor);
@@ -477,7 +478,6 @@ test("new task/comment/logo uploads reject active content and spoofed image labe
     [PNG, "image/jpeg"],
     [Buffer.from("%PDF-1.7"), "image/png"],
     [Buffer.from("not an image"), "image/gif"],
-    [new Uint8Array(), "image/png"],
   ];
   for (const [path, method] of [
     [`/tasks/${TASK}/attachments`, "POST"],
@@ -596,4 +596,81 @@ test("legacy attachment downloads remain forced downloads with safe serving head
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
   assert.equal(response.headers.get("content-security-policy"), "default-src 'none'; sandbox");
   assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes);
+});
+
+function unreadUpload(path, method = "POST") {
+  const observed = { pulls: 0, cancelled: false };
+  const body = new ReadableStream(
+    {
+      pull(controller) {
+        observed.pulls++;
+        controller.error(new Error("Body should not be read"));
+      },
+      cancel() {
+        observed.cancelled = true;
+      },
+    },
+    { highWaterMark: 0 }
+  );
+  return {
+    observed,
+    request: new Request(`https://api.invalid${path}`, {
+      method,
+      body,
+      duplex: "half",
+      headers: {
+        "content-type": "multipart/form-data; boundary=test",
+        "content-length": String(25 * 1024 ** 2 + MULTIPART_OVERHEAD_BYTES + 1),
+      },
+    }),
+  };
+}
+
+test("task/comment/logo access checks happen before upload bodies are read", async () => {
+  state.member = false;
+  for (const [path, method] of [
+    [`/tasks/${TASK}/attachments`, "POST"],
+    [`/comments/${COMMENT}/attachments`, "POST"],
+    [`/teams/${TEAM}/logo`, "PUT"],
+  ]) {
+    const source = unreadUpload(path, method);
+    const response = await app.request(source.request);
+    assert.equal(response.status, 403);
+    assert.equal(source.observed.pulls, 0);
+    await source.request.body.cancel();
+  }
+  assert.equal(state.puts.length, 0);
+});
+
+test("owner package body limits reject uploads before reading or storage writes", async () => {
+  for (const [path, method] of [
+    [`/tasks/${TASK}/attachments`, "POST"],
+    [`/comments/${COMMENT}/attachments`, "POST"],
+    [`/teams/${TEAM}/logo`, "PUT"],
+  ]) {
+    // The paid teammate's allowance must not override the Free workspace owner.
+    state.actor = method === "PUT" ? OWNER : OTHER;
+    const source = unreadUpload(path, method);
+    const response = await app.request(source.request);
+    assert.equal(response.status, 413);
+    assert.equal((await response.json()).error, "payload_too_large");
+    assert.equal(source.observed.pulls, 0);
+    assert.equal(source.observed.cancelled, true);
+  }
+  assert.equal(state.puts.length, 0);
+  assert.equal(state.files.length, 0);
+});
+
+test("empty uploads are rejected consistently before storage writes", async () => {
+  state.actor = OWNER;
+  for (const [path, method] of [
+    [`/tasks/${TASK}/attachments`, "POST"],
+    [`/comments/${COMMENT}/attachments`, "POST"],
+    [`/teams/${TEAM}/logo`, "PUT"],
+  ]) {
+    const response = await rawUpload(path, new Uint8Array(), "image/png", method);
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error, "invalid_input");
+  }
+  assert.equal(state.puts.length, 0);
 });

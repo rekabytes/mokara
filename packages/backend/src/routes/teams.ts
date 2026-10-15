@@ -6,6 +6,7 @@ import { validate } from "../lib/validate.ts";
 import { slugify, ensureUniqueSlug } from "../lib/slug.ts";
 import { getTeamRole } from "../lib/team-membership.ts";
 import { detectImageType, isRasterImageType } from "../lib/file-types.ts";
+import { readUploadFile } from "../lib/upload-body.ts";
 import {
   joinDenial,
   limitsOfUser,
@@ -303,11 +304,11 @@ teamRoutes.put("/:id/logo", async (c) => {
     );
   }
 
-  const body = await c.req.parseBody();
-  const file = body.file;
-  if (!(file instanceof File)) {
-    return c.json({ error: "invalid_input", message: "a file is required" }, 400);
-  }
+  const account = await storageAccountForTeam(teamId);
+  if (!account) return c.json({ error: "not_found", message: "team not found" }, 404);
+  const file = await readUploadFile(c.req.raw, account.limits.maxFileBytes);
+  if (!(file instanceof File))
+    return c.json({ error: file.error, message: file.message }, file.status);
   const declaredType = file.type === "application/octet-stream" ? "" : file.type;
   if (declaredType && !isRasterImageType(declaredType)) {
     return c.json(
@@ -322,8 +323,6 @@ teamRoutes.put("/:id/logo", async (c) => {
   });
   if (!team) return c.json({ error: "not_found", message: "team not found" }, 404);
 
-  const account = await storageAccountForTeam(teamId);
-  if (!account) return c.json({ error: "not_found", message: "team not found" }, 404);
   const denial = await storageUploadDenial(account, file.size, team.logoBytes ?? 0);
   if (denial) return c.json({ error: denial.error, message: denial.message }, denial.status);
 

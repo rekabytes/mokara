@@ -46,6 +46,33 @@ No migration, new bucket, dependency or environment setting is needed. Deploy
 the updated backend and frontend. `test:uploads` covers rejection before storage,
 canonical MIME, legacy reads, shared quotas and mDrive limits and runs in CI.
 
+### Upload request limits
+
+The frontend proxy forwards request bodies as streams instead of buffering a full
+upload before the backend can authenticate it. Backend uploads authenticate and
+check workspace access first, then resolve the workspace owner's per-file limit
+before reading multipart data. Task, comment, logo and mDrive uploads share one
+reader that counts actual streamed bytes before multipart parsing, with 64 KiB
+for framing in addition to the file limit. A valid oversized Content-Length can
+reject early; missing or misleading lengths never bypass the actual-byte check.
+The proxy owns transfer framing, so browser length headers are not forwarded.
+
+The reader requires one non-empty file, rejects duplicate/additional file parts,
+limits non-file multipart overhead, and returns the existing error envelope for
+oversized, malformed or aborted uploads. Overflows cancel the incoming reader;
+storage writes and mDrive reservations begin only after parsing succeeds. Proxy
+cancellation continues to use the browser request's abort signal.
+
+The 3 MB task/comment image cap is still checked after type classification; PDFs,
+logos and mDrive retain owner package limits. The intended self-hosted unlimited
+file policy remains unchanged (its multipart framing allowance is still bounded).
+This is bounded parsing for hosted plans, not resumable/direct-to-object-storage
+uploading or constant-memory file processing: accepted files still occupy server
+memory. Deployment ingress must permit the package file size plus framing, and
+should apply its own connection/time/concurrency controls. No new environment
+setting or migration is required. `test:uploads` and frontend regression tests
+cover the streamed proxy, actual-byte limits, authorization ordering and aborts.
+
 Folders have a limit of 1,000 per workspace and 20 nesting levels. File formats are checked against actual signatures as well as MIME declarations; HTML and SVG are excluded. This is format validation, not a malware scanner or a guarantee about document contents.
 
 ## Architecture and reliability

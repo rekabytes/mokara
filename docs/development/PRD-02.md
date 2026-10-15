@@ -208,8 +208,11 @@ Stable `error` codes for the frontend to switch on:
   `backend/.env` and `frontend/.env` (frontend only uses it for display,
   e.g. dev-time inspection; the cookie is httpOnly so JS can't read it).
 - **Cookie:** `mokara_token=<jwt>; HttpOnly; Path=/; SameSite=Lax; Max-Age=604800; Secure` (Secure flag on in prod).
-- **CORS:** `Access-Control-Allow-Credentials: true`. `CORS_ALLOWED_ORIGINS`
-  becomes a single explicit origin (no wildcards) so credentials work.
+- **Browser access:** `AUTH_PUBLIC_URL` and additional exact
+  `CORS_ALLOWED_ORIGINS` entries are the only trusted browser origins. No
+  wildcard or open credentialed CORS. Browser writes require a trusted Origin
+  before handlers run; machine endpoints retain separate authentication. See
+  `browser-access.md` for deployment and compatibility details.
 
 ## 9. Frontend Routes
 

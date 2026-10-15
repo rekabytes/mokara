@@ -307,3 +307,30 @@ test("revocation failure cannot change the password or issue a replacement cooki
     message: "Something went wrong.",
   });
 });
+
+test("oversized replacement passwords are rejected before password work and revocation", async () => {
+  state.passwordOk = true;
+  const response = await request(await issueToken(USER, "alice"), {
+    ...body,
+    new_password: "😀".repeat(19),
+  });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, "invalid_input");
+  assert.equal(response.headers.get("set-cookie"), null);
+  assert.equal(state.limitCalls, 0);
+  assert.equal(state.reads, 0);
+  assert.equal(state.checks.length, 0);
+  assertNoChange();
+});
+
+test("legacy current passwords are passed intact to verification when setting a valid replacement", async () => {
+  state.passwordOk = true;
+  const current = "a".repeat(72) + "legacy-tail";
+  const response = await request(await issueToken(USER, "alice"), {
+    ...body,
+    current_password: current,
+  });
+  assert.equal(response.status, 204);
+  assert.deepEqual(state.checks, [{ password: current, hash: "hash" }]);
+  assert.equal(state.updates.length, 1);
+});

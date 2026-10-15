@@ -17,6 +17,37 @@ Attempts include successful requests, failed verification and invalid input. The
 
 Exhausted quotas return `429`, `Retry-After` in seconds and the normal API error shape. Redis failure returns `503`, allowing neither registration nor login to bypass enforcement. This is intentionally conservative: an attacker can temporarily exhaust a known username's quota, so these initial thresholds need observation and tuning for the real audience. There is no one-account-per-IP rule.
 
+## Password requirements and compatibility
+
+New passwords for registration and Settings use the same rule: at least eight
+Unicode code points and no more than 72 UTF-8 bytes. The minimum was previously
+checked as JavaScript string length (UTF-16 code units); new passwords now count
+Unicode code points consistently in both runtimes. There are no new composition
+rules. Spaces and combining sequences are retained exactly, with no trimming,
+normalization or silent truncation. Symbols and emoji can consume several bytes;
+72 ASCII characters, 36 `é` characters or 18 four-byte emoji reach the byte cap.
+
+The byte ceiling comes from the installed bcrypt implementation. Its upstream
+[security notes](https://github.com/dcodeIO/bcrypt.js#security-considerations)
+explain that inputs over 72 bytes otherwise truncate silently. Both server schemas
+reject those new passwords before hashing or account writes, and `hashPassword`
+checks the policy again for non-route callers. Signup and Settings share one
+browser helper for guidance and early validation; parity tests compare its
+boundaries and messages with the separate backend policy module. No new shared
+workspace package or browser import of backend code is needed.
+
+Existing hashes are not migrated. Login and current-password verification retain
+the old bcrypt comparison behavior and accept existing nonempty passwords,
+including older short/over-limit inputs. The login form no longer applies the
+new-password minimum to existing credentials. Users can sign in and choose a
+replacement under the new policy. Existing over-limit hashes retain bcrypt's
+legacy truncation behavior until the password is changed; this update cannot
+recover ignored bytes from historical hashes. Social-only accounts are unchanged.
+
+Deploy matching backend and frontend. No migration, environment variable or
+forced password reset is needed. Verify signup and Settings at the 72-byte
+boundary, multi-byte input rejection and legacy sign-in after deployment.
+
 ## Password changes in Settings
 
 `POST /api/auth/password` requires a valid session and validated input before

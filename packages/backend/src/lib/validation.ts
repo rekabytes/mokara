@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { newPasswordError } from "./password-policy.ts";
 import { validScopes, parseScopes, MCP_SCOPES } from "../mcp/permissions.ts";
 
 export const mcpScopesSchema = z
@@ -25,7 +26,10 @@ export const usernameSchema = z
   .regex(/^[a-z0-9_]+$/, "username may only contain a-z, 0-9, underscore")
   .transform((s) => s.toLowerCase().trim());
 
-export const passwordSchema = z.string().min(8, "password must be at least 8 characters");
+export const passwordSchema = z.string().superRefine((password, ctx) => {
+  const message = newPasswordError(password);
+  if (message) ctx.addIssue({ code: "custom", message });
+});
 
 export const signUpSchema = z.object({
   username: usernameSchema,

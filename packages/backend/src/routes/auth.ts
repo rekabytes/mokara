@@ -192,6 +192,36 @@ authRoutes.get("/me", meHandler);
 authRoutes.post("/password", authRequired, validate("json", changePasswordSchema), async (c) => {
   const userId = c.get("userId");
   const { current_password, new_password } = c.req.valid("json");
+  // One allowance per authenticated account, shared across devices/replicas.
+  // Count successes too: refreshing a session must not reset this window.
+  try {
+    const retry = await consumeAuthLimit(
+      getRedis(),
+      "passwordChange",
+      userId,
+      env.AUTH_SECRET || "mokara-local-auth-limits"
+    );
+    if (retry) {
+      c.header("Retry-After", String(retry));
+      const minutes = Math.ceil(retry / 60);
+      return c.json(
+        {
+          error: "auth_rate_limited",
+          message: `Too many password change attempts. Try again in ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`,
+        },
+        429
+      );
+    }
+  } catch {
+    log.warn("password change protection unavailable — failing closed");
+    return c.json(
+      {
+        error: "auth_protection_unavailable",
+        message: "Password change protection is temporarily unavailable. Please try again.",
+      },
+      503
+    );
+  }
   const u = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, username: true, passwordHash: true },

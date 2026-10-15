@@ -11,10 +11,40 @@ All replicas use Redis counters with atomic increment/expiry and fixed windows:
 | Registration per client IP/network | 5        | 1 hour     |
 | Login per client IP/network        | 60       | 10 minutes |
 | Login per username across all IPs  | 10       | 10 minutes |
+| Password changes per account       | 10       | 10 minutes |
 
 Attempts include successful requests, failed verification and invalid input. The IP limit runs before validation, provider calls, password hashing or database reads. The account limit runs after username validation and before account lookup/password verification. Limits expire automatically; blocked requests do not extend the window and no permanent account lock is created. IPv6 clients share a /64 bucket; IPv4-mapped socket addresses share their native IPv4 bucket. IP/user identities are HMAC-derived in Redis keys with bounded retention, rather than stored verbatim there.
 
 Exhausted quotas return `429`, `Retry-After` in seconds and the normal API error shape. Redis failure returns `503`, allowing neither registration nor login to bypass enforcement. This is intentionally conservative: an attacker can temporarily exhaust a known username's quota, so these initial thresholds need observation and tuning for the real audience. There is no one-account-per-IP rule.
+
+## Password changes in Settings
+
+`POST /api/auth/password` requires a valid session and validated input before
+consuming a separate account-wide allowance of 10 attempts per 10 minutes.
+The bucket uses the verified user ID, not a submitted username, session ID or
+IP address. Changing devices, signing in again or using another replica cannot
+reset it. Other accounts and normal sign-in have separate allowances.
+
+Every validated attempt counts, including successful changes and attempts by
+social-only accounts. Invalid input and unauthenticated requests do not consume
+this allowance. The limiter runs before the user lookup, current-password
+verification and new-password hashing. The eleventh attempt returns the standard
+`auth_rate_limited` envelope with status 429, a safe wait message and the actual
+remaining TTL in `Retry-After`. Repeated blocked requests do not extend the
+window. Settings already displays this through its unified error handler.
+
+If Redis or its counter response is unavailable, fail closed with 503 before
+password verification or modification; no replacement session is issued. The
+existing session-validity guard runs first and can independently return 503.
+Wrong current passwords, social-only accounts and successful changes keep their
+existing response contracts. A successful change retains the existing session
+revocation floor and replacement cookie behavior. This change does not revise
+that floor's timestamp granularity or add password recovery/MFA.
+
+No new environment variables, dependencies or migrations are needed. Deploy the
+backend after merging. Check Settings with a wrong password, repeated attempts,
+a correct change and a second account; confirm the retry message does not sign
+the user out and normal sign-in remains usable during the cooldown.
 
 ## Trusted client IPs behind Next.js
 

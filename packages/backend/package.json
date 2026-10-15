@@ -9,9 +9,9 @@
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "test:github": "node --import tsx --experimental-test-module-mocks --test test/github-sync.test.mjs test/github-renewal.test.mjs test/github-issue-references.test.mjs",
-    "test:auth": "node --import tsx --experimental-test-module-mocks --test test/auth-protection.test.mjs test/social-auth.test.mjs test/social-routes.test.mjs test/events-security.test.mjs test/password-change.test.mjs",
+    "test:auth": "node --import tsx --experimental-test-module-mocks --test test/auth-protection.test.mjs test/social-auth.test.mjs test/social-routes.test.mjs test/events-security.test.mjs test/admin-login.test.mjs test/password-change.test.mjs",
     "test:uploads": "node --import tsx --experimental-test-module-mocks --test test/account-storage.test.mjs test/workspace-files.test.mjs test/file-types.test.mjs test/upload-body.test.mjs",
-    "test:admin": "node --import tsx --experimental-test-module-mocks --test test/admin-monitoring.test.mjs test/billing-monitoring.test.mjs",
+    "test:admin": "node --import tsx --experimental-test-module-mocks --test test/admin-monitoring.test.mjs test/billing-monitoring.test.mjs test/admin-login.test.mjs",
     "test:mcp": "node --import tsx --experimental-test-module-mocks --test test/mcp.test.mjs test/mcp-oauth.test.mjs test/mcp-write.test.mjs test/mcp-domain.test.mjs test/mcp-storage.test.mjs"
   },
   "dependencies": {

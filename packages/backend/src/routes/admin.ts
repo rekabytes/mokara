@@ -1,14 +1,12 @@
 import { invitationHistory, userMemberships } from "./admin-relationships.ts";
 import { Hono } from "hono";
 import { prisma } from "../db.ts";
-import { adminConfigured, env } from "../env.ts";
-import { issueAdminToken, safeEqual } from "../lib/admin-token.ts";
+import { env } from "../env.ts";
 import { log } from "../lib/logger.ts";
 import { effectivePlan } from "../lib/plans.ts";
 import { validate } from "../lib/validate.ts";
 import {
   adminInvitationQuerySchema,
-  adminLoginSchema,
   adminPlanSchema,
   adminPageSchema,
   adminUserParamSchema,
@@ -18,6 +16,7 @@ import { GITHUB_USER_VERIFICATION_TTL_MS } from "../lib/github-repositories.ts";
 import { monitoringOverview, attentionJobs, ADMIN_PAGE_SIZE } from "./admin-monitoring.ts";
 import { adminSupportRoutes, auditFilter } from "./admin-support.ts";
 import { adminRequired } from "../middleware/admin.ts";
+import { adminLoginRoutes } from "./admin-login.ts";
 
 // The operator console's API. Mounted on the public `api` app (index.ts) before
 // the authed sub-app, for the same reason the Stripe webhook is: none of these
@@ -32,6 +31,7 @@ import { adminRequired } from "../middleware/admin.ts";
 export const adminRoutes = new Hono<{ Variables: { adminActor: string } }>();
 
 adminRoutes.route("/", adminSupportRoutes);
+adminRoutes.route("/", adminLoginRoutes);
 
 adminRoutes.get("/overview", adminRequired, async (c) => c.json(await monitoringOverview()));
 adminRoutes.get("/attention", adminRequired, validate("query", adminPageSchema), async (c) =>
@@ -65,23 +65,6 @@ adminRoutes.get("/audit", adminRequired, validate("query", adminAuditQuerySchema
       created_at: event.createdAt.toISOString(),
     })),
   });
-});
-
-// POST /login — credentials + the login-URL key, all three compared before any
-// answer so a failure costs the same time whichever one was wrong (the user
-// login path has a bcrypt timing oracle; this one must not repeat it).
-adminRoutes.post("/login", validate("json", adminLoginSchema), async (c) => {
-  if (!adminConfigured) {
-    return c.json({ error: "not_found", message: "not found" }, 404);
-  }
-  const { username, password, url_key } = c.req.valid("json");
-  const keyOk = safeEqual(url_key, env.ADMIN_URL_KEY);
-  const userOk = safeEqual(username, env.ADMIN_USERNAME);
-  const passOk = safeEqual(password, env.ADMIN_PASSWORD);
-  if (!keyOk || !userOk || !passOk) {
-    return c.json({ error: "invalid_credentials", message: "invalid admin credentials" }, 401);
-  }
-  return c.json({ token: await issueAdminToken() });
 });
 
 // GET /users — the console's index. Every user, newest first, with the number

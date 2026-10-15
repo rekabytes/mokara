@@ -5,6 +5,7 @@ import { z } from "zod";
 
 export const AUTH_LIMITS = {
   passwordChange: { attempts: 10, seconds: 600 },
+  adminLogin: { attempts: 10, seconds: 600 },
   mcpOAuthPeer: { attempts: 120, seconds: 60 },
   mcpOAuthGlobal: { attempts: 1200, seconds: 60 },
   mcpRegister: { attempts: 100, seconds: 3600 },

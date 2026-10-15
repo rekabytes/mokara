@@ -78,7 +78,7 @@ export function getRootMetadata(): Metadata {
     icons: {
       icon: [
         { url: "/favicon.ico", sizes: "16x16 32x32 48x48" },
-        { url: "/mokara-mark.svg", type: "image/svg+xml", sizes: "any" },
+        { url: "/icons/mokara-icon.svg", type: "image/svg+xml", sizes: "any" },
         { url: "/icons/icon-32.png", type: "image/png", sizes: "32x32" },
       ],
       apple: { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },

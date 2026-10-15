@@ -24,6 +24,7 @@ import { publicCap } from "../lib/plans.ts";
 import { storageReady, putObject, getObjectStream } from "../lib/storage.ts";
 import { enqueueFileDeletion } from "../lib/file-cleanup.ts";
 import { detectFileType } from "../lib/file-types.ts";
+import { readUploadFile } from "../lib/upload-body.ts";
 import {
   fileDenial,
   fileDto,
@@ -163,17 +164,11 @@ fileRoutes.post(
         { error: "attachments_disabled", message: "File storage is not configured." },
         409
       );
-    const body = await c.req.parseBody();
-    const file = body.file;
-    if (!(file instanceof File) || file.size === 0)
-      return c.json({ error: "invalid_input", message: "Choose a non-empty image or PDF." }, 400);
     const account = await storageAccountForTeam(teamId);
     if (!account) return c.json({ error: "not_found", message: "Workspace not found." }, 404);
-    if (file.size > account.limits.maxFileBytes)
-      return c.json(
-        { error: "file_too_large", message: "That file exceeds this account's per-file limit." },
-        400
-      );
+    const file = await readUploadFile(c.req.raw, account.limits.maxFileBytes);
+    if (!(file instanceof File))
+      return c.json({ error: file.error, message: file.message }, file.status);
     const bytes = new Uint8Array(await file.arrayBuffer());
     const contentType = detectFileType(bytes);
     if (!contentType || (file.type && file.type !== contentType))

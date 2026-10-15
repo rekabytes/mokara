@@ -22,10 +22,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Hop-by-hop and per-hop headers that must not be forwarded in either
-// direction. `content-length` in particular: on a proxied request whose body
-// Next has already buffered, the value upstream computes will not match what we
-// send, and `content-encoding` on the way back would be re-declared after we
-// already decompressed it.
+// direction. The request body is forwarded as a stream, so its transfer framing
+// belongs to fetch rather than the caller. `content-encoding` on the way back
+// would be re-declared after fetch already decompressed the response.
 const REQUEST_HEADERS_TO_REMOVE = [
   "accept-encoding",
   "connection",
@@ -115,20 +114,23 @@ async function proxy(request: NextRequest): Promise<Response> {
     }
   }
 
-  const body = request.body ? await request.arrayBuffer() : undefined;
-
   try {
-    const upstream = await fetch(target, {
+    // Streaming lets the backend reject authentication/access/size failures
+    // without first buffering the entire upload in this proxy. Node fetch
+    // requires duplex for streaming request bodies; it is a transport option.
+    const init: RequestInit & { duplex?: "half" } = {
       method: request.method,
       headers,
-      body,
+      body: request.body,
+      ...(request.body ? { duplex: "half" } : {}),
       // Manual, or a 3xx from the backend would be followed here and the browser
       // would never see the redirect it was actually told about.
       redirect: "manual",
       cache: "no-store",
       // Client disconnects mid-request must cancel the upstream call too.
       signal: request.signal,
-    });
+    };
+    const upstream = await fetch(target, init);
 
     return new Response(upstream.body, {
       status: upstream.status,

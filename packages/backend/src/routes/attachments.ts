@@ -11,6 +11,7 @@ import {
 } from "../lib/storage.ts";
 import { IMAGE_ATTACHMENT_MAX_BYTES } from "../lib/plans.ts";
 import { detectFileType, isRasterImageType } from "../lib/file-types.ts";
+import { readUploadFile } from "../lib/upload-body.ts";
 import { toAttachment } from "../lib/types.ts";
 import type { Vars } from "../middleware/auth.ts";
 
@@ -68,7 +69,7 @@ async function commentTaskId(commentId: string): Promise<string | null> {
   return comment?.taskId ?? null;
 }
 
-type Denial = { status: 404 | 403 | 409 | 400 | 503; error: string; message: string };
+type Denial = { status: 404 | 403 | 409 | 400 | 413 | 503; error: string; message: string };
 
 const unsupportedFile: Denial = {
   status: 400,
@@ -95,7 +96,7 @@ function imageSizeDenial(type: string, size: number): Denial | null {
 async function storeUpload(
   c: {
     get: (k: "userId") => string;
-    req: { parseBody: () => Promise<Record<string, string | File>> };
+    req: { raw: Request };
   },
   input: { teamId: string; scope: "tasks" | "comments"; scopeId: string }
 ): Promise<{ attachment: ReturnType<typeof toAttachment> } | Denial> {
@@ -111,14 +112,10 @@ async function storeUpload(
     };
   }
 
-  const body = await c.req.parseBody();
-  const file = body.file;
-  if (!(file instanceof File)) {
-    return { status: 400, error: "invalid_input", message: "a file is required" };
-  }
-
   const account = await storageAccountForTeam(input.teamId);
   if (!account) return { status: 404, error: "not_found", message: "team not found" };
+  const file = await readUploadFile(c.req.raw, account.limits.maxFileBytes);
+  if (!(file instanceof File)) return file;
 
   // Browsers use octet-stream when no useful type is available; infer it below.
   const declaredType = file.type === "application/octet-stream" ? "" : file.type;

@@ -131,9 +131,17 @@ export const taskKpisSchema = z.object({ kpis: taskKpiBindings });
 
 export type TaskKpiBinding = z.infer<typeof taskKpiBindings>[number];
 
+const taskTitle = z
+  .string()
+  .min(1, "title is required")
+  .max(500, "Task titles must be 500 characters or fewer.");
+const taskDescription = z
+  .string()
+  .max(20000, "Task descriptions must be 20,000 characters or fewer.");
+
 export const createTaskSchema = z.object({
-  title: z.string().min(1, "title is required"),
-  description: z.string().optional(),
+  title: taskTitle,
+  description: taskDescription.optional(),
   status: taskStatusSchema.optional(),
   priority: taskPrioritySchema.optional(),
   due_date: isoDate,
@@ -159,8 +167,8 @@ export const githubRepositoriesSchema = z
 
 export const updateTaskSchema = z
   .object({
-    title: z.string().min(1, "title is required").optional(),
-    description: z.string().nullable().optional(),
+    title: taskTitle.optional(),
+    description: taskDescription.nullable().optional(),
     status: taskStatusSchema.optional(),
     priority: taskPrioritySchema.optional(),
     due_date: isoDate,

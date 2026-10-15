@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { collectionPage, collectionAfter, collectionCursor } from "../lib/collection-page.ts";
 import { prisma } from "../db.ts";
 import { commentSchema, createCommentSchema } from "../lib/validation.ts";
 import { validate } from "../lib/validate.ts";
@@ -40,12 +41,22 @@ commentRoutes.get("/tasks/:id/comments", async (c) => {
     return c.json({ error: "forbidden", message: "not a member of this task's team" }, 403);
   }
 
+  const scope = `comments:${taskId}`;
+  const page = collectionPage(c.req.query(), scope);
+  if (!page) return c.json({ error: "invalid_input", message: "Invalid comment page." }, 400);
   const comments = await prisma.comment.findMany({
-    where: { taskId },
+    where: { taskId, ...collectionAfter(page.cursor, "asc") },
     include: authorInclude,
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    take: page.limit + 1,
   });
-  return c.json({ comments: comments.map(toComment) });
+  const rows = comments.slice(0, page.limit);
+  const last = rows.at(-1);
+  c.header("Cache-Control", "private, no-store");
+  if (comments.length > page.limit && last) {
+    c.header("X-Mokara-Next-Cursor", collectionCursor(scope, last));
+  }
+  return c.json({ comments: rows.map(toComment) });
 });
 
 commentRoutes.post("/tasks/:id/comments", validate("json", createCommentSchema), async (c) => {

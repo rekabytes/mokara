@@ -126,7 +126,12 @@ function logCall(method: string, path: string, status: number, ms: number, detai
   else console.warn(line);
 }
 
-async function req<T>(schema: z.ZodType<T>, path: string, init?: RequestInit): Promise<T> {
+async function req<T>(
+  schema: z.ZodType<T>,
+  path: string,
+  init?: RequestInit,
+  onHeaders?: (headers: Headers) => void
+): Promise<T> {
   const method = (init?.method ?? "GET").toUpperCase();
   const start = Date.now();
   const done = (status: number, detail?: string) =>
@@ -196,7 +201,9 @@ async function req<T>(schema: z.ZodType<T>, path: string, init?: RequestInit): P
   // Every successful response crosses a runtime schema before reaching state.
   try {
     const body: unknown = text ? JSON.parse(text) : undefined;
-    return parseResponse(schema, body);
+    const parsed = parseResponse(schema, body);
+    onHeaders?.(res.headers);
+    return parsed;
   } catch {
     throw {
       error: "invalid_response",
@@ -204,6 +211,43 @@ async function req<T>(schema: z.ZodType<T>, path: string, init?: RequestInit): P
       status: 502,
     } satisfies ApiError;
   }
+}
+
+// Preserve complete board/thread snapshots while bounding each server query.
+// A failed or cancelled page rejects the whole read; never report a partial list.
+async function collection<T, Item extends { id: string }>(
+  schema: z.ZodType<T>,
+  path: string,
+  items: (response: T) => Item[],
+  signal?: AbortSignal
+): Promise<Item[]> {
+  const rows = new Map<string, Item>();
+  const seen = new Set<string>();
+  let cursor: string | null = null;
+  do {
+    signal?.throwIfAborted();
+    const nextPath = cursor
+      ? `${path}${path.includes("?") ? "&" : "?"}cursor=${encodeURIComponent(cursor)}`
+      : path;
+    const continuation: { cursor: string | null } = { cursor: null };
+    const response = await req(schema, nextPath, { signal }, (headers) => {
+      continuation.cursor = headers.get("x-mokara-next-cursor");
+    });
+    signal?.throwIfAborted();
+    const next = continuation.cursor;
+    const page = items(response);
+    for (const row of page) rows.set(row.id, row);
+    if (next && (seen.has(next) || next.length > 512 || page.length === 0)) {
+      throw {
+        error: "invalid_response",
+        message: "Unexpected server response.",
+        status: 502,
+      } satisfies ApiError;
+    }
+    if (next) seen.add(next);
+    cursor = next;
+  } while (cursor);
+  return [...rows.values()];
 }
 
 /** Narrow the `{ error, … }` envelope of a failed response before trusting it. */
@@ -521,7 +565,12 @@ export const api = {
   // through the existing listNotifications() surface — no per-request
   // /me/due-soon endpoint any more.
   listTeamTasks: (teamId: string, status?: string, signal?: AbortSignal) =>
-    req(tasksSchema, `/teams/${teamId}/tasks${status ? `?status=${status}` : ""}`, { signal }),
+    collection(
+      tasksSchema,
+      `/teams/${teamId}/tasks${status ? `?status=${encodeURIComponent(status)}` : ""}`,
+      (rows) => rows,
+      signal
+    ),
   createTeamTask: (
     teamId: string,
     data: {
@@ -583,8 +632,14 @@ export const api = {
   flagTask: (id: string) => req(taskSchema, `/tasks/${id}/flag`, { method: "POST" }),
 
   // ---- Comments ----
-  listComments: (taskId: string, signal?: AbortSignal) =>
-    req(commentsSchema, `/tasks/${taskId}/comments`, { signal }),
+  listComments: async (taskId: string, signal?: AbortSignal) => ({
+    comments: await collection(
+      commentsSchema,
+      `/tasks/${taskId}/comments`,
+      (page) => page.comments,
+      signal
+    ),
+  }),
   createComment: (taskId: string, body: string, parentId?: string) =>
     req(commentResultSchema, `/tasks/${taskId}/comments`, {
       method: "POST",

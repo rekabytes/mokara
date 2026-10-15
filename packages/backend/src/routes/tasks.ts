@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { collectionPage, collectionAfter, collectionCursor } from "../lib/collection-page.ts";
 import { prisma } from "../db.ts";
 import {
   createTaskSchema,
@@ -141,12 +142,26 @@ taskRoutes.get("/teams/:id/tasks", async (c) => {
     );
   }
 
+  const scope = `tasks:${teamId}:${parsedStatus?.data ?? "all"}`;
+  const page = collectionPage(c.req.query(), scope);
+  if (!page) return c.json({ error: "invalid_input", message: "Invalid task page." }, 400);
   const tasks = await prisma.task.findMany({
-    where: { teamId, ...(parsedStatus?.data ? { status: parsedStatus.data } : {}) },
-    orderBy: { createdAt: "desc" },
+    where: {
+      teamId,
+      ...(parsedStatus?.data ? { status: parsedStatus.data } : {}),
+      ...collectionAfter(page.cursor, "desc"),
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: page.limit + 1,
     include: TASK_INCLUDE,
   });
-  return c.json(tasks.map(shape));
+  const rows = tasks.slice(0, page.limit);
+  const last = rows.at(-1);
+  c.header("Cache-Control", "private, no-store");
+  if (tasks.length > page.limit && last) {
+    c.header("X-Mokara-Next-Cursor", collectionCursor(scope, last));
+  }
+  return c.json(rows.map(shape));
 });
 
 taskRoutes.post("/teams/:id/tasks", validate("json", createTaskSchema), async (c) => {

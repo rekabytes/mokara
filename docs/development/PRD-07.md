@@ -129,8 +129,10 @@ Why this is the right shape, not just the familiar one:
 - **The image is portable.** `BACKEND_URL` is read by the Next server at runtime, so
   one published image serves any host. This is the actual point of pulling instead of
   building.
-- **CORS stops mattering.** Keep the middleware (free, and correct for future
-  non-browser clients), but `CORS_ALLOWED_ORIGINS` can stay empty.
+- **Browser trust stays explicit.** Set backend `AUTH_PUBLIC_URL` to the
+  frontend's public origin. The proxy preserves browser Origin headers, and the
+  backend verifies writes against that origin. `CORS_ALLOWED_ORIGINS` can stay
+  empty unless additional trusted frontends are needed. See `browser-access.md`.
 
 ## 5. Images
 

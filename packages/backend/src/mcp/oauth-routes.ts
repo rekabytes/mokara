@@ -132,7 +132,7 @@ mcpOAuthRoutes.get("/consent", async (c) => {
 });
 mcpOAuthRoutes.post("/consent", async (c) => {
   const config = requireOAuthConfig();
-  // Cookie authentication requires explicit same-origin POSTs, even if general CORS is open.
+  // Cookie consent stays canonical-origin-only, including with additional trusted frontends.
   if (c.req.header("Origin") !== config.origin)
     throw new McpOAuthFailure("invalid_request", "Open this request on Mokara to continue.");
   const input = mcpOAuthConsentSchema.safeParse(await c.req.json().catch(() => null));

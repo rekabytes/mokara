@@ -2,25 +2,8 @@ import type { Context, Next } from "hono";
 import { isAllowedMcpOrigin } from "../mcp/origin.ts";
 import { env } from "../env.ts";
 
-// Parses CORS_ALLOWED_ORIGINS into either:
-//   - { mode: "open" }      — no allow-list configured (echo any origin or "*")
-//   - { mode: "wildcard" }  — explicitly "*"
-//   - { mode: "list", list } — specific allow-list
-type Allowed = { mode: "open" } | { mode: "wildcard" } | { mode: "list"; list: string[] };
+import { allowedBrowserOrigin, originlessMachinePath } from "../lib/browser-origin.ts";
 
-function parseAllowedOrigins(raw: string): Allowed {
-  const parts = raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (parts.length === 0) return { mode: "open" };
-  if (parts.length === 1 && parts[0] === "*") return { mode: "wildcard" };
-  return { mode: "list", list: parts };
-}
-
-// Mirrors the Go `corsMiddleware`: when credentials are used (the cookie-based
-// auth), the response Access-Control-Allow-Origin MUST be a single explicit
-// value — never "*" — so we echo the request Origin whenever one is present.
 export async function corsMiddleware(c: Context, next: Next) {
   if (c.req.path === "/api/mcp" || c.req.path === "/api/mcp/") {
     c.header("Cache-Control", "no-store");
@@ -49,33 +32,31 @@ export async function corsMiddleware(c: Context, next: Next) {
     await next();
     return;
   }
-  const allowed = parseAllowedOrigins(env.CORS_ALLOWED_ORIGINS);
-  const origin = c.req.header("Origin") ?? "";
+  const origin = c.req.header("Origin");
+  const trusted = allowedBrowserOrigin(origin, env);
+  const safe = ["GET", "HEAD", "OPTIONS"].includes(c.req.method);
+  c.header("Vary", "Origin");
 
-  if (allowed.mode === "open" || allowed.mode === "wildcard") {
-    if (origin) {
-      c.header("Access-Control-Allow-Origin", origin);
-      c.header("Access-Control-Allow-Credentials", "true");
-      c.header("Vary", "Origin");
-    } else {
-      c.header("Access-Control-Allow-Origin", "*");
-    }
-  } else {
-    if (origin && allowed.list.includes(origin)) {
-      c.header("Access-Control-Allow-Origin", origin);
-      c.header("Access-Control-Allow-Credentials", "true");
-      c.header("Vary", "Origin");
-    }
-    // else: no header set — browser will block the request.
+  // CORS alone cannot stop a simple form POST from reaching a handler. Enforce
+  // the same trust boundary before parsing bodies or performing cookie mutations.
+  if (
+    (origin !== undefined && !trusted) ||
+    (!safe && !trusted && !originlessMachinePath(c.req.path))
+  ) {
+    c.header("Cache-Control", "no-store");
+    return c.json(
+      { error: "origin_forbidden", message: "Start this request from a trusted Mokara site." },
+      403
+    );
   }
-
-  c.header("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
-  c.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  c.header("Access-Control-Max-Age", "86400");
-
-  if (c.req.method === "OPTIONS") {
-    return c.body(null, 204);
+  if (trusted && origin) {
+    c.header("Access-Control-Allow-Origin", origin);
+    c.header("Access-Control-Allow-Credentials", "true");
+    c.header("Access-Control-Allow-Methods", "GET, HEAD, POST, PATCH, PUT, DELETE, OPTIONS");
+    c.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    c.header("Access-Control-Expose-Headers", "Retry-After, X-Mokara-Next-Cursor");
+    c.header("Access-Control-Max-Age", "86400");
   }
-
+  if (c.req.method === "OPTIONS") return c.body(null, 204);
   await next();
 }

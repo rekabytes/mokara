@@ -60,3 +60,15 @@ test("network and local validation errors keep their explicit classifications", 
   assert.equal(network.retryable, true);
   assert.equal(manualError("Choose a workspace.").message, "Choose a workspace.");
 });
+
+test("browser protection failures stay inline with safe actionable copy", () => {
+  const error = normalizeError({
+    error: "origin_forbidden",
+    message: "private backend detail",
+    status: 403,
+  });
+  assert.equal(error.action, "inline");
+  assert.equal(error.kind, "permission");
+  assert.match(error.message, /Refresh Mokara/);
+  assert.equal(error.message.includes("private backend"), false);
+});

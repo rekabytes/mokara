@@ -370,7 +370,10 @@ test("consent requires session, browser binding, same origin and explicit member
   const flow = await start();
   assert.equal((await app.request(`/api/mcp/oauth/consent?request=${flow.request}`)).status, 401);
   assert.equal((await consent(flow, {}, { Cookie: "session=valid" })).status, 400);
-  assert.equal((await consent(flow, {}, { Origin: "https://evil.example" })).status, 400);
+  const blocked = await consent(flow, {}, { Origin: "https://evil.example" });
+  assert.equal(blocked.status, 403);
+  assert.equal((await blocked.json()).error, "origin_forbidden");
+  assert.equal(grants.size, 0);
   assert.equal((await consent(flow, { workspace_ids: [] })).status, 400);
   assert.equal((await consent(flow, { workspace_ids: [randomUUID()] })).status, 400);
   member = false;
@@ -601,4 +604,20 @@ test("GitHub grants bind only explicitly selected currently eligible repositorie
   });
   assert.equal(response.status, 200);
   assert.deepEqual([...grants.values()][0].repositoryIds, [repoId]);
+});
+
+test("OAuth consent remains canonical-origin-only despite additional trusted browser origins", async () => {
+  const { env } = await import("../src/env.ts");
+  const previous = env.CORS_ALLOWED_ORIGINS;
+  const additional = "https://additional.test.invalid";
+  env.CORS_ALLOWED_ORIGINS = `${origin},${additional}`;
+  try {
+    const flow = await start();
+    const response = await consent(flow, {}, { Origin: additional });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error, "invalid_request");
+    assert.equal(grants.size, 0);
+  } finally {
+    env.CORS_ALLOWED_ORIGINS = previous;
+  }
 });

@@ -35,6 +35,10 @@ an indexable sitemap. No domain is guessed from request headers.
 - `/social/mokara-preview.jpg`: 1200 × 630 branded link card, using the existing
   sanitized product screenshot and the public site's Fraunces/Instrument Sans.
 
+The shared image metadata declares its JPEG format and dimensions. HTTPS
+deployments also publish the same configured image URL as `og:image:secure_url`.
+HTTP deployments do not invent an HTTPS endpoint.
+
 The social card is an explicit public marketing asset. It is never generated
 from a user's tasks or authenticated workspace. Public routes provide their own
 titles and descriptions with the shared image. The homepage includes WebSite
@@ -49,6 +53,16 @@ before enabling production. Share a public page in the intended messaging app;
 preview caching and whether an embed appears are controlled by that service.
 An already cached card may need that service's inspection/refresh tool.
 
+If Discord shows an image but X or Threads does not, check the result on a
+published post as well as in the composer. Confirm the homepage and image can be
+fetched by the receiving platform. A browser using a crawler's user-agent can
+check response compatibility, but does not prove access from that platform's
+servers. Review Cloudflare Security Events for blocked or challenged preview
+requests, including `Twitterbot` and `facebookexternalhit`. Keep any adjustment
+limited to verified preview traffic and public pages; do not disable protection
+for the application. The optional image metadata is a compatibility improvement,
+not proof that a platform-access or cached-preview problem has been resolved.
+
 Once production indexing is enabled, the owner can verify the domain in Google
 Search Console and submit the sitemap. Development does not need submission.
 No Cloudflare setting is required by these code changes; an existing bot or
@@ -56,4 +70,5 @@ access restriction can still prevent a third-party preview fetch.
 
 References: [Next.js metadata](https://nextjs.org/docs/app/getting-started/metadata-and-og-images),
 [robots](https://nextjs.org/docs/app/api-reference/file-conventions/metadata/robots),
-[sitemap](https://nextjs.org/docs/app/api-reference/file-conventions/metadata/sitemap).
+[sitemap](https://nextjs.org/docs/app/api-reference/file-conventions/metadata/sitemap),
+[Open Graph image properties](https://ogp.me/#structured).

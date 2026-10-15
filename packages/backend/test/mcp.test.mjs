@@ -81,6 +81,9 @@ const prisma = {
     ],
   },
 };
+mock.module("../src/lib/github-access.ts", {
+  namedExports: { ensureGitHubAccess: async () => {} },
+});
 mock.module("../src/db.ts", { namedExports: { prisma } });
 mock.module("../src/env.ts", {
   namedExports: { env, githubConfigured: false, storageConfigured: false },

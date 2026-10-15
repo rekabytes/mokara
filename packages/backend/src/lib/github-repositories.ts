@@ -1,5 +1,7 @@
 import { prisma } from "../db.ts";
 import { GITHUB_REPOSITORY_LIMIT } from "./plans.ts";
+import { ensureGitHubAccess } from "./github-access.ts";
+import { GitHubError } from "./github.ts";
 import type { Prisma } from "@mokara/db/prisma/generated/client";
 
 export const GITHUB_USER_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -12,6 +14,12 @@ export function repositorySelectionError(ids: string[]): string | null {
 export async function activateGitHubRepositories(userId: string, ids: string[]) {
   const selectionError = repositorySelectionError(ids);
   if (selectionError) return selectionError;
+  try {
+    await ensureGitHubAccess(userId);
+  } catch (error) {
+    if (error instanceof GitHubError) return error.code;
+    throw error;
+  }
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     // Serialize refresh/selection/disconnect for this user's connection.
     await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;

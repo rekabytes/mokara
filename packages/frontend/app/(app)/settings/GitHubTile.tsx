@@ -113,7 +113,19 @@ export function GitHubTile({ run }: { run: Run }) {
       const result = await run(() => api.refreshGitHub(), {
         fallback: "Couldn't refresh GitHub repositories.",
       });
-      if (result) window.location.assign(result.url);
+      if (result) {
+        setIntegration(result);
+        const active =
+          result.connection?.repositories
+            .filter((repo) => repo.enabled && repo.available)
+            .map((repo) => repo.id) ?? [];
+        setSelected(active);
+        if (active.length === 0) {
+          setManaging(true);
+          setFilter("all");
+        }
+        setCallbackMessage("GitHub access and repositories refreshed.");
+      }
     } finally {
       pending.current = false;
       setBusy(false);
@@ -176,8 +188,20 @@ export function GitHubTile({ run }: { run: Run }) {
         caption="Choose active repositories and sync linked task statuses"
         right={
           integration?.connection ? (
-            <span className="rounded-[var(--radius-pill)] bg-[var(--color-success-soft)] px-2.5 py-1 text-[0.76rem] font-semibold text-[var(--color-success)]">
-              @{integration.connection.github_login}
+            <span
+              className={`rounded-[var(--radius-pill)] px-2.5 py-1 text-[0.76rem] font-medium ${
+                integration.connection.reauthorization_required ||
+                integration.connection.verification_error
+                  ? "bg-[var(--color-warning-soft)] text-[var(--color-warning)]"
+                  : "bg-[var(--color-success-soft)] text-[var(--color-success)]"
+              }`}
+            >
+              @{integration.connection.github_login} ·{" "}
+              {integration.connection.reauthorization_required
+                ? "Reconnect required"
+                : integration.connection.verification_error
+                  ? "Temporarily unavailable"
+                  : "Connected"}
             </span>
           ) : null
         }
@@ -233,7 +257,14 @@ export function GitHubTile({ run }: { run: Run }) {
           </div>
           {integration.connection.reauthorization_required && (
             <p role="status" className="mb-0 mt-2 text-[0.82rem] text-[var(--color-ink-muted)]">
-              Reconnect to verify access and resume sync.
+              Reconnect to restore access. Older connections need one reconnect to enable automatic
+              renewal.
+            </p>
+          )}
+          {integration.connection.verification_error && (
+            <p role="status" className="mb-0 mt-2 text-[0.82rem] text-[var(--color-ink-muted)]">
+              GitHub access could not be checked right now. Try Refresh again shortly. Your saved
+              repositories are preserved.
             </p>
           )}
           {!integration.sync_configured && (
@@ -403,7 +434,11 @@ export function GitHubTile({ run }: { run: Run }) {
             <button
               type="button"
               disabled={busy}
-              onClick={refresh}
+              onClick={
+                integration.connection.reauthorization_required
+                  ? () => navigate("connect")
+                  : refresh
+              }
               className="btn-base btn-ghost btn-small"
             >
               {integration.connection.reauthorization_required ? "Reconnect" : "Refresh"}

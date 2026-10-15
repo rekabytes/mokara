@@ -353,6 +353,17 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
     action: "inline",
     message: "Connect your GitHub account first.",
   },
+  github_verification_pending: {
+    kind: "server",
+    action: "inline",
+    message: "GitHub access is being verified. Try again shortly.",
+  },
+  github_credentials_unavailable: {
+    kind: "server",
+    action: "inline",
+    message:
+      "GitHub credentials could not be opened. Ask your administrator to check the encryption key.",
+  },
   github_reauthorization_required: {
     kind: "conflict",
     action: "inline",

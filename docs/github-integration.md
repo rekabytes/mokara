@@ -59,12 +59,13 @@ GITHUB_APP_SLUG=
 GITHUB_APP_CLIENT_ID=
 GITHUB_APP_CLIENT_SECRET=
 GITHUB_APP_PRIVATE_KEY_BASE64=
+GITHUB_TOKEN_ENCRYPTION_KEY=
 GITHUB_CALLBACK_URL=
 GITHUB_PUBLIC_APP_URL=
 GITHUB_WEBHOOK_SECRET=
 ```
 
-The first six values enable connection/publishing. The private key is base64-encoded PEM. `GITHUB_PUBLIC_APP_URL` is an optional trusted origin for issue backlinks.
+The six App/callback values plus `GITHUB_TOKEN_ENCRYPTION_KEY` enable connection/publishing. The private key is base64-encoded PEM. Generate the separate encryption key with `openssl rand -base64 32`; keep it stable and identical across backend instances. It encrypts stored user credentials with AES-256-GCM, bound to the Mokara user ID. Losing/changing this key makes existing credentials unreadable; do not rotate it without a credential migration. `GITHUB_PUBLIC_APP_URL` is an optional trusted origin for issue backlinks.
 
 Set `GITHUB_WEBHOOK_SECRET` to a separate random secret of at least 32 characters and enter the identical value in GitHub's webhook secret field. Do not reuse the OAuth client secret. Never commit or log these values. Missing webhook configuration leaves existing connection/publishing usable, and Settings warns that incoming synchronization is unavailable.
 
@@ -81,10 +82,13 @@ No credentials, GitHub configuration, tunnel or deployment are changed automatic
 
 ## Authorization and reliability
 
-- OAuth uses single-use Redis state bound to the signed-in Mokara user. Temporary user tokens are discarded/revoked after verification; installation tokens exist only in memory.
+- OAuth uses single-use Redis state bound to the signed-in Mokara user. User credentials are retained only as authenticated ciphertext; installation tokens exist only in memory.
 - Each publishing request checks the user's **specific enabled repository association**, not merely access to an organization installation. Installation/repository pagination includes repositories beyond the first 100.
 - Activation is backend-enforced and serialized with refresh/disconnect through a per-user database row lock. Forged, inaccessible and duplicate IDs cannot bypass the three-repository cap.
-- Existing 24-hour GitHub-user verification remains enforced. After expiry, reconnect to verify access and resume synchronization. No user token is retained for background reauthorization.
+- Renewable connections recheck the user-specific installation/repository intersection every five minutes on use and in the existing sync worker. Expiring user tokens rotate automatically, with the replacement saved before repository reads. A per-connection database lease serializes rotation across instances; provider I/O stays outside database transactions. Temporary failures fail access checks closed, preserve credentials/selections and back off before background retry.
+- `Refresh` now rechecks access without navigation. `Reconnect` appears for revoked authorization and legacy connections without stored credentials. Existing users reconnect once after this migration. Real token expiry/revocation can still require reconnect; extending a cached permission TTL is not a substitute for verification.
+- Apply migration `20261015120000_github_renewable_credentials` before the new backend, set the encryption key, and enable **Expire user authorization tokens** in GitHub App settings. Deploy the matching frontend because the Refresh endpoint now returns the integration snapshot rather than an OAuth URL.
+- A crash after GitHub consumes a refresh token but before its replacement is saved can still require reconnect; the lease prevents concurrent rotation but cannot make an external provider operation atomic with PostgreSQL.
 - A linked task syncs only while its publisher's connection/repository remains active and that user still belongs to the task's workspace. Disconnection, deactivation, removal, suspension or revocation pauses sync with a visible reason.
 - Reconnection/reactivation resumes paused/failed links using the **current Mokara task status**. Changes made locally while paused therefore reconcile to GitHub. This is not an import/backfill of GitHub activity missed during the pause.
 - The public webhook authenticates exact raw request bytes with constant-time HMAC-SHA256 comparison and a 1 MiB body limit. It does not use a session cookie. Only validated coordinates/actions, not full private webhook bodies, are stored.

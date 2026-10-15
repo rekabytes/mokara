@@ -94,6 +94,7 @@ export type GitHubIntegration = {
     github_login: string;
     status: string;
     reauthorization_required: boolean;
+    verification_error: string | null;
     repositories: GitHubRepository[];
   } | null;
 };

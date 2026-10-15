@@ -190,6 +190,7 @@ export const githubIntegrationSchema = z.object({
       github_login: z.string(),
       status: z.string(),
       reauthorization_required: z.boolean(),
+      verification_error: z.string().nullable().default(null),
       repositories: z.array(
         z.object({
           id: z.string(),

@@ -237,8 +237,12 @@ model Task {
 // and stored in `position`.
 // GitHub App integration: identity is user-scoped, while installations are
 // normalized because several connected users may access the same organization
-// installation. No GitHub credential is persisted in PostgreSQL.
+// installation. Renewable user credentials are authenticated ciphertext only.
 model GitHubAccountConnection {
+  verificationRetryAt DateTime? @map("verification_retry_at") @db.Timestamptz(3)
+  credentialsEncrypted String? @map("credentials_encrypted")
+  refreshLeaseId String? @map("refresh_lease_id") @db.Uuid
+  refreshLeaseUntil DateTime? @map("refresh_lease_until") @db.Timestamptz(3)
   id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId       String   @unique @map("user_id") @db.Uuid
   githubUserId BigInt   @map("github_user_id")
@@ -253,6 +257,7 @@ model GitHubAccountConnection {
   repositories  GitHubAccountRepository[]
   issueLinks    GitHubIssueLink[]
 
+  @@index([status, verifiedAt])
   @@map("github_account_connections")
 }
 

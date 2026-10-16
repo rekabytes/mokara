@@ -163,7 +163,8 @@ export function ProgressGantt({
   const rowsData: HeatRowData[] = tasks.map((t) => {
     const createdIdx = dayIdx(t.created_at);
     const dueIdx = dayIdx(t.due_date);
-    const doneIdx = t.completed_at ? dayIdx(t.completed_at) : null;
+    // Current status wins even if an older response includes a past completion.
+    const doneIdx = t.status === "done" && t.completed_at ? dayIdx(t.completed_at) : null;
     const startedIdx = t.started_at ? dayIdx(t.started_at) : null;
     const movedDays = new Set(
       // flatMap with a truthy check instead of filter-then-`ch.from_due!`: the
@@ -193,10 +194,7 @@ export function ProgressGantt({
       }
       return idx > dueIdx ? "late" : "waiting";
     };
-    const end = Math.min(
-      totalDays - 1,
-      Math.max(dueIdx, doneIdx ?? dueIdx, Math.min(todayIdx, dueIdx))
-    );
+    const end = Math.min(totalDays - 1, Math.max(dueIdx, doneIdx ?? todayIdx));
     const cells: HeatCell[] = [];
     for (let idx = createdIdx; idx <= end; idx++) {
       const s = state(idx);

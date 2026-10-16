@@ -11,11 +11,20 @@ await mock.module("../src/db.ts", {
         findMany: async ({ where }) => {
           state.reads++;
           return state.events
-            .filter((e) => e.teamId === where.teamId)
+            .filter(
+              (e) =>
+                e.teamId === where.teamId &&
+                (!where.taskId || where.taskId.in.includes(e.taskId)) &&
+                (!where.toStatus || where.toStatus.in.includes(e.toStatus))
+            )
             .sort((a, b) => a.createdAt - b.createdAt);
         },
       },
       task: {
+        findMany: async ({ where }) =>
+          state.tasks.filter(
+            (t) => t.teamId === where.teamId && t.dueDate && t.status !== "canceled"
+          ),
         groupBy: async ({ where }) => {
           const counts = new Map();
           for (const task of state.tasks.filter((t) => t.teamId === where.teamId))
@@ -143,5 +152,77 @@ test("empty workspaces remain zero-filled and unauthorized reads never query his
   state.allowed = false;
   state.reads = 0;
   assert.equal((await app.request(`/teams/${TEAM}/analytics`)).status, 403);
+  assert.equal(state.reads, 0);
+});
+
+function scheduled(id, dueDay = 2) {
+  const task = create(id);
+  Object.assign(task, {
+    title: id,
+    createdAt: new Date(TODAY - 3 * 86400000),
+    dueDate: new Date(TODAY + dueDay * 86400000),
+    dueChanges: [],
+  });
+  event(task, "todo", "in_progress", -2);
+  event(task, "in_progress", "done", -1);
+  return task;
+}
+async function progress() {
+  const response = await app.request(`/teams/${TEAM}/progress`);
+  assert.equal(response.status, 200);
+  return response.json();
+}
+for (const status of ["todo", "in_progress"]) {
+  test(`progress clears the finish when reopened to ${status}, including a fresh request`, async () => {
+    const task = scheduled("reopened");
+    assert.equal(
+      (await progress()).tasks[0].completed_at,
+      new Date(TODAY - 86400000).toISOString()
+    );
+    event(task, "done", status);
+    const reopened = await progress();
+    assert.equal(reopened.tasks[0].status, status);
+    assert.equal(reopened.tasks[0].completed_at, null);
+    assert.equal(reopened.tasks[0].started_at, new Date(TODAY - 2 * 86400000).toISOString());
+    assert.deepEqual(await progress(), reopened);
+    assert.equal((await read()).series.at(-1).completed, 1);
+    event(task, status, "done");
+    // Deliberately reverse events to ensure the latest completion is chosen by date.
+    state.events.reverse();
+    assert.equal((await progress()).tasks[0].completed_at, new Date(TODAY).toISOString());
+    assert.equal((await read()).series.at(-1).completed, 2);
+  });
+}
+test("overdue reopening preserves the deadline and its change history", async () => {
+  const task = scheduled("overdue", -1);
+  task.dueChanges.push({
+    fromDue: new Date(TODAY - 2 * 86400000),
+    toDue: task.dueDate,
+    createdAt: new Date(TODAY - 86400000),
+  });
+  event(task, "done", "in_progress");
+  const data = (await progress()).tasks[0];
+  assert.equal(data.completed_at, null);
+  assert.equal(data.due_date, task.dueDate.toISOString());
+  assert.deepEqual(data.due_changes, [
+    {
+      from_due: task.dueChanges[0].fromDue.toISOString(),
+      to_due: task.dueDate.toISOString(),
+      changed_at: task.dueChanges[0].createdAt.toISOString(),
+    },
+  ]);
+});
+test("progress excludes canceled, unscheduled and other-team tasks and enforces membership", async () => {
+  scheduled("visible");
+  scheduled("canceled").status = "canceled";
+  scheduled("other").teamId = "other";
+  scheduled("unscheduled").dueDate = null;
+  assert.deepEqual(
+    (await progress()).tasks.map((t) => t.id),
+    ["visible"]
+  );
+  state.allowed = false;
+  state.reads = 0;
+  assert.equal((await app.request(`/teams/${TEAM}/progress`)).status, 403);
   assert.equal(state.reads, 0);
 });

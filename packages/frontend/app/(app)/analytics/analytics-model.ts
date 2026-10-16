@@ -39,10 +39,15 @@ export function trailingDates(today: Date, days: number): string[] {
 }
 
 export const SERIES: { key: SeriesKey; label: string; color: string; token: string }[] = [
-  { key: "created", label: "Created", color: "#0ea5e9", token: "var(--color-created)" },
-  { key: "in_progress", label: "In progress", color: "#a16207", token: "var(--color-warning)" },
-  { key: "completed", label: "Completed", color: "#6366f1", token: "var(--color-accent)" },
-  { key: "canceled", label: "Canceled", color: "#ef4444", token: "var(--color-danger)" },
+  { key: "created", label: "Tasks created", color: "#0ea5e9", token: "var(--color-created)" },
+  {
+    key: "in_progress",
+    label: "Moved to in progress",
+    color: "#a16207",
+    token: "var(--color-warning)",
+  },
+  { key: "completed", label: "Marked completed", color: "#6366f1", token: "var(--color-accent)" },
+  { key: "canceled", label: "Marked canceled", color: "#ef4444", token: "var(--color-danger)" },
 ];
 
 export const MONTH_NAMES = Array.from({ length: 12 }, (_, i) =>

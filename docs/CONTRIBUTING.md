@@ -43,20 +43,72 @@ The separate screenshot fixture script uses `mira` / `jonas` / `priya`. It requi
 ## Pull request checklist
 
 CI runs on every PR to `dev`: frozen install → `db:generate` → `typecheck` →
-`lint` → `format` → real frontend build. Everything except the build is a
-local script; run them before you push:
+`lint` → `format` → frontend and backend regression tests → frontend build →
+migration checks against an empty database. CI owns the production build; you
+can run the following checks locally from the repository root:
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm format
+pnpm typecheck
+pnpm lint
+pnpm format
 ```
 
-- **No automated test suite exists yet.** CI's green check plus a described
-  manual pass is the bar: put the click-through in the PR body ("created a
-  task with a file → thumbnail appears in the drawer → uploader delete →
-  reload"). Screenshots for UI changes, please.
+Run the automated tests relevant to your change as described below. In the PR
+body, explain what changed and which checks you ran. For user-facing changes,
+also describe your browser checks (for example, "created a task with a file →
+thumbnail appears in the drawer → deleted the file → reloaded"). Include
+screenshots for UI changes. Automated tests verify specific behavior; they do
+not replace checking the actual browser flow.
+
 - **Prettier and ESLint are the style authority.** If `pnpm format` complains,
-  `pnpm format:fix`. Don't fight the config.
+  run `pnpm format:fix`, then review the diff for unrelated changes.
 - **Migrations:** see below — they are hand-written here.
+
+### Backend tests
+
+After installing dependencies and generating Prisma as described in the
+[setup guide](../README.md), run these commands from the **repository root**:
+
+| Test group                          | Command                                        |
+| ----------------------------------- | ---------------------------------------------- |
+| Authentication and request handling | `pnpm --filter @mokara/backend test:auth`      |
+| MCP                                 | `pnpm --filter @mokara/backend test:mcp`       |
+| GitHub integration                  | `pnpm --filter @mokara/backend test:github`    |
+| Uploads and workspace files         | `pnpm --filter @mokara/backend test:uploads`   |
+| Analytics                           | `pnpm --filter @mokara/backend test:analytics` |
+| Additional admin checks             | `pnpm --filter @mokara/backend test:admin`     |
+
+CI runs the first five groups. The additional admin group is available for
+changes to the operator console and its backend responses; it is not a separate
+CI step. These suites use isolated fixtures and mocked infrastructure/provider
+boundaries, so they do not require running Mokara servers or live external
+accounts. CI's database migration check is separate and does use a disposable
+database.
+
+Backend tests live in `packages/backend/test/` and use Node's built-in test
+runner with the installed `tsx` loader. Prefer an existing test file that covers
+the changed behavior. If you add a file, include it in an appropriate package
+script that CI runs; an unreferenced file will not automatically join these
+explicit backend test groups.
+
+### Frontend tests
+
+Start in the **repository root**, then run:
+
+```bash
+cd packages/backend
+TSX_TSCONFIG_PATH=../frontend/tsconfig.json node --import tsx --test ../frontend/test/*.test.mjs
+```
+
+The backend directory supplies the existing `tsx` dependency; the environment
+setting tells it to use the frontend's TypeScript aliases and JSX configuration.
+This is the same command and working directory used by CI. Frontend tests live
+in `packages/frontend/test/` and mock transport or render isolated components;
+no development server or live account is needed. New `*.test.mjs` files in this
+directory are included by the wildcard.
+
+If you run more root-level commands afterward, return to the repository root
+with `cd ../..`.
 
 ## Conventions that are not negotiable
 

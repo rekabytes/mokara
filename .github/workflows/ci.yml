@@ -77,6 +77,7 @@ jobs:
           pnpm --filter @mokara/backend test:mcp
           pnpm --filter @mokara/backend test:github
           pnpm --filter @mokara/backend test:uploads
+          pnpm --filter @mokara/backend test:analytics
 
       - name: Build frontend (standalone)
         run: pnpm build:frontend

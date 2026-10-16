@@ -143,31 +143,60 @@ Response (snake_case, new `toAnalytics()` mapper):
       "created": 3,
       "in_progress": 1,
       "completed": 2,
-      "canceled": 0,
-      "created_avg": 2.4,
-      "in_progress_avg": 1.6,
-      "completed_avg": 2.1,
-      "canceled_avg": 0.4
+      "canceled": 0
     }
   ],
   "totals": { "open": 5, "in_progress": 2, "completed": 12, "canceled": 3 }
 }
 ```
 
-- `series`: one row per calendar day in the range (inclusive today),
-  oldest → newest, **zero-filled** so lines are continuous.
-  - `created` = events with `from_status IS NULL` that day
-  - `in_progress` / `completed` / `canceled` = events with
-    `to_status = '<status>'` that day (`completed` counts `done`)
-  - `<key>_avg` = trailing 7-day average of the raw count (day inclusive),
-    computed server-side over **full team history** so values at the left
-    edge of the window are correct, not truncated. Fractional by design —
-    consecutive averages never tie, which is what eliminates the horizontal
-    segments raw integer counts produce.
+- `series`: cumulative integer event totals as of each UTC calendar day,
+  oldest → newest, zero-filled before activity and carried forward on quiet days.
+  - `created` counts events with `from_status IS NULL`.
+  - `in_progress` / `completed` / `canceled` count subsequent transitions to
+    the corresponding status (`completed` counts `done`). Creation directly in
+    a status is counted as a creation, not a subsequent move.
+  - The visible window includes lifetime activity before its left edge.
+    There are no rolling-average fields in the current response.
 - `totals`: **current** snapshot from the `tasks` table (not events):
   `open` = `todo`, plus live counts per other status.
-- Bucketing in SQL (`date_trunc('day', created_at)` + `GROUP BY`), not in JS.
-- Errors reuse the contract: `not_found` / `forbidden` like other team routes.
+- Current implementation buckets events in JavaScript; current counts use
+  Prisma `groupBy`. This fix does not change their aggregation or retention.
+- Membership failures return `forbidden` like other team routes.
+
+### Issue #53: historical activity versus current status
+
+The reported historical In progress value of3 alongside a current value of0
+is explained by the event counter: it increments on transitions into progress
+and never subtracts when a task completes. Three tasks moving to progress and
+then completing reproduce exactly those values. Reopening/completing again can
+count the same task more than once. Fresh reads preserve this meaning; it is
+not evidence of three tasks currently stuck in progress. The original live
+workspace history was not independently inspected; the source and isolated
+reproduction establish this interpretation of the screenshot.
+
+Preserve historical activity and the separate current distribution. The card is
+now **Activity history**, with explicit cumulative-event guidance. Series labels
+are **Tasks created**, **Moved to in progress**, **Marked completed** and
+**Marked canceled**. Tooltips say **Cumulative events** and new events **on this
+day**, rather than “today” when hovering a past date. The first visible day does
+not claim that its cumulative baseline all occurred that day. Integer-axis ticks
+match event counts. Current distribution retains current-status names/counts.
+
+| Scenario for one task    | Historical moves to progress | Currently in progress |
+| ------------------------ | ---------------------------- | --------------------- |
+| Move Todo → In progress  | 1                            | 1                     |
+| Complete it              | 1                            | 0                     |
+| Reopen to In progress    | 2                            | 1                     |
+| Complete again or cancel | 2                            | 0                     |
+
+Regression coverage exercises the real analytics route with isolated database
+fixtures, fresh reads, completion/cancellation/reopening and window baselines;
+frontend rendering checks the history/current distinction and tooltip handling.
+The route contract, dates, refresh behavior, event history and stored statuses
+are unchanged. Deploy the frontend after merging; no environment variable,
+dependency or migration is required. Owner browser acceptance should repeat the
+three-task scenario and confirm the labels make both counts understandable.
 
 ## 8. Frontend Design
 

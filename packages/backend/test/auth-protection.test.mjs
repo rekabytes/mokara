@@ -282,6 +282,16 @@ const request = (path, body, ip = "198.51.100.1") => {
 };
 const signup = { username: "alice", password: "password123", turnstile_token: "token" };
 
+test("oversized signup passwords are rejected before verification, hashing or account creation", async () => {
+  const response = await request("signup", { ...signup, password: "é".repeat(37) });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, "invalid_input");
+  assert.equal(response.headers.get("set-cookie"), null);
+  assert.equal(state.providerCalls, 0);
+  assert.equal(state.hashes, 0);
+  assert.equal(state.creates, 0);
+});
+
 test("signup creates an account/session only after valid server verification", async () => {
   const response = await request("signup", signup);
   assert.equal(response.status, 201);

@@ -166,6 +166,12 @@ export const ERROR_RULES: Record<string, ErrorRule> = {
   },
 
   // --- access ---
+  origin_forbidden: {
+    kind: "permission",
+    action: "inline",
+    message:
+      "This request was blocked. Refresh Mokara and try again. If it continues, contact your administrator.",
+  },
   forbidden: { kind: "permission", action: "inline", message: "You don't have access to this." },
   not_member: {
     kind: "permission",

@@ -19,11 +19,11 @@ pattern rather than re-deriving one. Where this PRD deliberately differs from it
 
 ## 1. Goal
 
-`git tag v0.2.14 && git push origin v0.2.14` produces:
+`git tag v0.2.15 && git push origin v0.2.15` produces:
 
-- `ghcr.io/<owner>/mokara-frontend:0.2.14` (+ `:0.2`, `:latest`)
-- `ghcr.io/<owner>/mokara-backend:0.2.14` (+ same)
-- `ghcr.io/<owner>/mokara-admin:0.2.14` (+ same) — the operator console, added
+- `ghcr.io/<owner>/mokara-frontend:0.2.15` (+ `:0.2`, `:latest`)
+- `ghcr.io/<owner>/mokara-backend:0.2.15` (+ same)
+- `ghcr.io/<owner>/mokara-admin:0.2.15` (+ same) — the operator console, added
   2026-09-09; it joins the same matrix and sits behind the same gate
 
 The tag has to match `version` in the root and every workspace `package.json`,
@@ -129,8 +129,10 @@ Why this is the right shape, not just the familiar one:
 - **The image is portable.** `BACKEND_URL` is read by the Next server at runtime, so
   one published image serves any host. This is the actual point of pulling instead of
   building.
-- **CORS stops mattering.** Keep the middleware (free, and correct for future
-  non-browser clients), but `CORS_ALLOWED_ORIGINS` can stay empty.
+- **Browser trust stays explicit.** Set backend `AUTH_PUBLIC_URL` to the
+  frontend's public origin. The proxy preserves browser Origin headers, and the
+  backend verifies writes against that origin. `CORS_ALLOWED_ORIGINS` can stay
+  empty unless additional trusted frontends are needed. See `browser-access.md`.
 
 ## 5. Images
 

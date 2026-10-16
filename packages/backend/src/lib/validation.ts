@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { newPasswordError } from "./password-policy.ts";
 import { validScopes, parseScopes, MCP_SCOPES } from "../mcp/permissions.ts";
 
 export const mcpScopesSchema = z
@@ -25,7 +26,10 @@ export const usernameSchema = z
   .regex(/^[a-z0-9_]+$/, "username may only contain a-z, 0-9, underscore")
   .transform((s) => s.toLowerCase().trim());
 
-export const passwordSchema = z.string().min(8, "password must be at least 8 characters");
+export const passwordSchema = z.string().superRefine((password, ctx) => {
+  const message = newPasswordError(password);
+  if (message) ctx.addIssue({ code: "custom", message });
+});
 
 export const signUpSchema = z.object({
   username: usernameSchema,
@@ -127,9 +131,17 @@ export const taskKpisSchema = z.object({ kpis: taskKpiBindings });
 
 export type TaskKpiBinding = z.infer<typeof taskKpiBindings>[number];
 
+const taskTitle = z
+  .string()
+  .min(1, "title is required")
+  .max(500, "Task titles must be 500 characters or fewer.");
+const taskDescription = z
+  .string()
+  .max(20000, "Task descriptions must be 20,000 characters or fewer.");
+
 export const createTaskSchema = z.object({
-  title: z.string().min(1, "title is required"),
-  description: z.string().optional(),
+  title: taskTitle,
+  description: taskDescription.optional(),
   status: taskStatusSchema.optional(),
   priority: taskPrioritySchema.optional(),
   due_date: isoDate,
@@ -155,8 +167,8 @@ export const githubRepositoriesSchema = z
 
 export const updateTaskSchema = z
   .object({
-    title: z.string().min(1, "title is required").optional(),
-    description: z.string().nullable().optional(),
+    title: taskTitle.optional(),
+    description: taskDescription.nullable().optional(),
     status: taskStatusSchema.optional(),
     priority: taskPrioritySchema.optional(),
     due_date: isoDate,

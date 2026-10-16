@@ -4,6 +4,33 @@
 
 The operator console lands on **Overview**, with **Needs attention**, **Users**, **Workspaces**, **Billing**, and **Audit** navigation. The admin service remains a session-gated proxy: no DB, Redis, storage or Stripe credentials are added to it. No new dependencies, suspension controls, retries, remote configuration changes or automatic external probes are introduced.
 
+## Sign-in protection
+
+The backend permits ten credential-bearing admin sign-in attempts per ten-minute
+fixed window, shared across replicas through the existing atomic Redis limiter.
+The bucket is keyed to the configured operator using a keyed digest; changing
+the submitted username or forwarded IP headers does not create another budget.
+Successful attempts count too. Requests without the correct login access key do
+not consume the operator's budget, so public callers cannot trivially lock out
+the operator. A caller with that key can still exhaust the temporary allowance.
+
+Blocked requests return 429 with Redis's remaining `Retry-After`; retries do not
+extend the window and there is no permanent account lock. Redis/counter failures
+fail closed with 503 before issuing a token. The console preserves these statuses,
+shows a safe retry/unavailability message and never sets a session on failure.
+Both login POST bodies are limited to 4 KiB; schema field limits remain enforced
+in the backend. A disabled console stays hidden before parsing input. Existing
+key checks, token verification and secure eight-hour session cookies remain.
+
+The console still holds no Redis credentials, and no client-IP assertion or new
+environment setting is required. Deploy backend and admin together for the retry
+message. No migration/dependency is needed. `test:auth` (CI) and `test:admin`
+include isolated route tests for shared/concurrent limits, cooldown recovery,
+Redis failures, retry headers, cookie behavior and disabled configurations.
+Browser acceptance: verify normal sign-in, repeated invalid credentials followed
+by the cooldown message, and recovery after the window expires. These tests use
+mocked storage/transport and do not replace live acceptance.
+
 ### Overview
 
 - Backend package version, deploy mode, process uptime and snapshot timestamp. Package version is not an image commit SHA, and uptime is for the responding replica.

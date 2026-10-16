@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { TASK_DESCRIPTION_MAX_CHARACTERS } from "./task-content";
 import { TaskMarkdown } from "./TaskMarkdown";
 
 export function DescriptionField({
@@ -21,6 +22,7 @@ export function DescriptionField({
   }
 
   function commit() {
+    if (draft.trim().length > TASK_DESCRIPTION_MAX_CHARACTERS) return;
     setEditing(false);
     if (draft !== value) onSave(draft);
     else setDraft(value);
@@ -28,31 +30,44 @@ export function DescriptionField({
 
   if (editing) {
     return (
-      <textarea
-        autoFocus
-        data-tour="drawer-description"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            e.preventDefault();
-            setDraft(value);
-            setEditing(false);
-          }
-          // Owner (2026-09-10): Enter saves, Shift+Enter is a newline — the
-          // chat-input grammar, since ⌘+Enter was undiscoverable. ⌘/Ctrl+Enter
-          // still saves (same action, and it matches the composer's hint).
-          else if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            commit();
-          }
-        }}
-        aria-label="Task description (Markdown supported)"
-        rows={8}
-        placeholder="Add description…"
-        className="mt-3 min-h-[10rem] shrink-0 w-full resize-y rounded-md border border-[var(--color-border-soft)] bg-white px-2.5 py-2 text-[0.92rem] leading-[1.5] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
-      />
+      <>
+        <textarea
+          autoFocus
+          data-tour="drawer-description"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              setDraft(value);
+              setEditing(false);
+            }
+            // Owner (2026-09-10): Enter saves, Shift+Enter is a newline — the
+            // chat-input grammar, since ⌘+Enter was undiscoverable. ⌘/Ctrl+Enter
+            // still saves (same action, and it matches the composer's hint).
+            else if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              commit();
+            }
+          }}
+          aria-label="Task description (Markdown supported)"
+          aria-describedby="task-description-limit"
+          aria-invalid={draft.trim().length > TASK_DESCRIPTION_MAX_CHARACTERS}
+          rows={8}
+          placeholder="Add description…"
+          className="mt-3 min-h-[10rem] shrink-0 w-full resize-y rounded-md border border-[var(--color-border-soft)] bg-white px-2.5 py-2 text-[0.92rem] leading-[1.5] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+        />
+        <p
+          id="task-description-limit"
+          role="status"
+          className="mt-1 text-[0.7rem] text-[var(--color-ink-muted)]"
+        >
+          {draft.trim().length.toLocaleString()} /{" "}
+          {TASK_DESCRIPTION_MAX_CHARACTERS.toLocaleString()} characters. Shorten the description to
+          save if it exceeds the limit.
+        </p>
+      </>
     );
   }
 

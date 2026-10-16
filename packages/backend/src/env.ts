@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { z } from "zod";
+import { validBrowserOriginList } from "./lib/browser-origin.ts";
 
 const EnvSchema = z
   .object({
@@ -7,12 +8,16 @@ const EnvSchema = z
     PORT: z.coerce.number().int().positive().default(4700),
     // Native MCP clients omit Origin; browser clients require an explicit origin.
     MCP_ALLOWED_ORIGINS: z.string().default(""),
-    CORS_ALLOWED_ORIGINS: z.string().default(""),
+    CORS_ALLOWED_ORIGINS: z.string().default("").refine(validBrowserOriginList, {
+      message:
+        "CORS_ALLOWED_ORIGINS must contain exact HTTP(S) origins, not wildcards, credentials or URL paths",
+    }),
     // Empty by default so development boots without a .env value (jwt.ts falls
     // back to a labelled dev secret). The refine below makes "unset" fatal in
     // production instead — see the comment there.
     AUTH_SECRET: z.string().default(""),
     // Social sign-in uses separate credentials from repository integration.
+    // Canonical frontend origin for browser request protection and OAuth.
     AUTH_PUBLIC_URL: z.string().trim().default(""),
     GOOGLE_AUTH_CLIENT_ID: z.string().trim().default(""),
     GOOGLE_AUTH_CLIENT_SECRET: z.string().trim().default(""),

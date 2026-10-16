@@ -51,9 +51,15 @@ export function ActivityCard({ data, loading, error, load }: Props) {
   const windowSeries = useMemo(() => normalizeWindowSeries(data, windowDates), [data, windowDates]);
 
   return (
-    <section className="mt-4 rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-18px_rgba(15,23,42,0.25)]">
+    <section
+      aria-labelledby="activity-history-title"
+      aria-describedby="activity-history-description"
+      className="mt-4 rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-18px_rgba(15,23,42,0.25)]"
+    >
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[0.8rem] font-semibold">Activity over time</span>
+        <h3 id="activity-history-title" className="m-0 text-[0.8rem] font-semibold">
+          Activity history
+        </h3>
         <div className="flex flex-wrap gap-1.5">
           {SERIES.map((s) => {
             const on = visible.has(s.key);
@@ -99,6 +105,13 @@ export function ActivityCard({ data, loading, error, load }: Props) {
         </div>
       </div>
 
+      <p
+        id="activity-history-description"
+        className="mb-3 mt-1 text-[0.75rem] leading-relaxed text-[var(--color-ink-muted)]"
+      >
+        Cumulative events, not current task counts. Completed or reopened tasks keep their earlier
+        activity here. See Current distribution for tasks currently in each status.
+      </p>
       <div className="h-[340px]">
         {loading && !data ? (
           <div className="grid h-full place-items-center text-[0.8rem] text-[var(--color-ink-faint)]">
@@ -137,7 +150,7 @@ export function ActivityCard({ data, loading, error, load }: Props) {
                 tickLine={false}
                 axisLine={false}
                 width={32}
-                allowDecimals
+                allowDecimals={false}
                 domain={[0, (dataMax: number) => Math.max(1, Math.ceil(dataMax * 1.1))]}
               />
               <Tooltip
@@ -164,8 +177,8 @@ export function ActivityCard({ data, loading, error, load }: Props) {
         )}
       </div>
       <p className="mt-2 px-1 text-[0.7rem] text-[var(--color-ink-faint)]">
-        Running totals over the last {WINDOW_DAYS} days, ending today. Hover any day for the total
-        and new events.
+        Cumulative event totals shown over the last {WINDOW_DAYS} days. The same task can be counted
+        more than once. Hover a day for its cumulative total and new events.
       </p>
     </section>
   );

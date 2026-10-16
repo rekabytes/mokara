@@ -5,8 +5,8 @@ import { getRedis } from "../redis.ts";
 // audience live publishes JSON to its channel. The `user:<id>` topic was
 // reserved for notifications in the 2026-08-21 realtime decision; the
 // `team:<id>` topic (2026-09-07) carries board events to every member of a
-// workspace — the bridge authorizes by membership at connect time, so a
-// client only ever receives channels for teams it belongs to.
+// workspace — the bridge rechecks current membership and session validity
+// before delivery; subscribing to a channel is not a lasting access grant.
 export const userChannel = (userId: string): string => `mokara:user:${userId}`;
 export const teamChannel = (teamId: string): string => `mokara:team:${teamId}`;
 

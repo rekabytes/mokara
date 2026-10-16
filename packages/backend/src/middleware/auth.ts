@@ -1,5 +1,5 @@
 import type { Context, Next } from "hono";
-import { parseToken } from "../lib/jwt.ts";
+import { parseToken, type ParsedToken } from "../lib/jwt.ts";
 import { isSessionValid, trackSession } from "../lib/sessions.ts";
 import { describeUserAgent } from "../lib/ua.ts";
 import { getRedis } from "../redis.ts";
@@ -10,6 +10,7 @@ export type Vars = {
   userId: string;
   username: string;
   jti: string; // the current request's session id — Settings marks its own row
+  session: ParsedToken; // verified claims for long-lived request revalidation
 };
 
 export async function authRequired(c: Context, next: Next) {
@@ -61,5 +62,6 @@ export async function authRequired(c: Context, next: Next) {
   c.set("userId", claims.sub);
   c.set("username", claims.username);
   c.set("jti", claims.jti);
+  c.set("session", claims);
   await next();
 }

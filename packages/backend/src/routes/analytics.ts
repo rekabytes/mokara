@@ -124,7 +124,8 @@ analyticsRoutes.get("/teams/:id/analytics", async (c) => {
 // Progress tracking (Gantt): per-task planned vs actual spans. Returns the
 // team's non-canceled tasks that have a due date, with the real start time
 // (first `in_progress` event — start dates are not user-entered), the
-// completion time (latest `done` event) and the full due-date history.
+// completion time (latest `done` event for currently completed work) and
+// the full due-date history.
 analyticsRoutes.get("/teams/:id/progress", async (c) => {
   const userId = c.get("userId");
   const teamId = c.req.param("id")!;
@@ -178,7 +179,7 @@ analyticsRoutes.get("/teams/:id/progress", async (c) => {
       created_at: t.createdAt.toISOString(),
       started_at: startedAt.get(t.id)?.toISOString() ?? null,
       due_date: t.dueDate!.toISOString(),
-      completed_at: completedAt.get(t.id)?.toISOString() ?? null,
+      completed_at: t.status === "done" ? (completedAt.get(t.id)?.toISOString() ?? null) : null,
       due_changes: t.dueChanges.map((ch) => ({
         from_due: ch.fromDue?.toISOString() ?? null,
         to_due: ch.toDue?.toISOString() ?? null,

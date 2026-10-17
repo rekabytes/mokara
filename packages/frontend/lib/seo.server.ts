@@ -25,6 +25,11 @@ export const PUBLIC_PAGES = {
     description:
       "Practical guides for connecting your AI agent to Mokara and keeping control of your workspace.",
   },
+  "/docs/support": {
+    title: "Embed support tickets · Mokara",
+    description:
+      "Add a Mokara support ticket form to your website or web app. Follow setup, domain permissions, attachments and customer reply guidance.",
+  },
   "/docs/mcp": {
     title: "Connect an AI agent with MCP · Mokara",
     description:

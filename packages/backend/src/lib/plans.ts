@@ -137,3 +137,16 @@ export function publicCap(cap: number): number | null {
 export const PLAN_BY_PRICE_LOOKUP_KEY: Record<string, Plan> = {
   starter_monthly: "starter",
 };
+
+export function supportLimits(owner: PlanHolder) {
+  switch (effectivePlan(owner)) {
+    case "starter":
+      return { sites: 1, tickets: 100 };
+    case "pro":
+      return { sites: 3, tickets: 500 };
+    case "ultra":
+      return { sites: 10, tickets: 2000 };
+    default:
+      return { sites: 0, tickets: 0 };
+  }
+}

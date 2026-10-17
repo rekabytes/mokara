@@ -1,3 +1,6 @@
+import { supportRoutes } from "./routes/support.ts";
+import { supportPublicRoutes } from "./routes/support-public.ts";
+import { startSupportEmailWorker } from "./lib/support-email.ts";
 import { serve, type ServerType } from "@hono/node-server";
 import { Hono } from "hono";
 import { corsMiddleware } from "./middleware/cors.ts";
@@ -84,6 +87,7 @@ async function main() {
 
   const api = new Hono<{ Variables: Vars }>();
   api.route("/auth", authRoutes);
+  api.route("/support-public", supportPublicRoutes);
   // Agent credentials authenticate independently of browser cookies.
   api.route("/mcp/oauth", mcpOAuthRoutes);
   api.route("/mcp", mcpRoutes);
@@ -128,6 +132,7 @@ async function main() {
   mountEventsRoute(authed);
   authed.route("/teams", teamRoutes);
   authed.route("/invitations", invitationRoutes);
+  authed.route("/", supportRoutes);
   authed.route("/", taskRoutes);
   authed.route("/", commentRoutes);
   authed.route("/", subtaskRoutes);
@@ -171,6 +176,7 @@ async function main() {
   startServer(1);
   const stopGitHubSync = startGitHubSyncWorker();
   const stopFileCleanup = startFileCleanupWorker();
+  const stopSupportEmail = startSupportEmailWorker();
 
   // 4) Graceful shutdown — drop idle and live connections immediately so the
   //  listening socket frees before tsx watch's next child tries to bind.
@@ -181,7 +187,7 @@ async function main() {
     // Narrowed: the Http2 variant of ServerType lacks closeAllConnections.
     if (s && "closeIdleConnections" in s) s.closeIdleConnections();
     if (s && "closeAllConnections" in s) s.closeAllConnections();
-    await Promise.all([stopGitHubSync(), stopFileCleanup()]);
+    await Promise.all([stopGitHubSync(), stopFileCleanup(), stopSupportEmail()]);
     await disconnectRedis();
     await disconnectDB();
     log.ok("Stopped");

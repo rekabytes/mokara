@@ -149,6 +149,9 @@ export function getRobots(): MetadataRoute.Robots {
       allow: "/",
       disallow: [
         "/api/",
+        "/support",
+        "/support-ticket/",
+        "/ticket-form/",
         "/files",
         "/tasks",
         "/analytics",

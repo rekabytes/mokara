@@ -74,6 +74,7 @@ model User {
   assignedTasks     Task[]                   @relation("TaskAssignee")
   workspaceFolders WorkspaceFolder[] @relation("WorkspaceFolderCreator")
   workspaceFiles WorkspaceFile[] @relation("WorkspaceFileUploader")
+  supportAssignments SupportTicket[] @relation("SupportAssignee")
   attachments       Attachment[]
   adminAuditEvents  AdminAuditEvent[]
   githubConnection  GitHubAccountConnection?
@@ -157,6 +158,8 @@ model Team {
   workspaceFolders WorkspaceFolder[]
   workspaceFiles WorkspaceFile[]
   attachments    Attachment[]
+  supportSites SupportSite[]
+  supportTickets SupportTicket[]
 
   @@map("teams")
 }
@@ -230,6 +233,7 @@ model Task {
   @@index([projectId])
   @@index([assigneeId])
   @@map("tasks")
+  supportTicket SupportTicket?
 }
 
 // PRD-11 Phase 1.2: a checklist inside a task. Deliberately flat items rather
@@ -699,6 +703,9 @@ model WorkspaceFile {
   @@index([teamId, folderId, trashedAt])
   @@index([trashedAt])
   @@map("workspace_files")
+  supportTicketId String? @map("support_ticket_id") @db.Uuid
+  supportTicket SupportTicket? @relation(fields: [supportTicketId, teamId], references: [id, teamId], onDelete: Cascade)
+  @@index([supportTicketId])
 }
 
 // Durable cleanup survives removal of file metadata (and of its workspace).
@@ -717,4 +724,84 @@ model FileObjectDeletion {
   @@index([ownerId])
   @@index([teamId])
   @@map("file_object_deletions")
+}
+
+
+model SupportSite {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId String @map("team_id") @db.Uuid
+  name String
+  origins String[]
+  accent String @default("#6366f1")
+  greeting String @default("Report an issue or send a request.")
+  enabled Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  tickets SupportTicket[]
+  @@unique([id, teamId])
+  @@index([teamId])
+  @@map("support_sites")
+}
+
+model SupportTicket {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId String @map("team_id") @db.Uuid
+  siteId String @map("site_id") @db.Uuid
+  ownerId String @map("owner_id") @db.Uuid
+  submissionId String @unique @map("submission_id") @db.Uuid
+  submissionHash String @map("submission_hash")
+  reference String @unique
+  subject String
+  details String
+  requestType String @map("request_type")
+  area String
+  customerName String @map("customer_name")
+  customerEmail String @map("customer_email")
+  status String @default("open")
+  priority String @default("medium")
+  assigneeId String? @map("assignee_id") @db.Uuid
+  taskId String? @unique @map("task_id") @db.Uuid
+  accessHash String @unique @map("access_hash")
+  accessEncrypted String @map("access_encrypted")
+  accessExpiresAt DateTime @map("access_expires_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  site SupportSite @relation(fields: [siteId, teamId], references: [id, teamId], onDelete: Cascade)
+  assignee User? @relation("SupportAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  task Task? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  messages SupportMessage[]
+  attachments WorkspaceFile[]
+  @@unique([id, teamId])
+  @@index([teamId, createdAt, id])
+  @@index([ownerId, createdAt])
+  @@map("support_tickets")
+}
+
+model SupportMessage {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticketId String @map("ticket_id") @db.Uuid
+  requestId String @unique @map("request_id") @db.Uuid
+  author String
+  internal Boolean @default(false)
+  body String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  @@index([ticketId, createdAt, id])
+  @@map("support_messages")
+}
+
+model SupportEmail {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticketId String @map("ticket_id") @db.Uuid
+  recipient String
+  subject String
+  textEncrypted String @map("text_encrypted")
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
+  sentAt DateTime? @map("sent_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  @@index([sentAt, nextAttemptAt])
+  @@map("support_emails")
 }

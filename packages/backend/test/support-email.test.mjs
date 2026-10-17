@@ -123,3 +123,60 @@ test("invalid ciphertext is rejected and authentication secret rotations preserv
     env.AUTH_SECRET = before;
   }
 });
+
+const { brandedSupportSender, supportSenderMailbox } =
+  await import("../src/lib/support-email-sender.ts");
+test("branded names keep Mokara's mailbox for bare and named sender settings", () => {
+  for (const configured of ["support@example.test", "Mokara <support@example.test>"])
+    assert.equal(
+      brandedSupportSender("Northline", configured),
+      '"Northline Support via Mokara" <support@example.test>'
+    );
+  assert.equal(
+    brandedSupportSender("Northline Support", "support@example.test"),
+    '"Northline Support via Mokara" <support@example.test>'
+  );
+  assert.equal(
+    brandedSupportSender("", "support@example.test"),
+    '"Support via Mokara" <support@example.test>'
+  );
+});
+test("website names are quoted and cannot inject mail headers or replace the sender address", () => {
+  const sender = brandedSupportSender(
+    'Northline "Shop"\r\nBcc: attacker@other.test <other@other.test>',
+    "support@example.test"
+  );
+  assert.ok(sender.startsWith('"Northline \\"Shop\\"'));
+  assert.ok(!/[\r\n]/.test(sender));
+  assert.ok(sender.endsWith('via Mokara" <support@example.test>'));
+  assert.equal(supportSenderMailbox(sender), "support@example.test");
+  for (const value of [
+    "",
+    "invalid",
+    "one@example.test, two@example.test",
+    "Name <one@example.test> <two@example.test>",
+    "one@example.test\r\nBcc: two@example.test",
+  ])
+    assert.throws(() => supportSenderMailbox(value));
+});
+test("a queued branded sender remains identical when configuration changes between retries", async (t) => {
+  jobs[0].sender = brandedSupportSender("Northline", env.SUPPORT_EMAIL_FROM);
+  const previous = env.SUPPORT_EMAIL_FROM;
+  t.after(() => {
+    env.SUPPORT_EMAIL_FROM = previous;
+  });
+  t.mock.method(globalThis, "fetch", async (_url, init) => {
+    calls.push(init);
+    return new Response(null, { status: 503 });
+  });
+  await drainSupportEmails();
+  env.SUPPORT_EMAIL_FROM = "Changed <new@example.test>";
+  jobs[0].nextAttemptAt = new Date(0);
+  await drainSupportEmails();
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].body, calls[1].body);
+  assert.equal(
+    JSON.parse(calls[1].body).from,
+    '"Northline Support via Mokara" <support@example.test>'
+  );
+});

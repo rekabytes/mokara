@@ -167,9 +167,11 @@ export default function SupportIntegrationGuide() {
           </li>
         </ol>
         <p>
-          Email updates link customers to their ticket page. Replies sent directly to the email
-          sender are not collected in this version. Internal notes stay visible only to the
-          workspace.
+          Email updates use your website name in the sender label, such as{" "}
+          <strong>Northline Support via Mokara</strong>, with Mokara’s configured sending address.
+          Your business does not need SMTP credentials or an email API key. Email updates link
+          customers to their ticket page. Replies sent directly to the email sender are not
+          collected in this version. Internal notes stay visible only to the workspace.
         </p>
       </section>
       <section aria-labelledby="plans">

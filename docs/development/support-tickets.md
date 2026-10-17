@@ -31,8 +31,8 @@ still count toward the ticket’s three-file allowance.
 
 ## Deployment settings
 
-Apply migration `20261017030000_support_tickets` and deploy the matching frontend
-and backend. The normal deployment migration process owns this step.
+Apply migrations `20261017030000_support_tickets` and
+`20261017070000_support_email_sender`, then deploy the matching frontend and backend. The normal deployment migration process owns this step.
 
 Keep the existing `AUTH_PUBLIC_URL` set to the canonical frontend origin for this
 deployment. Installation snippets and private links use this runtime value;
@@ -43,7 +43,9 @@ Set these **backend-only** values, documented in `packages/backend/.env.example`
 - `SUPPORT_EMAIL_API_URL`: the HTTPS send-email endpoint from the email provider’s
   documentation. The integration follows the [Resend send-email API](https://resend.com/docs/api-reference/emails/send-email).
 - `SUPPORT_EMAIL_API_KEY`: a sending credential for that provider.
-- `SUPPORT_EMAIL_FROM`: a sender on a domain verified with the provider.
+- `SUPPORT_EMAIL_FROM`: a mailbox on a domain verified with the provider. A bare
+  address or an existing `Display name <address>` value is supported; the configured
+  mailbox remains the sending address.
 - `SUPPORT_ENCRYPTION_KEY`: generate a separate 32-byte key using
   `openssl rand -base64 32`. Preserve it when rotating `AUTH_SECRET`; it protects
   ticket capabilities and queued email content. Back it up with other secrets.
@@ -109,6 +111,13 @@ contents before sharing customer-provided text with GitHub.
 ## Email and failure behavior
 
 Confirmation and reply emails are queued transactionally with the ticket/message.
+The sender display name uses the website name: **Northline Support via Mokara**, for
+example. A website named **Northline Support** keeps that suffix once. The real
+mailbox always comes from Mokara's `SUPPORT_EMAIL_FROM`; customers do not provide
+SMTP credentials or authorize another sending address. Names are sanitized and
+quoted, and the full sender is saved with the queued message so changing a website
+name or sender setting does not change an in-flight retry's provider payload.
+Older queued messages without a sender snapshot retain the configured fallback.
 The worker sends text-only mail with a stable provider idempotency key, retries
 bounded failures and discards queued work for removed tickets. Delivered private
 content is removed from its queue row. Attempts stop before the provider's

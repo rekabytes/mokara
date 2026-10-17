@@ -61,7 +61,7 @@ export async function drainSupportEmails(signal?: AbortSignal) {
           "Idempotency-Key": `mokara-support-${job.id}`,
         },
         body: JSON.stringify({
-          from: env.SUPPORT_EMAIL_FROM,
+          from: job.sender ?? env.SUPPORT_EMAIL_FROM,
           to: [job.recipient],
           subject: job.subject,
           text: decryptSupport(job.textEncrypted),

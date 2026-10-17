@@ -796,6 +796,7 @@ model SupportEmail {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   ticketId String @map("ticket_id") @db.Uuid
   recipient String
+  sender String?
   subject String
   textEncrypted String @map("text_encrypted")
   attempts Int @default(0)

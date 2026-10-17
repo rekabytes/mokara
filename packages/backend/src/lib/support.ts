@@ -1,3 +1,4 @@
+import { brandedSupportSender, supportSenderMailbox } from "./support-email-sender.ts";
 import { z } from "zod";
 import { prisma } from "../db.ts";
 import { createHash, createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
@@ -23,7 +24,7 @@ export function supportConfigured() {
       (env.ENV !== "production" || new URL(env.AUTH_PUBLIC_URL).protocol === "https:") &&
       new URL(env.SUPPORT_EMAIL_API_URL).protocol === "https:" &&
       env.SUPPORT_EMAIL_API_KEY &&
-      env.SUPPORT_EMAIL_FROM
+      supportSenderMailbox(env.SUPPORT_EMAIL_FROM)
     );
   } catch {
     return false;
@@ -116,10 +117,15 @@ export async function queueSupportEmail(
       },
     });
   }
+  const site = await tx.supportSite.findUnique({
+    where: { id: ticket.siteId },
+    select: { name: true },
+  });
   await tx.supportEmail.create({
     data: {
       ticketId: ticket.id,
       recipient: ticket.customerEmail,
+      sender: brandedSupportSender(site?.name ?? "", env.SUPPORT_EMAIL_FROM),
       subject: `Ticket ${ticket.reference}: ${ticket.subject}`,
       textEncrypted: encryptSupport(
         `${text}\n\nView your ticket and reply:\n${supportTicketUrl(ticket)}\n\nThis private link expires after ${SUPPORT_ACCESS_DAYS} days. Do not share it. Replies are accepted on the ticket page, not by email.`

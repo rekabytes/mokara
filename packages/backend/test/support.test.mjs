@@ -358,6 +358,7 @@ test("submission is scoped, idempotent and queues encrypted confirmation", async
   assert.equal(s.tickets[0].ownerId, OWNER);
   assert.ok(s.locks.length);
   assert.equal(s.notifications.length, 1);
+  assert.equal(s.emails[0].sender, '"Northline Support via Mokara" <support@example.test>');
   assert.ok(!JSON.stringify(s.emails).includes(token));
   assert.ok(decryptSupport(s.emails[0].textEncrypted).includes(result.ticket_url));
   const replay = await post(pub, `/sites/${SITE}/tickets`, data);

@@ -36,7 +36,7 @@ const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   // Legacy companion to CSP frame-ancestors for older browsers.
-  { key: "X-Frame-Options", value: "DENY" },
+  // Frame protection is set by proxy.ts; ticket forms use an exact site allowlist.
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
 ];
 

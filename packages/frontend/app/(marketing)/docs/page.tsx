@@ -14,13 +14,21 @@ export default function DocumentationPage() {
       description="Practical guides for connecting your tools and keeping control of your workspace."
     >
       <section aria-labelledby="start">
-        <h2 id="start">Start with your agent</h2>
+        <h2 id="start">Connect your tools and your customers</h2>
         <p>
           Mokara’s Model Context Protocol (MCP) connection lets a compatible AI agent read your
           tasks, projects, members and comments, then create or update work when you grant write
           access. You choose the permissions and workspaces.
         </p>
         <div className="docs-guide-list">
+          <Link href="/docs/support" className="docs-guide">
+            <span className="docs-label">For website owners</span>
+            <h3>
+              Embed support tickets <span aria-hidden="true">↗</span>
+            </h3>
+            <p>Add a ticket form to your Help page and manage customer requests in Mokara.</p>
+            <span className="docs-guide-action">Read the integration guide →</span>
+          </Link>
           <Link href="/docs/mcp" className="docs-guide">
             <span className="docs-label">01 · For workspace members</span>
             <h3>

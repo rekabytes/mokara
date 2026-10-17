@@ -460,3 +460,61 @@ export const adminInvitationQuerySchema = z
     invitation_status: z.enum(["all", "pending", "accepted", "declined", "expired"]).default("all"),
   })
   .strict();
+
+const supportOrigin = z
+  .string()
+  .max(300)
+  .refine((value) => {
+    try {
+      const u = new URL(value);
+      return (
+        u.origin === value &&
+        (u.protocol === "https:" ||
+          (u.protocol === "http:" && ["localhost", "127.0.0.1"].includes(u.hostname)))
+      );
+    } catch {
+      return false;
+    }
+  }, "Enter an exact HTTPS origin without a path.");
+export const supportTeamParam = z.object({ teamId: z.uuid() });
+export const supportItemParam = supportTeamParam.extend({ id: z.uuid() });
+export const supportSiteSchema = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    origins: z.array(supportOrigin).min(1).max(10),
+    accent: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/)
+      .default("#6366f1"),
+    greeting: z.string().trim().min(1).max(200).default("Report an issue or send a request."),
+    enabled: z.boolean().default(true),
+  })
+  .strict();
+export const supportSubmissionSchema = z
+  .object({
+    request_id: z.uuid(),
+    subject: z.string().trim().min(1).max(200),
+    details: z.string().trim().min(1).max(10000),
+    request_type: z.enum(["Report a bug", "Request a feature", "Billing", "Other"]),
+    area: z.string().trim().min(1).max(100),
+    customer_name: z.string().trim().min(1).max(100),
+    customer_email: z.email().max(254),
+    turnstile_token: z.string().max(2048).optional(),
+    website: z.string().max(200).default(""),
+  })
+  .strict();
+export const supportPatchSchema = z
+  .object({
+    status: z.enum(["open", "in_progress", "waiting", "resolved"]).optional(),
+    priority: z.enum(["low", "medium", "high"]).optional(),
+    assignee_id: z.uuid().nullable().optional(),
+  })
+  .strict();
+export const supportMessageSchema = z
+  .object({
+    request_id: z.uuid(),
+    body: z.string().trim().min(1).max(10000),
+    internal: z.boolean().default(false),
+  })
+  .strict();
+export const supportPublicMessageSchema = supportMessageSchema.omit({ internal: true });

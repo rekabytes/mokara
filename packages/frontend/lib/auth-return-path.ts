@@ -4,7 +4,7 @@ export function authReturnPath(raw: string | null | undefined): string {
   const url = new URL(raw, "https://mokara.invalid");
   if (
     url.origin !== "https://mokara.invalid" ||
-    (!/^\/(files|tasks|analytics|teams|settings|invitations)(\/|$)/.test(url.pathname) &&
+    (!/^\/(support|files|tasks|analytics|teams|settings|invitations)(\/|$)/.test(url.pathname) &&
       url.pathname !== "/mcp/authorize")
   )
     return "/tasks";

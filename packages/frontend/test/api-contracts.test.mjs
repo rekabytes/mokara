@@ -143,7 +143,92 @@ const libraryFile = {
   trashed_at: null,
   can_manage: true,
 };
+const supportSite = {
+  id: "site",
+  name: "Northline",
+  origins: ["https://shop.example.test"],
+  accent: "#6366f1",
+  greeting: "Report an issue",
+  enabled: true,
+  form_url: "https://app.example.test/ticket-form/site",
+};
+const supportTicket = {
+  id: "ticket",
+  reference: "MK-TEST",
+  site_id: "site",
+  subject: "Invoice",
+  details: "Download failed",
+  request_type: "Report a bug",
+  area: "Orders",
+  customer_name: "Aisha",
+  customer_email: "aisha@example.test",
+  status: "open",
+  priority: "medium",
+  assignee_id: null,
+  task_id: null,
+  created_at: "2026-10-17",
+  updated_at: "2026-10-17",
+};
 const cases = [
+  [
+    "supportSites",
+    ["w"],
+    {
+      sites: [supportSite],
+      owner: true,
+      configured: true,
+      usage: { sites: 1, site_limit: 1, tickets: 1, ticket_limit: 100 },
+    },
+  ],
+  ["saveSupportSite", ["w", supportSite], { site: supportSite }],
+  ["supportTickets", ["w"], { tickets: [supportTicket], next_cursor: null }],
+  [
+    "supportTicket",
+    ["w", "ticket"],
+    {
+      ticket: supportTicket,
+      messages: [],
+      attachments: [],
+      next_cursor: null,
+      email_status: "queued",
+    },
+  ],
+  ["patchSupportTicket", ["w", "ticket", { status: "resolved" }], { ok: true }],
+  [
+    "replySupportTicket",
+    ["w", "ticket", { request_id: "r", body: "Reply", internal: false }],
+    { ok: true },
+  ],
+  ["supportTicketTask", ["w", "ticket"], { task_id: "t" }],
+  [
+    "submitSupportTicket",
+    ["site", {}],
+    { ticket: supportTicket, ticket_url: "https://app.example.test/support-ticket/ticket#private" },
+  ],
+  [
+    "publicSupportTicket",
+    ["ticket", "private"],
+    {
+      ticket: {
+        id: "ticket",
+        reference: "MK-TEST",
+        subject: "Invoice",
+        details: "Download failed",
+        status: "open",
+        created_at: "2026-10-17",
+      },
+      site_name: "Northline",
+      messages: [],
+      attachments: [],
+      next_cursor: null,
+    },
+  ],
+  ["publicSupportReply", ["ticket", "private", { body: "Reply" }], { ok: true }],
+  [
+    "uploadSupportFile",
+    ["ticket", "private", "upload", new File(["file"], "file.png")],
+    { ok: true },
+  ],
   [
     "listFiles",
     ["w"],
@@ -333,6 +418,7 @@ test("every JSON RPC rejects malformed success bodies and accepts its backend re
     response === undefined ? new Response(null, { status: 204 }) : Response.json(response)
   );
   const excluded = new Set([
+    "downloadSupportFile", // Binary Blob response is covered separately.
     "uploadWorkspaceFile",
     "workspaceFileUrl",
     "attachmentDownloadUrl",
@@ -409,4 +495,18 @@ test("account storage usage validates its scope and byte count while accepting o
     response = { ...legacy, storage };
     await assert.rejects(api.getBilling(), (error) => error.error === "invalid_response");
   }
+});
+
+test("private ticket attachments use the unified binary transport and preserve failures", async (t) => {
+  const blob = new Blob(["file"], { type: "application/octet-stream" });
+  t.mock.method(globalThis, "fetch", async () => new Response(blob));
+  const result = await api.downloadSupportFile("ticket", "private", "file");
+  assert.equal(await result.text(), "file");
+  t.mock.method(globalThis, "fetch", async () =>
+    Response.json({ error: "support_access", message: "Expired" }, { status: 403 })
+  );
+  await assert.rejects(
+    () => api.downloadSupportFile("ticket", "private", "file"),
+    (error) => error.error === "support_access" && error.status === 403
+  );
 });

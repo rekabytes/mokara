@@ -24,7 +24,9 @@ export function DocPage({
           <>
             <Link href="/docs">Documentation</Link>
             <span aria-hidden="true">/</span>
-            <span aria-current="page">AI agents</span>
+            <span aria-current="page">
+              {DOCUMENTATION_LINKS.find((link) => link.href === current)?.label}
+            </span>
           </>
         )}
       </nav>
@@ -43,8 +45,8 @@ export function DocPage({
             ))}
           </nav>
           <div className="docs-sidebar-note">
-            <span className="docs-label">MCP access</span>
-            <p>Selected permissions and workspaces. Always yours to revoke.</p>
+            <span className="docs-label">Your workspace</span>
+            <p>Connect your tools and receive requests where your team works.</p>
           </div>
         </aside>
         <article className="docs-article">

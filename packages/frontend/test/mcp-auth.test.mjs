@@ -3,6 +3,18 @@ import assert from "node:assert/strict";
 import { authReturnPath } from "../lib/auth-return-path.ts";
 import { GET as discovery } from "../app/.well-known/[...path]/route.ts";
 import { api } from "../lib/api.ts";
+import { renderToStaticMarkup } from "react-dom/server";
+import * as permissionModule from "../components/McpPermissions.tsx";
+const { McpPermissions } = permissionModule.default ?? permissionModule;
+test("GitHub consent explains future active repositories without a separate repository picker", () => {
+  const render = (scopes) => renderToStaticMarkup(McpPermissions({ scopes, onScopesChange() {} }));
+  const html = render(["mokara:read", "mokara:github"]);
+  assert.ok(html.includes("Follows your active repositories"));
+  assert.ok(html.includes("activate later"));
+  assert.ok(html.includes("without reconnecting"));
+  assert.ok(!html.includes("Approved GitHub repositories"));
+  assert.ok(!render(["mokara:read"]).includes("Follows your active repositories"));
+});
 test("sign-in resumes exact consent route and rejects external/API/traversal targets", () => {
   const flow = "/mcp/authorize?request=abc";
   assert.equal(authReturnPath(flow), flow);

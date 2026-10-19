@@ -49,8 +49,16 @@ const prisma = {
   },
   gitHubIssueLink: { findUnique: async () => (linked ? { repositoryId, status: "linked" } : null) },
   gitHubRepository: {
-    findMany: async () =>
-      eligible ? [{ id: repositoryId, fullName: "team/repo", private: true }] : [],
+    findMany: async ({ where }) => {
+      assert.equal(where.active, true);
+      assert.equal(where.connections.some.enabled, true);
+      assert.equal(where.connections.some.connection.userId, userId);
+      assert.equal(where.connections.some.connection.status, "active");
+      assert.ok(where.connections.some.connection.verifiedAt.gt instanceof Date);
+      assert.equal(where.installation.status, "active");
+      assert.equal(where.installation.connections.some.connection.userId, userId);
+      return eligible ? [{ id: repositoryId, fullName: "team/repo", private: true }] : [];
+    },
   },
   mcpOperation: {
     findUnique: async ({ where }) =>
@@ -313,7 +321,7 @@ test("membership is checked before replaying results; foreign task IDs never rea
   );
   assert.equal(calls.length, count);
 });
-test("GitHub requires both permission and the approved currently enabled repository", async () => {
+test("GitHub requires both permission and a currently active accessible repository", async () => {
   connection.scopes = ["mokara:read", "mokara:write"];
   assert.equal(
     errorCode(await tool("create_task", { ...createInput(), github_repository_id: repositoryId })),
@@ -327,6 +335,43 @@ test("GitHub requires both permission and the approved currently enabled reposit
     "mcp_repository_forbidden"
   );
   assert.equal(calls.length, 0);
+});
+test("existing manual connections follow active repositories without changing credentials", async () => {
+  // An old per-connection snapshot must not prevent using a newly activated repository.
+  connection.repositoryIds = [randomUUID()];
+  const list = () => tool("list_github_repositories", { workspace_id: workspace });
+  const repos = async () => JSON.parse((await list()).content[0].text).repositories;
+  eligible = false;
+  assert.deepEqual(await repos(), []);
+  eligible = true;
+  assert.deepEqual(
+    (await repos()).map((repo) => repo.id),
+    [repositoryId]
+  );
+  const input = { ...createInput(), github_repository_id: repositoryId };
+  assert.equal((await tool("create_task", input)).isError, undefined);
+  assert.ok(calls.some((call) => call.path.endsWith("/github-issue")));
+  eligible = false;
+  assert.deepEqual(await repos(), []);
+  assert.equal(
+    errorCode(
+      await tool("create_task", {
+        ...createInput(),
+        github_repository_id: repositoryId,
+      })
+    ),
+    "mcp_repository_forbidden"
+  );
+  eligible = true;
+  assert.equal(
+    errorCode(
+      await tool("create_task", {
+        ...createInput(),
+        github_repository_id: randomUUID(),
+      })
+    ),
+    "mcp_repository_forbidden"
+  );
 });
 test("GitHub publishing failure reports the created task and replays without recreating it", async () => {
   failure = {

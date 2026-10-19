@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { McpPermissions } from "@/components/McpPermissions";
-import { MCP_PERMISSIONS, type McpScope, type McpRepository } from "@/lib/mcp-permissions";
+import { MCP_PERMISSIONS, type McpScope } from "@/lib/mcp-permissions";
 import { api, type McpConnection, type TeamWithRole } from "@/lib/api";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -24,8 +24,6 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
   const [name, setName] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [scopes, setScopes] = useState<McpScope[]>(["mokara:read"]);
-  const [repositories, setRepositories] = useState<McpRepository[]>([]);
-  const [repositoryIds, setRepositoryIds] = useState<string[]>([]);
   const [activity, setActivity] = useState<
     Awaited<ReturnType<typeof api.listMcpActivity>>["activity"]
   >([]);
@@ -43,12 +41,11 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
     clearError();
     const data = await run(
       async () => {
-        const [connections, repositories, activity] = await Promise.all([
+        const [connections, activity] = await Promise.all([
           api.listMcpConnections(controller.signal),
-          api.listMcpRepositories(controller.signal),
           api.listMcpActivity(controller.signal),
         ]);
-        return { ...connections, ...repositories, ...activity };
+        return { ...connections, ...activity };
       },
       {
         signal: controller.signal,
@@ -56,7 +53,6 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
     );
     if (data) {
       setConnections(data.connections);
-      setRepositories(data.repositories);
       setActivity(data.activity);
     }
   }, [run, clearError]);
@@ -84,7 +80,6 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
             workspace_ids: allowedIds,
             expires_in_days: days,
             scopes,
-            repository_ids: scopes.includes("mokara:github") ? repositoryIds : [],
           }),
         {
           fallback: "Couldn't create the connection. Reload the list before trying again.",
@@ -103,7 +98,6 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
         setName("");
         setSelected([]);
         setScopes(["mokara:read"]);
-        setRepositoryIds([]);
       }
     } finally {
       pending.current = false;
@@ -245,8 +239,8 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
                           )
                             .map((permission) => permission.title)
                             .join(" · ")}
-                          {connection.repository_ids.length
-                            ? ` · ${connection.repository_ids.length} approved repositories`
+                          {connection.scopes.includes("mokara:github")
+                            ? " · Follows active GitHub repositories"
                             : ""}
                         </p>
                       </div>
@@ -349,14 +343,7 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
                 </select>
               </label>
             </div>
-            <McpPermissions
-              scopes={scopes}
-              onScopesChange={setScopes}
-              repositories={repositories}
-              selectedRepositories={repositoryIds}
-              onRepositoriesChange={setRepositoryIds}
-              disabled={busy}
-            />
+            <McpPermissions scopes={scopes} onScopesChange={setScopes} disabled={busy} />
             <fieldset className="m-0 mt-4 min-w-0 border-0 p-0">
               <legend className="text-xs">Workspaces · choose up to 20</legend>
               <div className="connection-scroll mt-2 grid max-h-48 gap-2 sm:grid-cols-2">
@@ -383,11 +370,7 @@ export function AIConnectionsTile({ containers }: { containers: TeamWithRole[] }
             <button
               type="submit"
               className="btn-base btn-primary mt-4"
-              disabled={
-                !name.trim() ||
-                allowedIds.length === 0 ||
-                (scopes.includes("mokara:github") && !repositoryIds.length)
-              }
+              disabled={!name.trim() || allowedIds.length === 0}
             >
               {busy ? "Working…" : "Create connection"}
             </button>

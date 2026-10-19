@@ -399,6 +399,35 @@ test("foreign scope issuance is denied; revocation always includes browser user"
   assert.equal(revoked.where.id, taskId);
   assert.ok(revoked.data.revokedAt instanceof Date);
 });
+test("manual GitHub grants follow active repositories without a repository snapshot", async () => {
+  const input = {
+    name: "Agent",
+    workspace_ids: [workspace],
+    scopes: ["mokara:read", "mokara:github"],
+  };
+  const response = await settings.request("/connections", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  assert.equal(response.status, 201);
+  const body = await response.json();
+  assert.equal(body.connection.repository_access, "active");
+  assert.deepEqual(body.connection.repository_ids, []);
+  assert.equal(created.repositoryIds, undefined);
+  // Previously stored selections are no longer advertised as an authorization list.
+  connection.scopes = input.scopes;
+  connection.repositoryIds = [other];
+  const list = await (await settings.request("/connections")).json();
+  assert.equal(list.connections[0].repository_access, "active");
+  assert.deepEqual(list.connections[0].repository_ids, []);
+  const denied = await settings.request("/connections", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...input, scopes: ["mokara:read"], repository_ids: [other] }),
+  });
+  assert.equal(denied.status, 403);
+});
 
 test("unexpected infrastructure failures use safe HTTP/tool errors and safe logs", async () => {
   databaseDown = true;

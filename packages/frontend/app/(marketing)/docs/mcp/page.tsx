@@ -256,10 +256,10 @@ export default async function McpGuidePage() {
                 </td>
               </tr>
               <tr>
-                <td>Use selected GitHub repositories</td>
+                <td>Use active GitHub repositories</td>
                 <td>
                   Find and read issues, publish tasks as issues, link existing issues and retry
-                  synchronization in specifically approved repositories.
+                  synchronization in your active repositories, including those you activate later.
                 </td>
               </tr>
             </tbody>
@@ -275,9 +275,12 @@ export default async function McpGuidePage() {
         <p>
           For GitHub, first connect the repository integration and enable repositories in
           <Link href="/settings"> Settings</Link>. GitHub sign-in alone does not connect
-          repositories. Select the repositories again when authorizing your agent. Linking an
-          existing issue enables synchronization and may change its state; changing a linked task’s
-          status also requires permission for its approved GitHub repository.
+          repositories. Grant GitHub permission once when authorizing your agent. It then follows
+          your active repositories, including those activated later, without reconnecting. Turn a
+          repository off in GitHub settings to remove it from subsequent agent requests. Existing
+          GitHub-enabled connections follow this same active list. Linking an existing issue enables
+          synchronization and may change its state; changing a linked task’s status also requires
+          GitHub permission and access to the active repository.
         </p>
       </section>
       <section aria-labelledby="access">
@@ -290,8 +293,8 @@ export default async function McpGuidePage() {
         <ToolCatalog />
         <p>
           All mutations require a <code>request_id</code> UUID. Deletions additionally require your
-          explicit deletion request and <code>confirm: true</code>. GitHub tools only use
-          repositories you specifically approved for the connection.
+          explicit deletion request and <code>confirm: true</code>. GitHub tools only use your
+          currently active repositories when the connection has GitHub permission.
         </p>
         <p>
           List tools that expose cursors return <code>next_cursor</code>; pass it unchanged to
@@ -326,7 +329,7 @@ export default async function McpGuidePage() {
         <p>
           After granting write access, ask your agent: “Create a testing task in Personal, medium
           priority, due Friday, with two steps.” With GitHub permission, also ask it to publish the
-          task in one of your approved repositories, or find and link an existing issue.
+          task in one of your active repositories, or find and link an existing issue.
         </p>
         <p>
           Task creation supports title, description, status, priority, due date, assignee, project,
@@ -405,6 +408,13 @@ export default async function McpGuidePage() {
           <dd>
             Check that you still belong to it and approved it for this connection. To change the
             selection, revoke and reconnect.
+          </dd>
+          <dt>A GitHub repository is missing</dt>
+          <dd>
+            Check that GitHub is connected and the repository is active in Mokara Settings → GitHub.
+            Ask the agent to list repositories again; you do not need to reconnect MCP when the
+            active list changes. If GitHub tools are missing altogether, the connection needs GitHub
+            permission. Reconnect GitHub itself if Mokara reports that its authorization expired.
           </dd>
           <dt>The client reports an origin or discovery error</dt>
           <dd>

@@ -122,6 +122,7 @@ const mcpConnection = {
   access: "read",
   scopes: ["mokara:read"],
   repository_ids: [],
+  repository_access: "none",
 };
 const libraryFolder = {
   id: "f",

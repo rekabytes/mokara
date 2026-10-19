@@ -4,14 +4,14 @@ Mokara exposes a stateless Streamable HTTP MCP endpoint at `/api/mcp`. An agent 
 
 ## Write permissions and tools
 
-Migration `20261013100000_mcp_write_permissions` adds connection/token scopes, repository allow-lists and durable request records. Deploy frontend/backend together and apply all MCP migrations. Existing connections and token rows receive only `mokara:read`; they never silently gain writes. New OAuth grants and manual credentials default to read. Consent displays only scopes actually requested by the client, with write/delete/GitHub unchecked and repositories explicitly selected.
+Migration `20261013100000_mcp_write_permissions` adds connection/token scopes, repository allow-lists and durable request records. Deploy frontend/backend together and apply all MCP migrations. Existing connections and token rows receive only `mokara:read`; they never silently gain writes. New OAuth grants and manual credentials default to read. Consent displays only scopes actually requested by the client, with write/delete/GitHub unchecked. GitHub permission follows the user’s currently active repositories, including future activations; there is no per-agent repository picker.
 
-| Scope           | Tools / behavior                                                                                                                                                                          |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mokara:read`   | Original six tools; complete task details, project details, KPI lists/progress, analytics, workspace progress, attachment metadata/content and this connection's operation activity.      |
-| `mokara:write`  | Create/edit tasks, steps, comments, projects, KPIs; set task KPI bindings, reorder steps, toggle flags, upload attachments.                                                               |
-| `mokara:delete` | Delete tasks, steps, own comments, eligible projects/KPIs and own attachments. Separate permission with explicit confirm input.                                                           |
-| `mokara:github` | Approved repository listing, issue listing/details, publishing, linking an existing issue and retrying sync. Current enabled repository access and GitHub verification are checked again. |
+| Scope           | Tools / behavior                                                                                                                                                                        |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mokara:read`   | Original six tools; complete task details, project details, KPI lists/progress, analytics, workspace progress, attachment metadata/content and this connection's operation activity.    |
+| `mokara:write`  | Create/edit tasks, steps, comments, projects, KPIs; set task KPI bindings, reorder steps, toggle flags, upload attachments.                                                             |
+| `mokara:delete` | Delete tasks, steps, own comments, eligible projects/KPIs and own attachments. Separate permission with explicit confirm input.                                                         |
+| `mokara:github` | Active repository listing, issue listing/details, publishing, linking an existing issue and retrying sync. Current enabled repository access and GitHub verification are checked again. |
 
 MCP invokes the existing Hono domain operations **in-process**, with the verified principal's current user identity. There is no loopback HTTP request, browser cookie, fabricated session, generic REST tool or arbitrary path/URL argument. Existing ownership rules, validation, quotas, notifications, SSE and GitHub outbox behavior remain authoritative. Status changes on tasks with linked GitHub issues additionally require the connection's GitHub repository permission, because they can trigger external synchronization. Linking an existing issue rejects pull requests and enables existing synchronization; the user must explicitly request it. A partial unique index prevents one GitHub issue from being actively synchronized by multiple tasks. GitHub publication claims the task/link under a row lock before external requests, so competing publishers cannot overwrite its target repository.
 
@@ -26,7 +26,7 @@ Redis limits new write requests to30/minute/user in addition to120 MCP requests/
 3. Keep the existing matching backend/frontend `AUTH_PROXY_SECRET` and trusted-ingress settings. Route `/api/*` and the three discovery paths under `/.well-known` through the frontend; do not challenge machine requests with an interactive Cloudflare page. Native clients need no additional origins. Browser MCP clients also need their exact origin in `MCP_ALLOWED_ORIGINS`.
 4. In an MCP client supporting remote Streamable HTTP, OAuth authorization code + PKCE S256 and dynamic client registration, add `https://dev.mokara.my/api/mcp` (or your deployment's corresponding URL). Choose its sign-in/connect action.
 5. The browser opens Mokara. Sign in with your existing username/password, Google or GitHub. Social registration still uses existing verification. No new provider credentials or callbacks are needed.
-6. Review the **unverified client name**, client ID and exact return address. Select up to 20 workspaces; none are checked by default. Choose permissions and approved repositories, then approve access for30 days or deny. Every new grant requires explicit consent.
+6. Review the **unverified client name**, client ID and exact return address. Select up to 20 workspaces; none are checked by default. Choose permissions, then approve access for30 days or deny. Every new grant requires explicit consent.
 7. The client receives a five-minute, one-use authorization code and exchanges it with its verifier and canonical `resource`. Access tokens last at most 15 minutes. Refresh tokens rotate on use and cannot extend the grant beyond 30 days. Start a new connection after expiry.
 8. **Settings → AI connections** lists OAuth and manual grants together. Revoke removes all access and refresh tokens for that connection. Membership is checked again for every workspace read.
 
@@ -34,9 +34,43 @@ Clients must discover the protected resource at `/.well-known/oauth-protected-re
 
 OAuth endpoints are `/api/mcp/oauth/register`, `/authorize`, `/token`, `/revoke`. Token and revocation requests use URL-encoded forms. Only authorization-code and refresh-token grants are enabled; supported permission scopes are listed above. Refresh can narrow scopes but cannot expand an issued token. Both authorize and token requests must include the exact resource URL. PKCE plain, implicit, password and client-credentials grants are rejected. Discovery, registration, token and revocation support public CORS without cookies; consent uses the Mokara browser session and requires a same-origin POST. The browser-bound consent request expires after ten minutes and is consumed once.
 
+## Active GitHub repositories
+
+GitHub-enabled OAuth and manual connections resolve eligible repositories from
+Mokara’s current GitHub settings on every repository request. Activating or
+deactivating a repository applies to the next request without replacing the MCP
+credential. Workspace grants and scopes remain fixed; a connection without
+`mokara:github` gains no repository access. This behavior applies to existing
+GitHub-enabled connections too, as explicitly approved for this change.
+
+Historical `mcp_connections.repository_ids` snapshots remain stored for rollback
+compatibility but are no longer authorization inputs. New grants use the database
+column’s empty default. Older clients may still send the deprecated
+`repository_ids` field; it is validated structurally but neither grants nor limits
+GitHub access. Nonempty IDs without GitHub permission are rejected. Connection
+metadata returns `repository_access: active | none` and an empty legacy
+`repository_ids` array. No migration or new environment setting is needed.
+
+Eligibility still checks the user’s own enabled repository associations, active
+installation and verified GitHub connection. Existing GitHub verification refresh
+rules apply (normally a five-minute freshness window); MCP does not promise
+instant detection of external GitHub permission changes before those checks or
+webhook updates. Inactive/unavailable repositories are never authorized solely
+because an agent has remembered their IDs.
+
+Dynamic registration accepts the standard advisory `application_type` values
+`native` and `web`, including Codex/rmcp’s native client payload. This field does
+not relax HTTPS/loopback redirect validation, exact callback matching, PKCE S256,
+resource binding or scope checks. Unknown application types, credentials and
+unsupported grants remain rejected. This fixes the reproduced pre-consent 400
+for that payload; a real deployed client sign-in remains an acceptance check.
+The payload follows the official [rmcp registration implementation](https://github.com/modelcontextprotocol/rust-sdk/blob/main/crates/rmcp/src/transport/auth.rs)
+and [Codex MCP connection guide](https://learn.chatgpt.com/docs/extend/mcp).
+Mokara still advertises DCR only, not client metadata document support.
+
 ## Manual connection fallback
 
-For clients that accept a configured Authorization header, open **Settings → AI connections**, name a manual connection, choose workspaces, permissions, approved GitHub repositories when applicable, and an expiry (7, 30 or 90 days). Save the token once in the client's secret configuration and use `Authorization: Bearer <issued-token>` with the same `/api/mcp` endpoint. Tokens are not recoverable. On an uncertain creation response, reload the list and revoke the uncertain entry before retrying. Never put tokens in URLs, prompts or committed files.
+For clients that accept a configured Authorization header, open **Settings → AI connections**, name a manual connection, choose workspaces, permissions and an expiry (7, 30 or 90 days). Save the token once in the client's secret configuration and use `Authorization: Bearer <issued-token>` with the same `/api/mcp` endpoint. Tokens are not recoverable. On an uncertain creation response, reload the list and revoke the uncertain entry before retrying. Never put tokens in URLs, prompts or committed files.
 
 ## Tools
 
@@ -55,7 +89,7 @@ Tools are registered according to the authenticated token’s scopes. Read/write
 
 ## Runtime and permissions
 
-- Browser-session-authenticated management routes: GET/POST `/api/me/mcp-connections`, DELETE `/api/me/mcp-connections/:id`. Agent credentials cannot call these routes. Creation accepts `name`, `workspace_ids`, `scopes`, `repository_ids` and `expires_in_days` (integer 1–90, default 30). The UI exposes common expiry choices.
+- Browser-session-authenticated management routes: GET/POST `/api/me/mcp-connections`, DELETE `/api/me/mcp-connections/:id`. Agent credentials cannot call these routes. Creation accepts `name`, `workspace_ids`, `scopes` and `expires_in_days` (integer 1–90, default 30). The UI exposes common expiry choices.
 - Tokens contain 256 random bits. Authorization codes, access tokens and refresh tokens also contain 256 random bits. Only SHA-256 credential hashes persist in Postgres; neither list responses nor logs return the hash or secret. The UI retains the one-time token only in component memory, with no browser storage.
 - Each agent HTTP request checks credential expiry/revocation. Each workspace tool checks the allow-list and current membership before reading. Workspace/task filters stay inside the database query; listing workspaces intersects grants with current memberships. Removing membership blocks subsequent tool calls; deleting the user cascades credential deletion. Already-authorized in-flight requests may finish.
 - Redis enforces 120 authenticated agent requests/minute per connection, 30 new mutations/minute per user and 10 grant/credential creations/hour per user. OAuth additionally limits 120 requests/minute per trusted peer, 1,200/minute globally and 100 registrations/hour globally. Redis failures deny access with 503; request limits return 429 with `Retry-After`. These limits supplement deployment edge protections and do not rate-limit unauthenticated token guesses.

@@ -12,10 +12,13 @@ const logs = [],
 const active = (row) => row && !row.revokedAt && row.expiresAt > new Date();
 const repoId = randomUUID();
 let repositoryAccess = false;
+let activeRepositoryIds = [];
 const db = {
   gitHubRepository: {
     findMany: async () =>
-      repositoryAccess ? [{ id: repoId, fullName: "team/repository", private: true }] : [],
+      repositoryAccess
+        ? activeRepositoryIds.map((id) => ({ id, fullName: `team/${id}`, private: true }))
+        : [],
   },
   mcpOAuthClient: {
     create: async ({ data }) => {
@@ -202,6 +205,7 @@ beforeEach(() => {
   cache = new Map();
   member = true;
   repositoryAccess = false;
+  activeRepositoryIds = [repoId];
   redisDown = false;
   databaseDown = false;
   quota = 1;
@@ -218,8 +222,8 @@ async function register(overrides = {}) {
     }),
   });
 }
-async function start(overrides = {}) {
-  const client = await (await register()).json(),
+async function start(overrides = {}, registeredClient) {
+  const client = registeredClient ?? (await (await register()).json()),
     verifier = "v".repeat(43);
   const params = {
     client_id: client.client_id,
@@ -325,9 +329,49 @@ test("registration rejects unsafe redirects, secrets and unsupported grants", as
     assert.equal(isSafeOAuthRedirect(uri), false);
     assert.equal((await register({ redirect_uris: [uri] })).status, 400);
   }
+  assert.equal((await register({ application_type: "unrecognized" })).status, 400);
+  assert.equal(
+    (await register({ application_type: "web", redirect_uris: ["http://evil.test/cb"] })).status,
+    400
+  );
+  assert.equal((await register({ client_secret: "must-not-accept" })).status, 400);
+  assert.equal((await register({ application_type: "web" })).status, 201);
   assert.equal((await register({ grant_types: ["password"] })).status, 400);
   assert.equal((await register({ token_endpoint_auth_method: "client_secret_post" })).status, 400);
   assert.equal((await register({ redirect_uris: ["https://agent.example/callback"] })).status, 201);
+});
+test("Codex native registration metadata completes the PKCE sign-in flow", async () => {
+  // rmcp's public-client DCR payload includes the standard application_type field.
+  const response = await register({
+    client_name: "Codex",
+    application_type: "native",
+    redirect_uris: ["http://127.0.0.1:5030/callback/client-id"],
+    grant_types: ["authorization_code", "refresh_token"],
+    response_types: ["code"],
+    token_endpoint_auth_method: "none",
+    scope: "mokara:read mokara:github",
+  });
+  assert.equal(response.status, 201);
+  const client = await response.json();
+  assert.equal(client.application_type, "native");
+  const flow = await start({ scope: "mokara:read mokara:github" }, client);
+  const screen = await app.request(`/api/mcp/oauth/consent?request=${flow.request}`, {
+    headers: { Cookie: flow.cookie },
+  });
+  assert.equal(screen.status, 200);
+  const snapshot = await screen.json();
+  assert.equal(snapshot.repository_access, "active");
+  assert.deepEqual(
+    snapshot.workspaces.map((row) => row.id),
+    [workspaceId]
+  );
+  const accepted = await consent(flow, { scopes: ["mokara:read", "mokara:github"] });
+  assert.equal(accepted.status, 200);
+  const code = new URL((await accepted.json()).url).searchParams.get("code");
+  const tokenResponse = await exchange({ ...flow, code });
+  assert.equal(tokenResponse.status, 200);
+  const token = await tokenResponse.json();
+  assert.equal((await refresh(flow, token.refresh_token)).status, 200);
 });
 test("standard advisory registration metadata never triggers remote fetching", async (t) => {
   t.mock.method(globalThis, "fetch", async () => {
@@ -586,24 +630,41 @@ test("write grants require explicit requested consent and existing read grants n
   });
   assert.equal(escalation.status, 400);
 });
-test("GitHub grants bind only explicitly selected currently eligible repositories", async () => {
+test("GitHub consent needs no repository snapshot and follows activation without a new token", async () => {
   const flow = await start({ scope: "mokara:read mokara:github" });
-  assert.equal(
-    (await consent(flow, { scopes: ["mokara:read", "mokara:github"], repository_ids: [repoId] }))
-      .status,
-    400
-  );
+  // No GitHub connection or repositories are required just to grant the permission.
+  const response = await consent(flow, { scopes: ["mokara:read", "mokara:github"] });
+  assert.equal(response.status, 200);
+  assert.deepEqual([...grants.values()][0].repositoryIds ?? [], []);
+  // Existing OAuth grants may retain obsolete selections; they use active access too.
+  [...grants.values()][0].repositoryIds = [randomUUID()];
+  const code = new URL((await response.json()).url).searchParams.get("code");
+  const token = await (await exchange({ ...flow, code })).json();
+  const principal = await authenticateAgent(`Bearer ${token.access_token}`);
+  const { requireRepository } = await import("../src/mcp/repositories.ts");
+  await assert.rejects(() => requireRepository(principal, repoId));
   repositoryAccess = true;
+  await requireRepository(principal, repoId);
+  const newlyActive = randomUUID();
+  activeRepositoryIds.push(newlyActive);
+  await requireRepository(principal, newlyActive);
+  activeRepositoryIds = [repoId];
+  await assert.rejects(() => requireRepository(principal, newlyActive));
+  repositoryAccess = false;
+  await assert.rejects(() => requireRepository(principal, repoId));
+});
+test("legacy repository selections cannot grant GitHub scope or restrict active repository mode", async () => {
+  const flow = await start({ scope: "mokara:read mokara:github" });
   assert.equal(
     (await consent(flow, { scopes: ["mokara:read"], repository_ids: [repoId] })).status,
     400
   );
   const response = await consent(flow, {
     scopes: ["mokara:read", "mokara:github"],
-    repository_ids: [repoId],
+    repository_ids: [randomUUID()],
   });
   assert.equal(response.status, 200);
-  assert.deepEqual([...grants.values()][0].repositoryIds, [repoId]);
+  assert.deepEqual([...grants.values()][0].repositoryIds ?? [], []);
 });
 
 test("OAuth consent remains canonical-origin-only despite additional trusted browser origins", async () => {

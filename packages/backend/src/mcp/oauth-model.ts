@@ -27,7 +27,6 @@ type Approval = {
   workspaceIds: string[];
   name: string;
   scopes?: string[];
-  repositoryIds?: string[];
 };
 
 // Instantiate per transaction/request. Never share an authenticated model across
@@ -93,7 +92,6 @@ export function oauthModel(
           name: approval.name,
           workspaceIds: approval.workspaceIds,
           scopes: approval.scopes ?? [MCP_SCOPE],
-          repositoryIds: approval.repositoryIds ?? [],
           clientId: row.id,
           resource,
           expiresAt: new Date(Date.now() + GRANT_SECONDS * 1000),

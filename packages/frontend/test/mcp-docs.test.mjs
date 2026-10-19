@@ -36,6 +36,9 @@ test("docs and both client configurations follow backend discovery at request ti
       )
     );
     assert.ok(html.includes(".agents/skills/mokara/SKILL.md"));
+    assert.ok(html.includes("without reconnecting"));
+    assert.ok(html.includes("Existing GitHub-enabled connections"));
+    assert.ok(!html.includes("Select the repositories again"));
     assert.ok(html.includes("mcpServers"));
     assert.ok(html.includes("servers"));
     assert.ok(!html.includes("mokara.my"));

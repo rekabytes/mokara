@@ -22,7 +22,6 @@ const metadataSelect = {
   expiresAt: true,
   revokedAt: true,
   scopes: true,
-  repositoryIds: true,
 } as const;
 
 function connectionResponse(row: {
@@ -33,7 +32,6 @@ function connectionResponse(row: {
   expiresAt: Date;
   revokedAt: Date | null;
   scopes: string[];
-  repositoryIds: string[];
 }) {
   return {
     id: row.id,
@@ -48,7 +46,9 @@ function connectionResponse(row: {
       ? ("write" as const)
       : ("read" as const),
     scopes: row.scopes ?? ["mokara:read"],
-    repository_ids: row.repositoryIds ?? [],
+    repository_access: row.scopes?.includes("mokara:github") ? "active" : "none",
+    // Retained for older clients; repository selection is managed in GitHub settings.
+    repository_ids: [],
   };
 }
 mcpConnectionRoutes.get("/activity", async (c) => {
@@ -110,7 +110,7 @@ mcpConnectionRoutes.post("/", validate("json", createMcpConnectionSchema), async
       { error: "mcp_workspace_forbidden", message: "Choose workspaces you belong to." },
       403
     );
-  await validateRepositoryGrant(userId, input.scopes, input.repository_ids);
+  validateRepositoryGrant(input.scopes, input.repository_ids);
   const { token, tokenHash } = newCredential();
   const row = await prisma.mcpConnection.create({
     data: {
@@ -119,7 +119,6 @@ mcpConnectionRoutes.post("/", validate("json", createMcpConnectionSchema), async
       workspaceIds: input.workspace_ids,
       tokenHash,
       scopes: input.scopes,
-      repositoryIds: input.repository_ids,
       expiresAt: new Date(Date.now() + input.expires_in_days * 86_400_000),
     },
     select: metadataSelect,

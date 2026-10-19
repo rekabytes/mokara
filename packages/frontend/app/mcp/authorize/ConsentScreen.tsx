@@ -23,7 +23,6 @@ export function ConsentScreen() {
   } | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [scopes, setScopes] = useState<McpScope[]>(["mokara:read"]);
-  const [repositories, setRepositories] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const mutation = useRef<AbortController | null>(null);
@@ -45,7 +44,6 @@ export function ConsentScreen() {
         setSnapshot({ request, userId, consent: result });
         setSelected([]);
         setScopes(["mokara:read"]);
-        setRepositories([]);
       }
     });
     return () => {
@@ -72,7 +70,6 @@ export function ConsentScreen() {
               approve,
               workspace_ids: approve ? allowed : [],
               scopes: approve ? scopes : ["mokara:read"],
-              repository_ids: approve && scopes.includes("mokara:github") ? repositories : [],
             },
             controller.signal
           ),
@@ -160,9 +157,6 @@ export function ConsentScreen() {
                 <McpPermissions
                   scopes={scopes}
                   onScopesChange={setScopes}
-                  repositories={data.repositories}
-                  selectedRepositories={repositories}
-                  onRepositoriesChange={setRepositories}
                   availableScopes={data.requested_scopes}
                   disabled={busy}
                 />
@@ -216,11 +210,7 @@ export function ConsentScreen() {
                     Deny
                   </button>
                   <button
-                    disabled={
-                      busy ||
-                      !allowed.length ||
-                      (scopes.includes("mokara:github") && !repositories.length)
-                    }
+                    disabled={busy || !allowed.length}
                     className="btn-base btn-primary min-h-11 flex-1"
                     onClick={() => void decide(true)}
                   >

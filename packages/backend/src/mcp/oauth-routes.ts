@@ -23,7 +23,7 @@ import {
 import { McpOAuthFailure, handleMcpOAuthError } from "./oauth-errors.ts";
 import { storeConsent, readConsent, consumeConsent } from "./oauth-flow.ts";
 import { MCP_SCOPES, parseScopes } from "./permissions.ts";
-import { eligibleRepositories, validateRepositoryGrant } from "./repositories.ts";
+import { validateRepositoryGrant } from "./repositories.ts";
 import { oauthModel, oauthServer } from "./oauth-model.ts";
 
 function remotePeer(c: Context): string | undefined {
@@ -81,6 +81,7 @@ mcpOAuthRoutes.post("/register", async (c) => {
       client_name: row.name,
       redirect_uris: row.redirectUris,
       token_endpoint_auth_method: "none",
+      ...(input.data.application_type ? { application_type: input.data.application_type } : {}),
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
       scope: input.data.scope ?? MCP_SCOPES.join(" "),
@@ -121,11 +122,7 @@ mcpOAuthRoutes.get("/consent", async (c) => {
     },
     scope: flow.params.scope,
     requested_scopes: parseScopes(flow.params.scope),
-    repositories: (await eligibleRepositories(c.get("userId"))).map((repo) => ({
-      id: repo.id,
-      name: repo.fullName,
-      private: repo.private,
-    })),
+    repository_access: "active",
     expires_in_days: 30,
     workspaces: memberships.map((row) => row.team),
   });
@@ -167,7 +164,7 @@ mcpOAuthRoutes.post("/consent", async (c) => {
       "invalid_scope",
       "The client did not request that permission. Reconnect with the required scopes."
     );
-  await validateRepositoryGrant(userId, input.data.scopes, input.data.repository_ids);
+  validateRepositoryGrant(input.data.scopes, input.data.repository_ids);
   await checkLimit("mcpIssue", userId);
   await consumeConsent(input.data.request, raw);
   const code = await prisma.$transaction(async (db) =>
@@ -177,7 +174,6 @@ mcpOAuthRoutes.post("/consent", async (c) => {
         workspaceIds: input.data.workspace_ids,
         name: client.name,
         scopes: input.data.scopes,
-        repositoryIds: input.data.repository_ids,
       })
     ).authorize(
       new OAuth2Server.Request({ method: "GET", headers: {}, query: params }),

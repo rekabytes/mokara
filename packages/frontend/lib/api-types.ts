@@ -365,6 +365,7 @@ export type McpConnection = {
   access: "read" | "write";
   scopes: string[];
   repository_ids: string[];
+  repository_access: "active" | "none";
 };
 
 export type WorkspaceFolder = {

@@ -15,7 +15,6 @@ export type McpPrincipal = {
   userId: string;
   workspaceIds: string[];
   scopes?: string[];
-  repositoryIds?: string[];
 };
 export function requireScope(principal: McpPrincipal, scope: McpScope) {
   if (!(principal.scopes ?? ["mokara:read"]).includes(scope))
@@ -90,7 +89,6 @@ export async function authenticateAgent(authorization: string | undefined): Prom
     scopes: (connection.scopes ?? ["mokara:read"]).filter(
       (scope) => !tokenScopes || tokenScopes.includes(scope)
     ),
-    repositoryIds: connection.repositoryIds ?? [],
   };
 }
 

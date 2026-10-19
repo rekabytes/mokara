@@ -169,7 +169,7 @@ export function registerWorkspaceTools(register: ToolRegistrar, principal: McpPr
   );
   register(
     "create_task",
-    "Create a task with all normal fields, optional steps and optional GitHub issue publishing. Select workspace/member/project/KPI/repository IDs from read tools. Reports partial follow-up failures without recreating the task. Requires write; GitHub also requires approved repository access.",
+    "Create a task with all normal fields, optional steps and optional GitHub issue publishing. Select workspace/member/project/KPI/repository IDs from read tools. Reports partial follow-up failures without recreating the task. Requires write; GitHub also requires active repository access.",
     z
       .object({
         ...write,
@@ -177,7 +177,7 @@ export function registerWorkspaceTools(register: ToolRegistrar, principal: McpPr
         steps: z.array(z.string().trim().min(1).max(200)).max(50).default([]),
         github_repository_id: uuid
           .describe(
-            "Approved repository ID from list_github_repositories. REQUIRED when the user requests a NEW task with a GitHub issue; omitting it creates only a Mokara task. Do not use project_id as a repository ID."
+            "Active repository ID from list_github_repositories. REQUIRED when the user requests a NEW task with a GitHub issue; omitting it creates only a Mokara task. Do not use project_id as a repository ID."
           )
           .optional(),
       })
@@ -405,21 +405,23 @@ export function registerWorkspaceTools(register: ToolRegistrar, principal: McpPr
   );
   register(
     "list_github_repositories",
-    "List GitHub repositories explicitly approved for this connection and still enabled in your Mokara GitHub integration.",
+    "List your active GitHub repositories. Changes in Mokara Settings apply without reconnecting. The connection needs GitHub permission, and you must still have access to each repository.",
     z.object(workspace).strict(),
     async (input) => {
       await requireWorkspace(principal, input.workspace_id);
       return {
-        repositories: (await eligibleRepositories(principal.userId))
-          .filter((repo) => principal.repositoryIds?.includes(repo.id))
-          .map((repo) => ({ id: repo.id, name: repo.fullName, private: repo.private })),
+        repositories: (await eligibleRepositories(principal.userId)).map((repo) => ({
+          id: repo.id,
+          name: repo.fullName,
+          private: repo.private,
+        })),
       };
     },
     { scope: "mokara:github", external: true, readOnly: true }
   );
   register(
     "publish_github_issue",
-    "Create a GitHub issue from an existing Mokara task in an explicitly selected, approved repository. Sends task content to GitHub; the user must request publishing. Existing integration retry/link policies apply.",
+    "Create a GitHub issue from an existing Mokara task in an explicitly selected, active repository. Sends task content to GitHub; the user must request publishing. Existing integration retry/link policies apply.",
     z.object({ ...write, task_id: uuid, repository_id: uuid }).strict(),
     async (input) => {
       await requireRepository(principal, input.repository_id);
@@ -434,7 +436,7 @@ export function registerWorkspaceTools(register: ToolRegistrar, principal: McpPr
   );
   register(
     "retry_github_sync",
-    "Retry synchronization for a task's linked issue in an approved GitHub repository.",
+    "Retry synchronization for a task's linked issue in an active GitHub repository.",
     z.object({ ...write, task_id: uuid }).strict(),
     (input) =>
       mutation(principal, "retry_github_sync", "mokara:github", input, async () => {

@@ -98,6 +98,7 @@ async function proxy(request: NextRequest): Promise<Response> {
         "/api/auth/social/username/claim",
       ].includes(request.nextUrl.pathname)) ||
     /^\/api\/auth\/social\/(google|github)\/(start|callback)$/.test(request.nextUrl.pathname) ||
+    request.nextUrl.pathname.startsWith("/api/support-public/") ||
     request.nextUrl.pathname.startsWith("/api/mcp/oauth/")
   ) {
     try {

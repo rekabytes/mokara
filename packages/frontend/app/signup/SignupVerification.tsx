@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { ErrorBanner } from "@/components/ErrorBanner";
 
-import { loadTurnstile, type Turnstile } from "./turnstile";
+import { loadTurnstile, type Turnstile } from "@/lib/turnstile";
 
 export type SignupVerificationState = { ready: boolean; token?: string };
 

@@ -40,9 +40,8 @@ export const MCP_PERMISSIONS = [
   },
   {
     scope: "mokara:github",
-    title: "Use selected GitHub repositories",
+    title: "Use active GitHub repositories",
     description:
-      "Read issues, publish task content to GitHub and link existing issues. Linking enables synchronization and may change the issue state.",
+      "Read issues, publish tasks as issues and link existing issues. Access follows your active repositories, including those you activate later. Linking can change an issue's state.",
   },
 ] satisfies { scope: McpScope; title: string; description: string }[];
-export type McpRepository = { id: string; name: string; private: boolean };

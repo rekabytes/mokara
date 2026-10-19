@@ -348,6 +348,7 @@ const mcpConnectionSchema = z.object({
   access: z.enum(["read", "write"]),
   scopes: z.array(z.enum(MCP_SCOPES)).default(["mokara:read"]),
   repository_ids: z.array(z.uuid()).default([]),
+  repository_access: z.enum(["active", "none"]).default("none"),
 }) satisfies z.ZodType<McpConnection>;
 export const mcpConnectionsSchema = z.object({ connections: z.array(mcpConnectionSchema) });
 export const mcpCredentialSchema = z.object({

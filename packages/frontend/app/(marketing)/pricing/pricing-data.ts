@@ -51,14 +51,14 @@ export const TIERS: Tier[] = [
     price: "Free",
     monthlyUsd: null,
     cadence: null,
-    tagline: "A real workspace for up to three people, with nothing held back.",
+    tagline: "A real workspace for up to three people.",
     capacity: [
       { label: "Members per team", value: "3" },
       { label: "Workspaces", value: "personal + 1 team" },
       { label: "Storage per account", value: "1 GB" },
       { label: "Per file", value: "25 MB" },
     ],
-    addsLabel: "Everything Mokara does today",
+    addsLabel: "Your core workspace",
     adds: [
       "Subtasks and checklists",
       "Due-soon reminders, in-app",
@@ -73,7 +73,7 @@ export const TIERS: Tier[] = [
     price: "$4",
     monthlyUsd: 4,
     cadence: "/ month",
-    tagline: "Small real teams — the same product, with room to grow.",
+    tagline: "Small real teams, with room to grow.",
     capacity: [
       { label: "People across owned workspaces", value: "8, including you" },
       { label: "Workspaces", value: "personal + 3" },
@@ -81,7 +81,12 @@ export const TIERS: Tier[] = [
       { label: "Per file", value: "100 MB" },
     ],
     addsLabel: "Everything in Free, plus",
-    adds: ["Custom workspace logo", "Priority support", "Flat per account — never per seat"],
+    adds: [
+      "Custom workspace logo",
+      "Support tickets: 1 website, 100 new tickets/month shared per owner",
+      "Priority support",
+      "Flat per account — never per seat",
+    ],
     featured: true,
   },
 ];
@@ -105,6 +110,7 @@ export const LATER_TIERS: {
       "personal + 10 team workspaces",
       "50 GB / account",
       "250 MB / file",
+      "Support: 3 websites, 500 new tickets/month per owner",
     ],
   },
   {
@@ -117,6 +123,7 @@ export const LATER_TIERS: {
       "personal + 20 team workspaces",
       "200 GB / account",
       "1 GB / file",
+      "Support: 10 websites, 2,000 new tickets/month per owner",
     ],
   },
 ];
@@ -135,6 +142,10 @@ export const IN_EVERY_PLAN: [string, string][] = [
 ];
 
 export const FAQ: { q: string; a: string }[] = [
+  {
+    q: "Can I receive support tickets from my own website?",
+    a: "Starter includes an embedded ticket form for 1 website and 100 new tickets per month. Pro includes 3 websites and 500 tickets; Ultra includes 10 websites and 2,000 tickets. These allowances are shared across all workspaces owned by the account and reset monthly in UTC. Attachments use the owner's existing shared storage, with up to 3 images or PDFs of 3 MB each per ticket. Reaching a limit does not remove existing tickets or stop replies. Pro and Ultra are not open for signup yet.",
+  },
   {
     q: "Will these people limits change my existing plan?",
     a: "Existing accounts keep their legacy per-workspace people allowances. Normal renewals keep those allowances too. New registrations use the new policy, and existing accounts switch to shared people allowances when they buy a new paid subscription or change to another paid tier. Once switched, the shared policy remains in place. Existing members are not removed if usage exceeds the new allowance.",

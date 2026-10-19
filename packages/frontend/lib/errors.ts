@@ -46,6 +46,29 @@ export type ErrorRule = {
 
 /** Every code the backend can emit, plus the client-only ones. */
 export const ERROR_RULES: Record<string, ErrorRule> = {
+  support_unavailable: {
+    kind: "server",
+    action: "retry",
+    message: "Support is temporarily unavailable. Please try again later.",
+    serverSays: true,
+  },
+  support_limit: {
+    kind: "conflict",
+    action: "inline",
+    message: "The shared support allowance has been reached.",
+    serverSays: true,
+  },
+  support_access: {
+    kind: "permission",
+    action: "inline",
+    message: "This ticket link is invalid or expired. Contact the business for help.",
+  },
+  support_conflict: {
+    kind: "conflict",
+    action: "inline",
+    message: "This request has changed. Refresh and try again.",
+    serverSays: true,
+  },
   file_owner_only: {
     kind: "permission",
     action: "inline",

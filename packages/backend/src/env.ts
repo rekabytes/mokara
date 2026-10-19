@@ -7,6 +7,10 @@ const EnvSchema = z
     DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
     PORT: z.coerce.number().int().positive().default(4700),
     // Native MCP clients omit Origin; browser clients require an explicit origin.
+    SUPPORT_ENCRYPTION_KEY: z.string().trim().default(""),
+    SUPPORT_EMAIL_API_URL: z.string().trim().default(""),
+    SUPPORT_EMAIL_API_KEY: z.string().trim().default(""),
+    SUPPORT_EMAIL_FROM: z.string().trim().default(""),
     MCP_ALLOWED_ORIGINS: z.string().default(""),
     CORS_ALLOWED_ORIGINS: z.string().default("").refine(validBrowserOriginList, {
       message:

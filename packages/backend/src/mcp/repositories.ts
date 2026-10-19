@@ -35,11 +35,7 @@ export async function eligibleRepositories(userId: string) {
     orderBy: { fullName: "asc" },
   });
 }
-export async function validateRepositoryGrant(
-  userId: string,
-  scopes: string[],
-  repositoryIds: string[]
-) {
+export function validateRepositoryGrant(scopes: string[], repositoryIds: string[]) {
   if (!scopes.includes("mokara:github")) {
     if (repositoryIds.length)
       throw new McpFailure(
@@ -49,20 +45,12 @@ export async function validateRepositoryGrant(
       );
     return;
   }
-  const allowed = await eligibleRepositories(userId);
-  if (!repositoryIds.length || repositoryIds.some((id) => !allowed.some((repo) => repo.id === id)))
-    throw new McpFailure(
-      "mcp_repository_forbidden",
-      "Choose connected, enabled GitHub repositories you can access. Reconnect GitHub if verification expired.",
-      403
-    );
+  // Older clients may send repository_ids. Access follows the active
+  // repositories in GitHub settings, so these IDs do not grant or limit access.
 }
 export async function requireRepository(principal: McpPrincipal, repositoryId: string) {
   requireScope(principal, "mokara:github");
-  if (
-    !principal.repositoryIds?.includes(repositoryId) ||
-    !(await eligibleRepositories(principal.userId)).some((repo) => repo.id === repositoryId)
-  )
+  if (!(await eligibleRepositories(principal.userId)).some((repo) => repo.id === repositoryId))
     throw new McpFailure(
       "mcp_repository_forbidden",
       "This connection cannot access that GitHub repository.",

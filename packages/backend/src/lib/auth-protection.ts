@@ -4,6 +4,10 @@ import type { Redis } from "@mokara/redis";
 import { z } from "zod";
 
 export const AUTH_LIMITS = {
+  supportPeer: { attempts: 10, seconds: 600 },
+  supportSite: { attempts: 100, seconds: 600 },
+  supportConfig: { attempts: 1200, seconds: 60 },
+  supportRead: { attempts: 120, seconds: 60 },
   passwordChange: { attempts: 10, seconds: 600 },
   adminLogin: { attempts: 10, seconds: 600 },
   mcpOAuthPeer: { attempts: 120, seconds: 60 },
@@ -146,7 +150,8 @@ const VerificationSchema = z.object({
 export async function verifySignupChallenge(
   token: string | undefined,
   settings: TurnstileSettings,
-  fetcher: typeof fetch = fetch
+  fetcher: typeof fetch = fetch,
+  action = "signup"
 ): Promise<"ok" | "invalid" | "unavailable"> {
   const protection = signupProtection(settings);
   if (!protection.required) return "ok";
@@ -173,7 +178,7 @@ export async function verifySignupChallenge(
         ? "unavailable"
         : "invalid";
     }
-    return result.action === "signup" &&
+    return result.action === action &&
       protection.hostnames.includes(result.hostname?.toLowerCase() ?? "")
       ? "ok"
       : "invalid";

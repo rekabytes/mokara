@@ -7,7 +7,7 @@ import {
   resolvedTourIndex,
   shouldRunTour,
 } from "../lib/onboarding.ts";
-import { loadTurnstile } from "../app/signup/turnstile.ts";
+import { loadTurnstile } from "../lib/turnstile.ts";
 import { api } from "../lib/api.ts";
 
 const progress = (extra = {}) => ({ taskCount: 0, modalOpen: false, taskOpen: false, ...extra });

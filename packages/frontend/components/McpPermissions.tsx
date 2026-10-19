@@ -1,19 +1,13 @@
 import Link from "next/link";
-import { MCP_PERMISSIONS, type McpScope, type McpRepository } from "@/lib/mcp-permissions";
+import { MCP_PERMISSIONS, type McpScope } from "@/lib/mcp-permissions";
 export function McpPermissions({
   scopes,
   onScopesChange,
-  repositories,
-  selectedRepositories,
-  onRepositoriesChange,
   availableScopes,
   disabled = false,
 }: {
   scopes: McpScope[];
   onScopesChange: (scopes: McpScope[]) => void;
-  repositories: McpRepository[];
-  selectedRepositories: string[];
-  onRepositoriesChange: (ids: string[]) => void;
   availableScopes?: string[];
   disabled?: boolean;
 }) {
@@ -39,7 +33,6 @@ export function McpPermissions({
                     ? [...scopes, permission.scope]
                     : scopes.filter((scope) => scope !== permission.scope);
                   onScopesChange(next);
-                  if (!next.includes("mokara:github")) onRepositoriesChange([]);
                 }}
               />
               <span className="min-w-0">
@@ -53,49 +46,20 @@ export function McpPermissions({
         </div>
       </fieldset>
       {scopes.includes("mokara:github") && (
-        <fieldset disabled={disabled} className="m-0 mt-4 min-w-0 border-0 p-0">
-          <legend className="mb-2 text-sm font-medium">Approved GitHub repositories</legend>
-          <p className="mb-3 mt-0 text-xs leading-5 text-[var(--color-ink-muted)]">
-            Choose at least one connected, enabled repository. This does not grant access to your
-            other repositories.
+        <div className="mt-4 rounded-[var(--radius-btn)] border border-[var(--color-border-soft)] p-4 text-xs leading-5 text-[var(--color-ink-muted)]">
+          <p className="m-0 font-medium text-[var(--color-ink)]">
+            Follows your active repositories
           </p>
-          <div className="grid max-h-56 gap-2 overflow-auto">
-            {repositories.map((repo) => (
-              <label key={repo.id} className="flex min-w-0 items-center gap-3 py-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="size-4 shrink-0 accent-[var(--color-accent)]"
-                  checked={selectedRepositories.includes(repo.id)}
-                  disabled={
-                    !selectedRepositories.includes(repo.id) && selectedRepositories.length >= 20
-                  }
-                  onChange={(event) =>
-                    onRepositoriesChange(
-                      event.target.checked
-                        ? [...selectedRepositories, repo.id]
-                        : selectedRepositories.filter((id) => id !== repo.id)
-                    )
-                  }
-                />
-                <span className="break-words">
-                  {repo.name}{" "}
-                  <span className="text-xs text-[var(--color-ink-muted)]">
-                    · {repo.private ? "Private" : "Public"}
-                  </span>
-                </span>
-              </label>
-            ))}
-          </div>
-          {!repositories.length && (
-            <p className="text-xs leading-5 text-[var(--color-ink-muted)]">
-              Connect or refresh GitHub and enable repositories in{" "}
-              <Link href="/settings" className="underline">
-                Settings
-              </Link>
-              , then start a new connection request.
-            </p>
-          )}
-        </fieldset>
+          <p className="mb-0 mt-2">
+            This agent can use your active GitHub repositories, including those you activate later.
+            Manage the list in{" "}
+            <Link href="/settings" className="underline">
+              Settings → GitHub
+            </Link>
+            . Your next agent request uses the updated list without reconnecting. The agent cannot
+            access inactive repositories or repositories you no longer have permission to use.
+          </p>
+        </div>
       )}
     </div>
   );

@@ -145,6 +145,10 @@ const ICONS: Record<string, RowIcon> = {
     Icon: CheckIcon,
     className: "bg-[var(--color-accent-soft)] text-[var(--color-accent)]",
   },
+  support_ticket: {
+    Icon: ReplyIcon,
+    className: "bg-[var(--color-accent-soft)] text-[var(--color-accent)]",
+  },
   comment_reply: { Icon: ReplyIcon, className: "bg-[rgba(14,165,233,0.14)] text-[#0284c7]" },
   // PRD-11 §1.5: overdue rows are loud (red), coming-up rows are quiet
   // (amber). The icon shape is the same so a glance still says "due soon".
@@ -206,7 +210,7 @@ export function NotificationDrawer() {
     // board lands on the right workspace.
     const teamId = n.payload.team_id;
     if (teamId) setSelectedId(teamId);
-    router.push("/tasks");
+    router.push(n.type === "support_ticket" ? "/support" : "/tasks");
   };
 
   // PRD-05: accept/decline straight from the row. The server updates the
@@ -342,6 +346,11 @@ export function NotificationDrawer() {
                           {n.type === "invitation" && (
                             <>
                               invited you to join <b>{n.payload.team_name ?? "a container"}</b>
+                            </>
+                          )}
+                          {n.type === "support_ticket" && (
+                            <>
+                              updated support ticket <b>{n.payload.task_title ?? "a ticket"}</b>
                             </>
                           )}
                           {n.type === "task_assigned" && (

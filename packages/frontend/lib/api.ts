@@ -1,4 +1,19 @@
 import {
+  supportSitesSchema,
+  supportSiteSchema,
+  supportListSchema,
+  supportDetailSchema,
+  supportSubmissionResultSchema,
+  supportPublicDetailSchema,
+  supportOkSchema,
+  supportTaskSchema,
+  supportFileSchema,
+  type SupportSiteDraft,
+  type SupportSubmission,
+  type SupportTicket,
+} from "./support-types";
+import { z as supportZ } from "zod";
+import {
   fileListSchema,
   workspaceFileResultSchema,
   workspaceFolderResultSchema,
@@ -130,7 +145,8 @@ async function req<T>(
   schema: z.ZodType<T>,
   path: string,
   init?: RequestInit,
-  onHeaders?: (headers: Headers) => void
+  onHeaders?: (headers: Headers) => void,
+  binary = false
 ): Promise<T> {
   const method = (init?.method ?? "GET").toUpperCase();
   const start = Date.now();
@@ -197,6 +213,7 @@ async function req<T>(
   }
   done(res.status);
   if (res.status === 204) return parseResponse(schema, undefined);
+  if (binary) return parseResponse(schema, await res.blob());
   const text = await res.text();
   // Every successful response crosses a runtime schema before reaching state.
   try {
@@ -321,6 +338,93 @@ function uploadViaXhr<T>(
 }
 
 export const api = {
+  supportSites: (teamId: string, signal?: AbortSignal) =>
+    req(supportSitesSchema, `/teams/${teamId}/support/sites`, { signal, cache: "no-store" }),
+  saveSupportSite: async (teamId: string, data: SupportSiteDraft, id?: string) =>
+    id
+      ? req(supportOkSchema, `/teams/${teamId}/support/sites/${id}`, {
+          method: "PUT",
+          body: JSON.stringify(data),
+        })
+      : req(supportZ.object({ site: supportSiteSchema }), `/teams/${teamId}/support/sites`, {
+          method: "POST",
+          body: JSON.stringify(data),
+        }),
+  supportTickets: (teamId: string, cursor?: string, signal?: AbortSignal) =>
+    req(
+      supportListSchema,
+      `/teams/${teamId}/support/tickets?limit=40${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+      { signal, cache: "no-store" }
+    ),
+  supportTicket: (teamId: string, id: string, cursor?: string, signal?: AbortSignal) =>
+    req(
+      supportDetailSchema,
+      `/teams/${teamId}/support/tickets/${id}?limit=40${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+      { signal, cache: "no-store" }
+    ),
+  patchSupportTicket: (
+    teamId: string,
+    id: string,
+    data: Partial<Pick<SupportTicket, "status" | "priority" | "assignee_id">>
+  ) =>
+    req(supportOkSchema, `/teams/${teamId}/support/tickets/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  replySupportTicket: (
+    teamId: string,
+    id: string,
+    data: { request_id: string; body: string; internal: boolean }
+  ) =>
+    req(supportOkSchema, `/teams/${teamId}/support/tickets/${id}/messages`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  supportTicketTask: (teamId: string, id: string) =>
+    req(supportTaskSchema, `/teams/${teamId}/support/tickets/${id}/task`, { method: "POST" }),
+  submitSupportTicket: (id: string, data: SupportSubmission) =>
+    req(supportSubmissionResultSchema, `/support-public/sites/${id}/tickets`, {
+      method: "POST",
+      credentials: "omit",
+      body: JSON.stringify(data),
+    }),
+  publicSupportTicket: (id: string, token: string, cursor?: string, signal?: AbortSignal) =>
+    req(
+      supportPublicDetailSchema,
+      `/support-public/tickets/${id}?limit=40${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+      {
+        credentials: "omit",
+        headers: { Authorization: `Bearer ${token}` },
+        signal,
+        cache: "no-store",
+      }
+    ),
+  publicSupportReply: (id: string, token: string, data: { request_id: string; body: string }) =>
+    req(supportOkSchema, `/support-public/tickets/${id}/messages`, {
+      method: "POST",
+      credentials: "omit",
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    }),
+  uploadSupportFile: (id: string, token: string, uploadId: string, file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return req(supportOkSchema, `/support-public/tickets/${id}/files?upload_id=${uploadId}`, {
+      method: "POST",
+      credentials: "omit",
+      headers: { Authorization: `Bearer ${token}` },
+      body,
+    });
+  },
+  downloadSupportFile: (id: string, token: string, fileId: string) =>
+    req(
+      supportFileSchema,
+      `/support-public/tickets/${id}/files/${fileId}`,
+      { credentials: "omit", headers: { Authorization: `Bearer ${token}` } },
+      undefined,
+      true
+    ),
+
   listFiles: (teamId: string, query: FileQuery = {}, signal?: AbortSignal) => {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(query))

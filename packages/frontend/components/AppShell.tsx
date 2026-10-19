@@ -75,6 +75,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const navItems: { href: string; label: string; icon: React.ReactNode }[] = [
     { href: "/tasks", label: "Tasks", icon: <TasksIcon /> },
     { href: "/files", label: "mDrive", icon: <FilesIcon /> },
+    { href: "/support", label: "Support", icon: <SupportIcon /> },
     { href: "/analytics", label: "Analytics", icon: <AnalyticsIcon /> },
   ];
 
@@ -385,6 +386,23 @@ function FilesIcon() {
       aria-hidden="true"
     >
       <path d="M3 7a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v9H3Z" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function SupportIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      aria-hidden="true"
+    >
+      <path d="M4 5h16v5a2 2 0 0 0 0 4v5H4v-5a2 2 0 0 0 0-4V5Z" />
+      <path d="M9 9h6M9 13h4" />
     </svg>
   );
 }

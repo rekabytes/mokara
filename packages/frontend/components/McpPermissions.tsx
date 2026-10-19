@@ -51,13 +51,13 @@ export function McpPermissions({
             Follows your active repositories
           </p>
           <p className="mb-0 mt-2">
-            This agent can access your active GitHub repositories, including repositories you
-            activate later. Manage them in{" "}
+            This agent can use your active GitHub repositories, including those you activate later.
+            Manage the list in{" "}
             <Link href="/settings" className="underline">
               Settings → GitHub
             </Link>
-            . Changes apply to the next agent request without reconnecting. Inactive repositories
-            and repositories you can no longer access stay unavailable.
+            . Your next agent request uses the updated list without reconnecting. The agent cannot
+            access inactive repositories or repositories you no longer have permission to use.
           </p>
         </div>
       )}

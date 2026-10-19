@@ -405,7 +405,7 @@ export function registerWorkspaceTools(register: ToolRegistrar, principal: McpPr
   );
   register(
     "list_github_repositories",
-    "List your currently active GitHub repositories. Activation changes in Mokara Settings apply without reconnecting this agent; GitHub permission and current access are still required.",
+    "List your active GitHub repositories. Changes in Mokara Settings apply without reconnecting. The connection needs GitHub permission, and you must still have access to each repository.",
     z.object(workspace).strict(),
     async (input) => {
       await requireWorkspace(principal, input.workspace_id);

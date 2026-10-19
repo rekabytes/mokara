@@ -45,8 +45,8 @@ export function validateRepositoryGrant(scopes: string[], repositoryIds: string[
       );
     return;
   }
-  // Legacy clients may still send repository_ids. GitHub permission now follows
-  // the user's active repositories; this list neither grants nor limits access.
+  // Older clients may send repository_ids. Access follows the active
+  // repositories in GitHub settings, so these IDs do not grant or limit access.
 }
 export async function requireRepository(principal: McpPrincipal, repositoryId: string) {
   requireScope(principal, "mokara:github");

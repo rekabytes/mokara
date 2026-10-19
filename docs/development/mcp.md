@@ -4,7 +4,7 @@ Mokara exposes a stateless Streamable HTTP MCP endpoint at `/api/mcp`. An agent 
 
 ## Write permissions and tools
 
-Migration `20261013100000_mcp_write_permissions` adds connection/token scopes, repository allow-lists and durable request records. Deploy frontend/backend together and apply all MCP migrations. Existing connections and token rows receive only `mokara:read`; they never silently gain writes. New OAuth grants and manual credentials default to read. Consent displays only scopes actually requested by the client, with write/delete/GitHub unchecked. GitHub permission follows the user’s currently active repositories, including future activations; there is no per-agent repository picker.
+Migration `20261013100000_mcp_write_permissions` adds connection/token scopes, repository allow-lists and durable request records. Deploy frontend/backend together and apply all MCP migrations. Existing connections and token rows receive only `mokara:read`; they never silently gain writes. New OAuth grants and manual credentials default to read. Consent displays only scopes actually requested by the client, with write/delete/GitHub unchecked. GitHub permission follows the user's active repositories, including repositories they activate later. Users manage that list in GitHub settings.
 
 | Scope           | Tools / behavior                                                                                                                                                                        |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -36,37 +36,36 @@ OAuth endpoints are `/api/mcp/oauth/register`, `/authorize`, `/token`, `/revoke`
 
 ## Active GitHub repositories
 
-GitHub-enabled OAuth and manual connections resolve eligible repositories from
-Mokara’s current GitHub settings on every repository request. Activating or
-deactivating a repository applies to the next request without replacing the MCP
-credential. Workspace grants and scopes remain fixed; a connection without
-`mokara:github` gains no repository access. This behavior applies to existing
-GitHub-enabled connections too, as explicitly approved for this change.
+Mokara checks the user's active GitHub repositories on every repository request.
+Activate or deactivate a repository in Settings and the next request uses the
+updated list. Existing GitHub-enabled connections use this list too. Workspace
+grants and scopes stay fixed. A connection needs `mokara:github` to access any
+repository.
 
-Historical `mcp_connections.repository_ids` snapshots remain stored for rollback
-compatibility but are no longer authorization inputs. New grants use the database
-column’s empty default. Older clients may still send the deprecated
-`repository_ids` field; it is validated structurally but neither grants nor limits
-GitHub access. Nonempty IDs without GitHub permission are rejected. Connection
-metadata returns `repository_access: active | none` and an empty legacy
-`repository_ids` array. No migration or new environment setting is needed.
+Mokara keeps old `mcp_connections.repository_ids` values for rollback, but no
+longer uses them to decide access. New connections leave that column empty.
+Older clients can still send `repository_ids`. Mokara validates their format,
+but the IDs do not grant or restrict access. Nonempty IDs still require GitHub
+permission. Connection metadata returns `repository_access: active | none` and
+an empty `repository_ids` array. No migration or new environment setting is needed.
 
-Eligibility still checks the user’s own enabled repository associations, active
-installation and verified GitHub connection. Existing GitHub verification refresh
-rules apply (normally a five-minute freshness window); MCP does not promise
-instant detection of external GitHub permission changes before those checks or
-webhook updates. Inactive/unavailable repositories are never authorized solely
-because an agent has remembered their IDs.
+A repository must be enabled for the user, belong to an active installation and
+have a verified GitHub connection. Mokara normally refreshes GitHub verification
+after five minutes. Changes made on GitHub may take effect after that check or a
+webhook update. Remembering a repository ID does not give an agent access to it.
 
-Dynamic registration accepts the standard advisory `application_type` values
-`native` and `web`, including Codex/rmcp’s native client payload. This field does
-not relax HTTPS/loopback redirect validation, exact callback matching, PKCE S256,
-resource binding or scope checks. Unknown application types, credentials and
-unsupported grants remain rejected. This fixes the reproduced pre-consent 400
-for that payload; a real deployed client sign-in remains an acceptance check.
-The payload follows the official [rmcp registration implementation](https://github.com/modelcontextprotocol/rust-sdk/blob/main/crates/rmcp/src/transport/auth.rs)
-and [Codex MCP connection guide](https://learn.chatgpt.com/docs/extend/mcp).
-Mokara still advertises DCR only, not client metadata document support.
+Registration accepts `application_type: native` and `application_type: web`.
+Codex's rmcp client sends the native value. Mokara validates the field without
+changing its HTTPS or loopback redirect rules, exact callback matching, PKCE S256,
+resource binding or scope checks. Mokara still rejects unknown application types,
+client credentials and unsupported grants.
+
+Accepting this field fixes the reproduced 400 error before consent. Real sign-in
+on the deployed app still needs testing. See the
+[rmcp registration code](https://github.com/modelcontextprotocol/rust-sdk/blob/main/crates/rmcp/src/transport/auth.rs)
+and [Codex MCP guide](https://learn.chatgpt.com/docs/extend/mcp).
+Mokara advertises dynamic client registration. It does not support client metadata
+documents.
 
 ## Manual connection fallback
 

@@ -344,8 +344,8 @@ export const mcpOAuthRegisterSchema = z
     client_name: z.string().trim().min(1).max(80).default("MCP client"),
     redirect_uris: z.array(z.string().min(1).max(2048)).min(1).max(10),
     token_endpoint_auth_method: z.literal("none").default("none"),
-    // Native MCP clients (including Codex/rmcp) send this standard DCR metadata.
-    // It is advisory only: all clients retain the same safe redirects and PKCE rules.
+    // Codex/rmcp sends application_type during client registration.
+    // Validate the value without changing redirect or PKCE checks.
     application_type: z.enum(["native", "web"]).optional(),
     // Standard advisory metadata is validated but never fetched or trusted.
     client_uri: z.url().max(2048).optional(),

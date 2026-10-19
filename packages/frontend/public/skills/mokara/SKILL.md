@@ -12,7 +12,8 @@ Requires a connected Mokara MCP server. This skill supplies workflow guidance; i
 ## Resolve the destination before writing
 
 - Use `list_workspaces` to resolve the workspace and `list_projects` to resolve a Mokara project. A project is not a GitHub repository.
-- For GitHub work, use `list_github_repositories` to resolve a currently active repository. Active repositories follow Mokara Settings → GitHub, including later additions; changing that list does not require reconnecting. GitHub permission and current access are still required. Use pagination where tools expose it.
+- For GitHub work, use `list_github_repositories` to find the active repository. Use pagination where a tool supports it.
+- Users manage active repositories in Mokara's GitHub settings. Changes apply without reconnecting, including repositories activated later. The connection still needs GitHub permission, and the user must still have access to the repository.
 - An explicit request for a GitHub issue, or a task in `owner/repository`, supplies publishing intent. Do not ask again merely because publishing is external.
 - "For X" may mean a project or a repository. If publishing intent or the destination is unclear, ask one short clarification BEFORE creating anything. Do not silently create an unlinked task when an issue was requested.
 - Active repository access alone does not mean every task should be published. A screenshot of a checked option is not a default preference.

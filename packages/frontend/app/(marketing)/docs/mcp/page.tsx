@@ -273,14 +273,16 @@ export default async function McpGuidePage() {
           read access, the client must request the additional OAuth scopes when reconnecting.
         </p>
         <p>
-          For GitHub, first connect the repository integration and enable repositories in
-          <Link href="/settings"> Settings</Link>. GitHub sign-in alone does not connect
-          repositories. Grant GitHub permission once when authorizing your agent. It then follows
-          your active repositories, including those activated later, without reconnecting. Turn a
-          repository off in GitHub settings to remove it from subsequent agent requests. Existing
-          GitHub-enabled connections follow this same active list. Linking an existing issue enables
-          synchronization and may change its state; changing a linked task’s status also requires
-          GitHub permission and access to the active repository.
+          Connect GitHub and activate repositories in <Link href="/settings">Settings</Link>.
+          Signing in with GitHub does not connect repositories. Grant your agent GitHub permission
+          once. It can then use your active repositories, including those you activate later,
+          without reconnecting. Existing GitHub-enabled connections use the same list. Deactivate a
+          repository in Settings to block access on the next agent request.
+        </p>
+        <p>
+          Linking an issue starts synchronization and can change its state. To change a linked
+          task&apos;s status, the agent needs GitHub permission and access to that active
+          repository.
         </p>
       </section>
       <section aria-labelledby="access">
@@ -412,9 +414,9 @@ export default async function McpGuidePage() {
           <dt>A GitHub repository is missing</dt>
           <dd>
             Check that GitHub is connected and the repository is active in Mokara Settings → GitHub.
-            Ask the agent to list repositories again; you do not need to reconnect MCP when the
-            active list changes. If GitHub tools are missing altogether, the connection needs GitHub
-            permission. Reconnect GitHub itself if Mokara reports that its authorization expired.
+            Ask the agent to list repositories again. Changing the active list does not require
+            reconnecting MCP. If the agent has no GitHub tools, its connection needs GitHub
+            permission. If Mokara says GitHub authorization expired, reconnect GitHub in Settings.
           </dd>
           <dt>The client reports an origin or discovery error</dt>
           <dd>

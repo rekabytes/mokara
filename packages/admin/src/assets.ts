@@ -290,6 +290,35 @@ main[data-view="workspace"] .section-stack > .panel:first-child, main[data-view=
   .login-card { padding: 32px 24px; }
 }
 @media (max-width: 390px) { .masthead-label { display: none; } .console-layout { padding-inline: 16px; } .page-header h1 { font-size: 34px; } .admin-stats dt { font-size: 11px; } }
+
+.release-panel { position: fixed; right: 24px; bottom: 24px; z-index: 40; width: min(350px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 4px; background: var(--panel); box-shadow: 0 8px 28px rgb(35 38 38 / .12); }
+.release-panel[hidden], .release-panel [hidden] { display: none; }
+.release-bar { display: flex; gap: 12px; align-items: center; padding: 12px 16px; }
+.release-summary { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 0; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; font: inherit; font-size: 13px; }
+.release-version { color: var(--accent); font: 400 11px/1.5 var(--font-mono); }
+.release-summary svg { flex: 0 0 16px; }
+.release-read { display: flex; align-items: center; gap: 6px; color: var(--accent); font-size: 12px; }
+.release-modal { width: min(640px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); margin: auto; padding: 0; color: var(--text); border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+.release-modal::backdrop { background: rgb(35 38 38 / .3); }
+.release-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; }
+.release-modal-header h2 { margin: 0; font-size: 20px; font-weight: 500; }
+body:has(.release-modal[open]) { overflow: hidden; }
+.release-summary[aria-expanded="true"] svg { transform: rotate(90deg); }
+.release-body { border-top: 1px solid var(--line); padding: 20px; max-height: min(65dvh, 540px); overflow-y: auto; scrollbar-width: thin; }
+.release-body h2 { margin: 4px 0 8px; font-size: 19px; font-weight: 500; }
+.release-body h3 { margin: 0 0 4px; font-size: 14px; font-weight: 500; }
+.release-body p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.release-body ul { list-style: none; margin: 20px 0 0; padding: 0; display: grid; gap: 16px; }
+.release-entry + .release-entry { border-top: 1px solid var(--line); }
+.release-entry-summary { display: flex; align-items: center; gap: 12px; padding: 16px 0; list-style: none; cursor: pointer; }
+.release-entry-summary::-webkit-details-marker { display: none; }
+.release-entry-summary::marker { content: ""; }
+.release-entry-heading { flex: 1; min-width: 0; }
+.release-entry-summary svg { flex: 0 0 16px; }
+.release-entry[open] > summary > svg { transform: rotate(90deg); }
+.release-body .release-entry-summary h2 { font-size: 15px; margin-bottom: 0; }
+.release-entry-content { padding-bottom: 20px; }
+@media (max-width: 600px) { .release-panel { right: 16px; bottom: 16px; } .release-bar { padding: 12px; gap: 8px; } .release-version { flex-basis: 100%; } .release-body { padding: 16px; } }
 `;
 
 export const ADMIN_JS = `
@@ -1029,6 +1058,96 @@ export const ADMIN_JS = `
       )
     );
     groupSections();
+  }
+
+
+  // Release notes use the same safe text rendering and request/error adapter as
+  // the rest of the console. Dismissal is a browser preference, not account data.
+  const releasePanel = document.getElementById("release-panel");
+  const releaseOpen = document.getElementById("release-open");
+  function releaseChevron() {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    for (const [key, value] of Object.entries({ width: "16", height: "16", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "1.5", "aria-hidden": "true" })) svg.setAttribute(key, value);
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", "m9 6 6 6-6 6"); path.setAttribute("stroke-linecap", "round"); path.setAttribute("stroke-linejoin", "round"); svg.append(path); return svg;
+  }
+  function validReleases(data) {
+    return data && Array.isArray(data.releases) && data.releases.every(r =>
+      r && typeof r.version === "string" && /^\\d+\\.\\d+\\.\\d+$/.test(r.version) &&
+      typeof r.date === "string" && /^\\d{4}-\\d{2}-\\d{2}$/.test(r.date) &&
+      typeof r.title === "string" && typeof r.summary === "string" &&
+      Array.isArray(r.changes) && r.changes.length > 0 && r.changes.every(c => c && typeof c.title === "string" && typeof c.body === "string"));
+  }
+  const releaseDialog = document.getElementById("release-dialog");
+  let releaseTimer = null;
+  function hideReleaseNotice(version) {
+    releasePanel.hidden = true;
+    if (releaseTimer !== null) clearTimeout(releaseTimer);
+    releaseTimer = null;
+    try { window.localStorage.setItem("mokara:admin:release-notice", version); }
+    catch { setNotice("Notice closed for this visit. Your browser could not save this preference."); }
+  }
+  async function loadReleases(expand = false) {
+    releaseOpen.disabled = true;
+    if (releaseTimer !== null) clearTimeout(releaseTimer);
+    releaseTimer = null;
+    try {
+      const data = await getJSON("/api/changelog");
+      if (!validReleases(data)) throw new Error("Release notes are unavailable. Try again.");
+      releasePanel.replaceChildren(); releaseDialog.replaceChildren();
+      const latest = data.releases[0];
+      const header = document.createElement("header"); header.className = "release-modal-header";
+      const heading = document.createElement("h2"); heading.id = "release-dialog-title"; heading.textContent = "What's new";
+      const close = document.createElement("button"); close.type = "button"; close.className = "btn btn-secondary"; close.textContent = "Close"; close.setAttribute("aria-label", "Close release notes");
+      close.addEventListener("click", () => releaseDialog.close()); header.append(heading, close);
+      const body = document.createElement("div"); body.className = "release-body";
+      const count = paragraph("Release history · " + data.releases.length + " releases"); body.append(count);
+      for (const [index, release] of data.releases.entries()) {
+        const article = document.createElement("details"); article.className = "release-entry"; article.open = index === 0;
+        const summary = document.createElement("summary"); summary.className = "release-entry-summary";
+        const labels = document.createElement("span"); labels.className = "release-entry-heading";
+        const meta = document.createElement("p"); meta.className = "release-version"; meta.textContent = "Version " + release.version + " · " + release.date;
+        const heading = document.createElement("h2"); heading.textContent = release.title;
+        const list = document.createElement("ul");
+        for (const change of release.changes) {
+          const item = document.createElement("li"); const heading = document.createElement("h3"); heading.textContent = change.title;
+          item.append(heading, paragraph(change.body)); list.append(item);
+        }
+        labels.append(meta, heading); summary.append(labels, releaseChevron());
+        const details = document.createElement("div"); details.className = "release-entry-content";
+        details.append(paragraph(release.summary), list); article.append(summary, details); body.append(article);
+      }
+      if (!latest) body.append(paragraph("No release notes yet."));
+      releaseDialog.append(header, body);
+      const show = () => {
+        if (latest) hideReleaseNotice(latest.version);
+        else releasePanel.hidden = true;
+        if (!releaseDialog.open) releaseDialog.showModal();
+      };
+      if (expand) { show(); return; }
+      if (!latest) { releasePanel.hidden = true; return; }
+      let dismissed = null;
+      try { dismissed = window.localStorage.getItem("mokara:admin:release-notice"); } catch { /* This display preference is optional. */ }
+      releasePanel.hidden = dismissed === latest.version;
+      const bar = document.createElement("div"); bar.className = "release-bar";
+      const summary = document.createElement("button"); summary.type = "button"; summary.className = "release-summary"; summary.setAttribute("aria-haspopup", "dialog");
+      const version = document.createElement("span"); version.className = "release-version"; version.textContent = "What's new · v" + latest.version;
+      const title = document.createElement("span"); title.textContent = latest.title;
+      const read = document.createElement("span"); read.className = "release-read"; read.textContent = "Read the update"; read.append(releaseChevron());
+      summary.append(version, title, read); summary.addEventListener("click", show);
+      const dismiss = document.createElement("button"); dismiss.type = "button"; dismiss.className = "btn btn-secondary"; dismiss.textContent = "×"; dismiss.setAttribute("aria-label", "Dismiss release notice");
+      dismiss.addEventListener("click", () => hideReleaseNotice(latest.version));
+      bar.append(summary, dismiss); releasePanel.append(bar);
+      if (!releasePanel.hidden) releaseTimer = setTimeout(() => hideReleaseNotice(latest.version), 30000);
+    } catch {
+      releasePanel.hidden = true;
+      setNotice("Couldn't load release notes. Use What's new to try again.", "error");
+    } finally { releaseOpen.disabled = false; }
+  }
+  if (releasePanel && releaseOpen && releaseDialog) {
+    releaseOpen.addEventListener("click", () => { void loadReleases(true); });
+    releaseDialog.addEventListener("click", event => { if (event.target === releaseDialog) releaseDialog.close(); });
+    void loadReleases();
   }
 
   const view = app.dataset.view;

@@ -1,3 +1,4 @@
+import { changelogSchema } from "./changelog";
 import {
   agentDetailSchema,
   agentResultSchema,
@@ -344,6 +345,8 @@ function uploadViaXhr<T>(
 }
 
 export const api = {
+  changelog: (signal?: AbortSignal) =>
+    req(changelogSchema, "/changelog", { signal, cache: "no-store" }),
   agentTask: (workspace: string, task: string, signal?: AbortSignal) =>
     req(agentDetailSchema, `/teams/${workspace}/tasks/${task}/agent`, { signal }),
   agentCommand: (data: AgentUserCommand) =>

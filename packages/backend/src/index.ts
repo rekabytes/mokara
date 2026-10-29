@@ -1,3 +1,4 @@
+import { changelogRoutes } from "./routes/changelog.ts";
 import { agentSyncRoutes } from "./routes/agent-sync.ts";
 import { startAgentLeaseWorker } from "./lib/agent-sync-worker.ts";
 import { supportRoutes } from "./routes/support.ts";
@@ -88,6 +89,7 @@ async function main() {
   app.get("/health", (c) => c.json({ status: "ok" }));
 
   const api = new Hono<{ Variables: Vars }>();
+  api.route("/changelog", changelogRoutes);
   api.route("/auth", authRoutes);
   api.route("/support-public", supportPublicRoutes);
   // Agent credentials authenticate independently of browser cookies.

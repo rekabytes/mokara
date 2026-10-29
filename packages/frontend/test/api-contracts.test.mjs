@@ -1,3 +1,11 @@
+import {
+  goal as businessGoal,
+  list as businessGoals,
+  result as businessGoalResult,
+  history as businessGoalHistory,
+  review as businessGoalReview,
+  periods as businessGoalPeriods,
+} from "./fixtures/kpi-goals.mjs";
 import { releases } from "../../backend/src/routes/changelog.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -172,6 +180,14 @@ const supportTicket = {
   updated_at: "2026-10-17",
 };
 const cases = [
+  ["listKpiGoals", [businessGoal.team_id], businessGoals],
+  ["createKpiGoal", [businessGoal.team_id, {}], businessGoalResult],
+  ["updateKpiGoal", [businessGoal.team_id, businessGoal.id, {}], businessGoalResult],
+  ["checkInKpiGoal", [businessGoal.team_id, businessGoal.id, {}], businessGoalResult],
+  ["kpiGoalHistory", [businessGoal.team_id, businessGoal.id], businessGoalHistory],
+  ["kpiGoalReview", [businessGoal.team_id, businessGoal.id], businessGoalReview],
+  ["kpiGoalPeriods", [businessGoal.team_id, businessGoal.id], businessGoalPeriods],
+  ["createKpiPeriod", [businessGoal.team_id, businessGoal.id, {}], businessGoalResult],
   ["changelog", [], { releases }],
   [
     "agentTask",

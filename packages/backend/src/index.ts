@@ -1,3 +1,4 @@
+import { kpiGoalRoutes } from "./routes/kpi-goals.ts";
 import { changelogRoutes } from "./routes/changelog.ts";
 import { agentSyncRoutes } from "./routes/agent-sync.ts";
 import { startAgentLeaseWorker } from "./lib/agent-sync-worker.ts";
@@ -147,6 +148,7 @@ async function main() {
   authed.route("/", analyticsRoutes);
   authed.route("/", projectRoutes);
   authed.route("/", kpiRoutes);
+  authed.route("/", kpiGoalRoutes);
   authed.route("/", githubRoutes);
 
   api.route("/", authed);

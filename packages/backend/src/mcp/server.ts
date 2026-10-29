@@ -1,4 +1,5 @@
 import { registerAgentTools } from "./agent-tools.ts";
+import { registerKpiTools } from "./kpi-tools.ts";
 import { MCP_WORKFLOW_INSTRUCTIONS, registerWorkflowPrompts } from "./workflows.ts";
 import { McpFailure } from "./errors.ts";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -132,7 +133,7 @@ export function createMcpServer(principal: McpPrincipal) {
               : {
                   error: "internal_error",
                   message:
-                    "Could not complete the operation. Keep the same request_id and arguments. Inspect current execution state for agent work, or list_operations for ordinary writes.",
+                    "Could not complete the operation. Keep the same request_id and arguments. Inspect execution state for agent work, goal/history for business KPI check-ins, or list_operations for ordinary task writes.",
                 };
           log.warn(`mcp ${name} ${failure.error}`);
           return { isError: true, content: [{ type: "text", text: JSON.stringify(failure) }] };
@@ -310,6 +311,7 @@ export function createMcpServer(principal: McpPrincipal) {
   registerGitHubTools(register, principal);
   registerDriveTools(register, principal);
   registerAgentTools(register, principal);
+  registerKpiTools(register, principal);
   return server;
 }
 

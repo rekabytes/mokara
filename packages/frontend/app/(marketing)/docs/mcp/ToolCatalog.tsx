@@ -32,7 +32,7 @@ const groups = [
       ["get_project", "Read a project and its tasks."],
       ["list_members", "List member names, IDs and roles, without emails or credentials."],
       ["list_comments", "Read a task’s comments and replies."],
-      ["list_kpis", "List workspace KPIs and ownership."],
+      ["list_kpis", "List task-based KPIs and ownership. Business goals have separate tools."],
       ["get_kpi_progress", "Read weighted KPI progress."],
       ["get_workspace_progress", "Read workspace task progress."],
       ["get_analytics", "Read workspace analytics for a chosen day range."],
@@ -61,8 +61,8 @@ const groups = [
       ["update_comment", "Edit a comment under normal ownership rules."],
       ["create_project", "Create a project."],
       ["update_project", "Edit a project."],
-      ["create_kpi", "Create a KPI."],
-      ["update_kpi", "Edit a KPI."],
+      ["create_kpi", "Create a task-based KPI, not a measured business goal."],
+      ["update_kpi", "Edit a task-based KPI."],
       ["set_task_kpis", "Replace your KPI bindings on a task, respecting weight limits."],
       ["upload_attachment", "Upload an image or PDF up to 1 MiB to a task or comment."],
     ],
@@ -92,6 +92,27 @@ const groups = [
         "Link an existing issue to a task and enable synchronization, which may update issue state.",
       ],
       ["retry_github_sync", "Retry synchronization for a task’s linked issue."],
+    ],
+  },
+  {
+    title: "Business KPI reads · 5 tools",
+    scope: "mokara:read",
+    tools: [
+      ["list_business_kpis", "List accessible measured goals, targets, dates and revisions."],
+      ["get_business_kpi", "Read one goal's definition, latest result and current permissions."],
+      ["get_business_kpi_review", "Read dated observations for a goal's trend review."],
+      ["list_business_kpi_history", "Read original check-ins, source notes and immutable history."],
+      ["compare_business_kpi_periods", "Compare a goal with its linked previous and next periods."],
+    ],
+  },
+  {
+    title: "Business KPI check-ins · 1 tool",
+    scope: "mokara:write",
+    tools: [
+      [
+        "record_business_kpi_check_in",
+        "Record a requested absolute result with its observation date, source and expected revision. Existing goal permissions apply.",
+      ],
     ],
   },
   {

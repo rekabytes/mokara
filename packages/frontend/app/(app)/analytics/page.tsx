@@ -6,6 +6,7 @@ import { useAnalyticsData } from "./use-analytics-data";
 import { DistributionCard } from "./DistributionCard";
 import { TaskProgressCard } from "./TaskProgressCard";
 import { KpiProgressCard } from "./KpiProgressCard";
+import { KpiGoalsPanel } from "@/components/kpis/KpiGoalsPanel";
 import { ActivityCard } from "./ActivityCard";
 
 export default function AnalyticsPage() {
@@ -41,6 +42,7 @@ export default function AnalyticsPage() {
         kpiError={kpiError}
         loadKpiProgress={loadKpiProgress}
       />
+      {selected && <KpiGoalsPanel key={selected.id} teamId={selected.id} />}
       <ActivityCard data={data} loading={loading} error={error} load={load} />
     </div>
   );

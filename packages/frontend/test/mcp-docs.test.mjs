@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import guideModule from "../app/(marketing)/docs/mcp/page.tsx";
@@ -90,8 +91,17 @@ test("public tool catalog covers all permissions and the complete current tool i
   const names = [...catalog.matchAll(/<td><code>([a-z_]+)<\/code><\/td>/g)].map(
     (match) => match[1]
   );
-  assert.equal(names.length, 66);
-  assert.equal(new Set(names).size, 66);
+  const skill = await readFile(
+    new URL("../public/skills/mokara/SKILL.md", import.meta.url),
+    "utf8"
+  );
+  const version = /version: "([^"]+)"/.exec(skill)?.[1];
+  assert.ok(version);
+  assert.ok(html.includes(`Download Mokara skill · v${version}`));
+  assert.ok(html.includes("does not independently verify the figure"));
+  assert.ok(html.includes("These check-ins use transactional KPI history"));
+  assert.equal(names.length, 72);
+  assert.equal(new Set(names).size, 72);
   for (const name of [
     "claim_agent_task",
     "read_agent_task_snapshot",
@@ -107,6 +117,12 @@ test("public tool catalog covers all permissions and the complete current tool i
     "upload_attachment",
     "delete_attachment",
     "get_kpi_progress",
+    "list_business_kpis",
+    "get_business_kpi",
+    "get_business_kpi_review",
+    "list_business_kpi_history",
+    "compare_business_kpi_periods",
+    "record_business_kpi_check_in",
     "publish_github_issue",
     "link_github_issue",
     "list_operations",

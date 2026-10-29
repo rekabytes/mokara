@@ -4,7 +4,7 @@ Mokara exposes a stateless Streamable HTTP MCP endpoint at `/api/mcp`. An agent 
 
 ## Agent task execution
 
-The additive agent execution contract adds 19 tools (66 total across all scopes).
+The additive agent execution contract adds 19 tools (72 total across all scopes, including six business-KPI tools).
 See [the public client integration guide](../../packages/frontend/public/docs/agent-execution.md)
 for actual tool names, payloads, permissions, transitions and recovery rules, and
 [implementation and QA notes](agent-execution.md) for database ownership and checks.
@@ -32,7 +32,7 @@ MCP invokes the existing Hono domain operations **in-process**, with the verifie
 
 Every mutation requires a `request_id` UUID. For ordinary task/GitHub/mDrive writes, the operation ledger has a unique `(connection_id, request_id)` key and a canonical argument hash. Matching completed requests replay their result; changed arguments conflict; matching in-flight/uncertain requests never execute again. Current scopes/membership are enforced before returning a stored result. The ledger reserves before side effects and writes a final result afterwards. A crash or failure after a domain write may leave `pending`: this is deliberately **uncertain**, not a claim that the operation did nothing. Inspect the task/activity before a new action. Existing domain handlers do not share a single transaction with the ledger, so this is duplicate prevention with explicit uncertainty, not a claim of distributed exactly-once delivery. Known failures before/within domain checks are recorded; unexpected failures remain pending. Creation can succeed while steps or GitHub publication fail; the result includes task ID and follow-up errors, and retries of that request never recreate the task.
 
-Redis limits new write requests to30/minute/user in addition to120 MCP requests/minute/connection. Replay of completed operations does not consume the write quota. MCP bodies are bounded at2MiB, uploads at1MiB decoded plus existing storage/file quotas, and tool data at128KiB. Attachment reads use storage byte ranges and64KiB chunks, returning `next_offset`; storage credentials and keys are never returned. Oversized results are explicit errors. Operation results may contain authorized workspace data; activity list endpoints expose only safe metadata. No automated ledger retention is introduced; deleting a grant cascades its operation records. Keep replay records while a grant is active.
+Redis limits new write requests to30/minute/user in addition to120 MCP requests/minute/connection. Replay of completed ordinary operations does not consume the write quota. Native business-KPI check-ins check the write limit on every attempt, including retries. MCP bodies are bounded at2MiB, uploads at1MiB decoded plus existing storage/file quotas, and tool data at128KiB. Attachment reads use storage byte ranges and64KiB chunks, returning `next_offset`; storage credentials and keys are never returned. Oversized results are explicit errors. Operation results may contain authorized workspace data; activity list endpoints expose only safe metadata. No automated ledger retention is introduced; deleting a grant cascades its operation records. Keep replay records while a grant is active.
 
 ## Sign in with Mokara (recommended)
 
@@ -133,3 +133,61 @@ Server instructions distinguish workspace/project/repository destinations, expli
 Scope-filtered MCP prompts `create_task_with_github_issue` (write + GitHub) and `publish_existing_task_to_github` (GitHub) render guidance and user-supplied arguments without executing tools. Prompts are optional client-selected templates; client support varies. Public `/docs/mcp` links the versioned, self-contained `/skills/mokara/SKILL.md` asset; users install it through their client's skill mechanism. Connecting MCP alone does not load it. No secrets, fixed resource IDs, service URLs or permission bypasses are embedded. Protocol regressions verify filtering, side-effect-free prompt rendering, combined publication outcomes, local-only creation and existing-task publishing. These tests do not evaluate a live model's tool selection; smaller-model acceptance remains a manual agent check.
 
 The public guide renders `npx skills@latest add <runtime-skill-url> --skill mokara --agent universal --yes`. The source URL is shell-quoted and derived from the same validated backend public endpoint origin, not frontend Host headers or a hardcoded domain. The hosted SKILL.md is the installation source, so no npm package publishing or public repository access is needed. Universal project scope targets `.agents/skills/mokara/SKILL.md`; other agent targets can use their own directories. Absent discovery metadata hides the command instead of guessing a URL. CLI behavior was verified against the official vercel-labs/skills source/docs; no installer was run against a live Mokara deployment.
+
+## Business KPI tools
+
+The six tools below are additive. Legacy task-based KPI tools and responses stay
+unchanged. See [business KPI implementation](kpi-goals.md) for periods and checks.
+
+| Tool                           | Scope          | Inputs and result                                                                                                                                                                                    |
+| ------------------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_business_kpis`           | `mokara:read`  | `workspace_id`, optional `limit` 1–20/default10 and UUID `cursor`; returns `goals`, `next_cursor`                                                                                                    |
+| `get_business_kpi`             | `mokara:read`  | `workspace_id`, `kpi_goal_id`; returns `goal`                                                                                                                                                        |
+| `get_business_kpi_review`      | `mokara:read`  | Same goal IDs, optional opaque `cursor`; returns `goal`, server UTC `as_of`, up to30 dated `observations`, `next_cursor`                                                                             |
+| `list_business_kpi_history`    | `mokara:read`  | Same IDs, optional `limit` 1–20/default10 and sequence `cursor`; returns `entries`, `next_cursor`                                                                                                    |
+| `compare_business_kpi_periods` | `mokara:read`  | Same IDs; returns selected `goal` and nullable `previous`, `next`                                                                                                                                    |
+| `record_business_kpi_check_in` | `mokara:write` | Same IDs, UUID `request_id`, positive `expected_revision`, decimal-string `value`, ISO `observed_on`, `source` 1–500 characters and optional `note` up to1400; returns `goal`, `entry`, `request_id` |
+
+Check-ins require explicit user intent and an actual user-provided or verified
+measurement. The tool description and skill prohibit guessing from task counts.
+A required source attribution is stored as `Source: ...` at the start of the
+history note; this does not mean Mokara independently verifies its content.
+The value is an absolute result, never an increment. Read the goal revision first.
+Example arguments, with IDs obtained from actual discovery:
+
+```json
+{
+  "workspace_id": "UUID_FROM_LIST_WORKSPACES",
+  "kpi_goal_id": "UUID_FROM_LIST_BUSINESS_KPIS",
+  "request_id": "NEW_UUID_RETAINED_FOR_RETRIES",
+  "expected_revision": 2,
+  "value": "5000.1234",
+  "observed_on": "2026-10-29",
+  "source": "User-provided sales total from their October report",
+  "note": "Confirmed total for this observation date"
+}
+```
+
+Existing approved read/write scopes already cover KPI data and updates. No scopes
+are added or silently upgraded. A read-only grant never receives the check-in
+tool; users must approve write access to use it. Every call checks workspace
+allowlists and current membership, then uses the actual KPI web routes in-process.
+Personal visibility and goal-level owner/contributor permissions are rechecked
+inside the domain transaction, including archive, revision and date constraints.
+These tools cannot create goals/periods, edit targets or execute tasks.
+
+Business check-ins use the KPI domain's transactional request ledger, not the
+ordinary MCP operation ledger. The accepted goal update, revision, immutable
+entry and request hash commit together. The exact UUID/payload on the same goal
+replays the original result; changed payloads conflict. After uncertainty, retry
+that exact request and inspect the goal/history. `list_operations` does not list
+these check-ins. Current scope, membership and visibility still apply to a replay; returning an earlier result does not submit a new check-in. Do not silently retry
+with a new UUID. Rate limits may temporarily delay an otherwise safe retry.
+
+Structured errors include `mcp_scope_forbidden`, `mcp_workspace_forbidden`,
+`forbidden`, `not_found`, `kpi_goal_invalid_input`, `kpi_goal_revision_conflict`,
+`kpi_goal_idempotency_conflict` and `kpi_goal_retry`. A revision conflict requires
+reviewing the new state before a confirmed new attempt. Review cursors are bound
+to goal revisions; restart without a cursor after a conflict. Read/history pages
+can be reduced with `limit` if the MCP response-size limit is reached. No new
+migration, configuration setting, provider or external client is introduced.

@@ -60,6 +60,9 @@ model User {
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  businessKpisOwned KpiGoal[] @relation("KpiGoalOwner")
+  businessKpisCreated KpiGoal[] @relation("KpiGoalCreator")
+  businessKpiEntries KpiGoalEntry[]
   ownedTeams        Team[]                   @relation("TeamOwner")
   memberships       TeamMember[]
   invitationsSent   TeamInvitation[]         @relation("Inviter")
@@ -155,6 +158,7 @@ model Team {
   taskEvents     TaskEvent[]
   projects       Project[]
   kpis           Kpi[]
+  kpiGoals KpiGoal[]
   workspaceFolders WorkspaceFolder[]
   workspaceFiles WorkspaceFile[]
   attachments    Attachment[]
@@ -172,6 +176,8 @@ model TeamMember {
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id])
+
+  kpiContributions KpiGoalContributor[]
 
   @@id([teamId, userId])
   @@index([userId])
@@ -873,4 +879,82 @@ model AgentSyncRequest {
 
   @@id([actorKey, requestId])
   @@map("agent_sync_requests")
+}
+
+model KpiGoal {
+  id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId         String               @map("team_id") @db.Uuid
+  creatorId      String?              @map("creator_id") @db.Uuid
+  ownerId        String?              @map("owner_id") @db.Uuid
+  ownerName      String               @map("owner_name")
+  name           String
+  scope          String               @default("personal")
+  measurement    String
+  unit           String?
+  baseline       Decimal              @db.Decimal(20, 4)
+  target         Decimal              @db.Decimal(20, 4)
+  currentValue   Decimal?             @map("current_value") @db.Decimal(20, 4)
+  startDate      DateTime             @map("start_date") @db.Date
+  endDate        DateTime             @map("end_date") @db.Date
+  lastObservedOn DateTime?            @map("last_observed_on") @db.Date
+  lastCheckInAt  DateTime?            @map("last_check_in_at") @db.Timestamptz(3)
+  archived       Boolean              @default(false)
+  revision       Int                  @default(1)
+  requestId      String               @unique @map("request_id") @db.Uuid
+  requestHash    String               @map("request_hash")
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  team           Team                 @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  creator        User?                @relation("KpiGoalCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  owner          User?                @relation("KpiGoalOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  contributors   KpiGoalContributor[]
+  entries        KpiGoalEntry[]
+  previousGoalId String?              @map("previous_goal_id") @db.Uuid
+  previousPeriod KpiGoal? @relation("KpiPeriods", fields: [previousGoalId, teamId], references: [id, teamId], onDelete: NoAction, onUpdate: NoAction)
+  nextPeriod     KpiGoal?             @relation("KpiPeriods")
+
+  @@unique([previousGoalId, teamId])
+
+  @@unique([id, teamId])
+
+  @@index([teamId, createdAt, id])
+
+  @@map("kpi_goals")
+}
+
+model KpiGoalContributor {
+  goalId String     @map("goal_id") @db.Uuid
+  teamId String     @map("team_id") @db.Uuid
+  userId String     @map("user_id") @db.Uuid
+  goal   KpiGoal    @relation(fields: [goalId, teamId], references: [id, teamId], onDelete: Cascade)
+  member TeamMember @relation(fields: [teamId, userId], references: [teamId, userId], onDelete: Cascade)
+
+  @@id([goalId, userId])
+
+  @@map("kpi_goal_contributors")
+}
+
+model KpiGoalEntry {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sequence    BigInt    @unique @default(autoincrement())
+  goalId      String    @map("goal_id") @db.Uuid
+  authorId    String?   @map("author_id") @db.Uuid
+  authorName  String    @map("author_name")
+  kind        String
+  value       Decimal?  @db.Decimal(20, 4)
+  observedOn  DateTime? @map("observed_on") @db.Date
+  note        String
+  revision    Int
+  snapshot    Json
+  requestId   String    @map("request_id") @db.Uuid
+  requestHash String    @map("request_hash")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  goal        KpiGoal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  author      User?     @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@unique([goalId, requestId])
+
+  @@index([goalId, sequence])
+
+  @@map("kpi_goal_entries")
 }

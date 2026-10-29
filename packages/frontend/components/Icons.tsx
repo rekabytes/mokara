@@ -4,6 +4,21 @@
 // Scope: an icon lives HERE only once a second file needs the byte-identical
 // shape. Route-private icons stay in a route-local `icons.tsx` beside the page
 // that draws them, so this module never becomes a grab-bag.
+export function ChevronDownIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      aria-hidden="true"
+    >
+      <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 export function StarIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">

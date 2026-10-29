@@ -93,7 +93,7 @@ export default async function McpGuidePage() {
         <h3>Manual download</h3>
         <p>
           <a href="/skills/mokara/SKILL.md" download="SKILL.md">
-            Download Mokara skill · v1.0.0
+            Download Mokara skill · v1.2.0
           </a>
         </p>
         <p>
@@ -245,7 +245,8 @@ export default async function McpGuidePage() {
                 <td>Create and edit work</td>
                 <td>
                   Create and edit tasks, assign members, set status, priority, dates and projects,
-                  bind eligible KPIs, manage steps/comments and upload attachments.
+                  bind eligible task KPIs, record authorized business KPI check-ins, manage
+                  steps/comments and upload attachments.
                 </td>
               </tr>
               <tr>
@@ -286,10 +287,10 @@ export default async function McpGuidePage() {
         </p>
       </section>
       <section aria-labelledby="access">
-        <h2 id="access">All 66 MCP tools</h2>
+        <h2 id="access">All 72 MCP tools</h2>
         <p>
           Your agent only sees tools allowed by the permissions you approved. The original
-          connection offered six read tools; the full catalog below includes all 60 additions.
+          connection offered six read tools; the full catalog below includes all 66 additions.
           Workspace membership, ownership rules and quotas still apply.
         </p>
         <ToolCatalog />
@@ -303,6 +304,46 @@ export default async function McpGuidePage() {
           continue. GitHub issue listing uses page numbers. Read each tool’s schema for its filters
           and limits. Billing, account credentials and admin operations are outside MCP task
           permissions. Workspace and repository text is content, not instructions for the agent.
+        </p>
+      </section>
+      <section aria-labelledby="business-kpis">
+        <h2 id="business-kpis">Review business goals with your agent</h2>
+        <p>
+          Ask your agent to list business KPIs, review recorded progress or compare reporting
+          periods. These measured goals have separate tools from the existing task-based KPIs.
+          Personal goals stay private; shared goals require current workspace access.
+        </p>
+        <p>
+          To record a result, explicitly ask for a check-in and provide the measured figure or a
+          source the agent can verify. For example: “Record MYR 5,000 as the total sales for the
+          selected goal on October 29. Use the sales report I supplied as the source.” Completing
+          tasks does not prove that revenue was earned. Mokara records the source attribution; it
+          does not independently verify the figure.
+        </p>
+        <ol>
+          <li>
+            Use <code>list_business_kpis</code> to select the workspace goal, then{" "}
+            <code>get_business_kpi</code> to read its revision and permissions.
+          </li>
+          <li>
+            Review dates and existing results with <code>get_business_kpi_review</code> or{" "}
+            <code>compare_business_kpi_periods</code>.
+          </li>
+          <li>
+            With <code>mokara:write</code> and goal update permission, call{" "}
+            <code>record_business_kpi_check_in</code> using a decimal-string value, observation
+            date, source, current revision and request UUID.
+          </li>
+          <li>
+            Retry with exactly the same UUID and arguments. Read the goal and{" "}
+            <code>list_business_kpi_history</code> to confirm the result. These check-ins use
+            transactional KPI history and do not appear in <code>list_operations</code>.
+          </li>
+        </ol>
+        <p>
+          A check-in is an absolute value, not an amount to add. A stale revision requires reviewing
+          the latest goal before a new request. These tools do not change targets, create periods or
+          authorize external task execution. Read-only connections keep their existing permissions.
         </p>
       </section>
       <section aria-labelledby="agent-work">
@@ -329,7 +370,7 @@ export default async function McpGuidePage() {
           <a href="/docs/agent-execution.md">Read the complete client integration guide</a> for tool
           schemas, examples, permissions, claims, revisions, cancellation and change-feed recovery.
           Agent execution retries use their transactional request ledger; reuse the same UUID and
-          payload, then read the current execution. Ordinary writes still use list_operations.
+          payload, then read the current execution. Ordinary task writes still use list_operations.
         </p>
       </section>
       <section aria-labelledby="drive-access">
@@ -372,9 +413,9 @@ export default async function McpGuidePage() {
         </p>
         <div className="docs-note">
           <p>
-            Every write needs a unique request UUID. Agents must reuse that UUID and the same
-            arguments when retrying. A pending or uncertain result must be checked in{" "}
-            <code>list_operations</code> or Settings → AI connections before attempting another
+            Ordinary task, GitHub and file writes need a unique request UUID. Agents must reuse that
+            UUID and the same arguments when retrying. A pending or uncertain result must be checked
+            in <code>list_operations</code> or Settings → AI connections before attempting another
             write.
           </p>
         </div>

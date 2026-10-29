@@ -46,6 +46,38 @@ export type ErrorRule = {
 
 /** Every code the backend can emit, plus the client-only ones. */
 export const ERROR_RULES: Record<string, ErrorRule> = {
+  kpi_goal_period_exists: {
+    kind: "conflict",
+    action: "inline",
+    message: "The next reporting period already exists. Refresh to open it.",
+    serverSays: true,
+  },
+  kpi_goal_invalid_input: {
+    kind: "input",
+    action: "inline",
+    message: "Check the KPI values and dates.",
+    serverSays: true,
+  },
+  kpi_goal_revision_conflict: {
+    kind: "conflict",
+    action: "inline",
+    message: "This KPI changed. Refresh it before submitting.",
+    serverSays: true,
+  },
+  kpi_goal_idempotency_conflict: {
+    kind: "conflict",
+    action: "inline",
+    message:
+      "This request was already used. Refresh and check the KPI before starting another update.",
+    serverSays: true,
+  },
+  kpi_goal_retry: {
+    kind: "conflict",
+    action: "retry",
+    message: "Retry the same KPI update.",
+    serverSays: true,
+  },
+
   agent_transaction_retry: {
     kind: "server",
     action: "retry",

@@ -96,6 +96,11 @@ jobs:
           AGENT_SYNC_TEST_DATABASE_URL: postgresql://mokara:mokara@localhost:5432/mokara_agent_qa
         run: pnpm --filter @mokara/backend test:agent-sync
 
+      - name: Business KPI PostgreSQL integration
+        env:
+          KPI_GOALS_TEST_DATABASE_URL: postgresql://mokara:mokara@localhost:5432/mokara_agent_qa
+        run: pnpm --filter @mokara/backend test:kpi-goals
+
   dev-images:
     name: Publish dev ${{ matrix.service }}
     needs: checks

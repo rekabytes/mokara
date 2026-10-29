@@ -526,3 +526,53 @@ export const supportMessageSchema = z
   })
   .strict();
 export const supportPublicMessageSchema = supportMessageSchema.omit({ internal: true });
+
+const goalDecimal = z
+  .string()
+  .regex(
+    /^-?(?:0|[1-9]\d{0,11})(?:\.\d{1,4})?$/,
+    "Use a number with up to 12 digits and four decimal places"
+  );
+const goalContributors = z
+  .array(z.uuid())
+  .max(100)
+  .refine((ids) => new Set(ids).size === ids.length, "Choose each contributor once");
+export const createKpiGoalSchema = z
+  .object({
+    request_id: z.uuid(),
+    name: z.string().trim().min(1).max(100),
+    scope: z.enum(["personal", "team"]),
+    measurement: z.enum(["number", "percentage", "money"]),
+    unit: z.string().trim().min(1).max(30).nullable(),
+    baseline: goalDecimal,
+    target: goalDecimal,
+    start_date: z.iso.date(),
+    end_date: z.iso.date(),
+    owner_id: z.uuid(),
+    contributor_ids: goalContributors,
+  })
+  .strict();
+export const checkInKpiGoalSchema = z
+  .object({
+    request_id: z.uuid(),
+    expected_revision: z.number().int().min(1),
+    value: goalDecimal,
+    observed_on: z.iso.date(),
+    note: z.string().trim().max(2000),
+  })
+  .strict();
+export const createKpiPeriodSchema = createKpiGoalSchema
+  .extend({
+    expected_revision: z.number().int().positive(),
+  })
+  .strict();
+export const updateKpiGoalSchema = z
+  .object({
+    request_id: z.uuid(),
+    expected_revision: z.number().int().min(1),
+    name: z.string().trim().min(1).max(100),
+    owner_id: z.uuid(),
+    contributor_ids: goalContributors,
+    archived: z.boolean(),
+  })
+  .strict();

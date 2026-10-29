@@ -106,7 +106,7 @@ ${HEAD}
 <a class="skip-link" href="#app">Skip to content</a>
 <header class="console-header"><div class="console-header-inner">
 <a class="brand" href="/overview">${BRAND_SYMBOL}<span>Mokara</span></a><span class="masthead-label">Administration</span>
-<div class="console-account"><span class="operator-label">Operator console</span><form method="post" action="/logout"><button type="submit" class="signout">Sign out <span aria-hidden="true">↗</span></button></form></div>
+<div class="console-account"><button type="button" id="release-open" class="btn btn-secondary" aria-controls="release-panel">What's new</button><span class="operator-label">Operator console</span><form method="post" action="/logout"><button type="submit" class="signout">Sign out <span aria-hidden="true">↗</span></button></form></div>
 </div></header>
 <div class="console-layout">
 <aside class="console-index"><p class="index-label">Console index</p><nav class="console-nav" aria-label="Administration">
@@ -122,6 +122,8 @@ ${navLink("audit", "Audit trail")}</div>
 </nav><div class="index-footer"><span class="index-line" aria-hidden="true"></span><span>Mokara<br>Administration</span></div></aside>
 <main id="app" tabindex="-1" aria-labelledby="page-title" data-view="${esc(opts.view)}"${userIdAttr}${opts.dataWorkspaceId === undefined ? "" : ` data-workspace-id="${esc(opts.dataWorkspaceId)}"`}>
 <header class="page-header"><div><p class="page-eyebrow"><span aria-hidden="true">${sectionNumbers[section]}</span> / ${section === "audit" ? "Governance" : ["overview", "attention"].includes(section) ? "Operations" : "Accounts &amp; support"}</p><h1 id="page-title">${esc(heading)}</h1></div><span class="page-register" aria-hidden="true">M / ${sectionNumbers[section]}</span></header>
+<section id="release-panel" class="release-panel" aria-label="What's new in Mokara" hidden></section>
+<dialog id="release-dialog" class="release-modal" aria-labelledby="release-dialog-title"></dialog>
 <p id="notice" class="notice" role="status"></p>
 <section id="content"><div class="load-state"><span class="loading-indicator" aria-hidden="true"></span><span>Loading…</span></div></section>
 </main>

@@ -16,6 +16,11 @@ export const supportSiteSchema = z.object({
     .min(1)
     .max(10),
   accent: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  button_text_color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable()
+    .optional(),
   greeting: z.string(),
   enabled: z.boolean(),
   form_url: z.string(),
@@ -101,7 +106,7 @@ export type SupportConfig = z.infer<typeof supportConfigSchema>;
 export type SupportDetail = z.infer<typeof supportDetailSchema>;
 export type SupportSiteDraft = Pick<
   SupportSite,
-  "name" | "origins" | "accent" | "greeting" | "enabled"
+  "name" | "origins" | "accent" | "button_text_color" | "greeting" | "enabled"
 >;
 export type SupportSubmission = {
   request_id: string;

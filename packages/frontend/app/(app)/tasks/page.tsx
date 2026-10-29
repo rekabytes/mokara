@@ -292,6 +292,20 @@ export default function TasksPage() {
                 currentUser={session.status === "authed" ? session.user : null}
                 projects={projects}
                 kpis={containerKpis}
+                onAgentChange={(detail) =>
+                  setTasks((rows) =>
+                    rows.map((row) =>
+                      row.id === selectedTask.id
+                        ? {
+                            ...row,
+                            agent_ready: detail.ready,
+                            agent_sync_paused: detail.paused,
+                            revision: detail.revision,
+                          }
+                        : row
+                    )
+                  )
+                }
                 onClose={closeDrawer}
                 onUpdate={(patch) => updateTaskField(selectedTask.id, patch)}
                 onSetKpis={(bindings) => setTaskKpis(selectedTask.id, bindings)}

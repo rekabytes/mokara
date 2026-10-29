@@ -198,20 +198,27 @@ test("stateless transport lists read tools but hides all writes from legacy conn
   assert.equal(init.headers.get("cache-control"), "no-store");
   const tools = (await (await rpc("tools/list")).json()).result.tools;
   assert.deepEqual(tools.map((tool) => tool.name).sort(), [
+    "get_agent_execution_capabilities",
+    "get_agent_task",
     "get_analytics",
     "get_kpi_progress",
     "get_project",
     "get_task",
     "get_task_details",
     "get_workspace_progress",
+    "list_agent_execution_history",
+    "list_agent_task_changes",
     "list_attachments",
     "list_comments",
     "list_kpis",
     "list_members",
     "list_operations",
     "list_projects",
+    "list_ready_agent_tasks",
     "list_tasks",
     "list_workspaces",
+    "read_agent_execution_snapshot",
+    "read_agent_task_snapshot",
     "read_attachment",
   ]);
   assert.ok(

@@ -172,6 +172,26 @@ const supportTicket = {
 };
 const cases = [
   [
+    "agentTask",
+    ["w", "t"],
+    {
+      task: {},
+      ready: false,
+      paused: false,
+      revision: "1",
+      execution: null,
+      new_information: false,
+      history: [],
+      next_history_cursor: null,
+    },
+  ],
+  [
+    "agentCommand",
+    [{ workspace_id: "w", task_id: "t", request_id: "r", action: "cancel" }],
+    { task_id: "t", revision: "2", ready: false, paused: false },
+  ],
+  ["agentHistory", ["w", "t"], { items: [], next_cursor: null }],
+  [
     "supportSites",
     ["w"],
     {

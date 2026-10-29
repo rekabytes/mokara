@@ -489,6 +489,11 @@ export const supportSiteSchema = z
       .string()
       .regex(/^#[0-9a-fA-F]{6}$/)
       .default("#6366f1"),
+    button_text_color: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/)
+      .nullable()
+      .optional(),
     greeting: z.string().trim().min(1).max(200).default("Report an issue or send a request."),
     enabled: z.boolean().default(true),
   })

@@ -74,6 +74,7 @@ export function supportSiteDto(site: SupportSite) {
     name: site.name,
     origins: site.origins,
     accent: site.accent,
+    button_text_color: site.buttonTextColor ?? null,
     greeting: site.greeting,
     enabled: site.enabled,
     form_url: formUrl,

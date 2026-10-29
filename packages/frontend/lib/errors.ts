@@ -46,6 +46,84 @@ export type ErrorRule = {
 
 /** Every code the backend can emit, plus the client-only ones. */
 export const ERROR_RULES: Record<string, ErrorRule> = {
+  agent_transaction_retry: {
+    kind: "server",
+    action: "retry",
+    message: "The transaction was rolled back. Retry the same request.",
+    serverSays: true,
+  },
+  agent_permission_denied: {
+    kind: "permission",
+    action: "inline",
+    message: "You need permission for this agent operation.",
+    serverSays: true,
+  },
+  agent_task_not_ready: {
+    kind: "conflict",
+    action: "inline",
+    message: "Mark this task ready before an agent can claim it.",
+    serverSays: true,
+  },
+  agent_revision_conflict: {
+    kind: "conflict",
+    action: "inline",
+    message: "The task changed. Refresh its details before trying again.",
+    serverSays: true,
+  },
+  agent_already_claimed: {
+    kind: "conflict",
+    action: "inline",
+    message: "This task already has an execution. Review it before requeueing.",
+    serverSays: true,
+  },
+  agent_lease_invalid: {
+    kind: "missing",
+    action: "inline",
+    message: "Execution not found.",
+    serverSays: true,
+  },
+  agent_lease_expired: {
+    kind: "conflict",
+    action: "inline",
+    message: "The lease expired. Stop work and recover the task.",
+    serverSays: true,
+  },
+  agent_claim_lost: {
+    kind: "permission",
+    action: "inline",
+    message: "This connection no longer owns the execution.",
+    serverSays: true,
+  },
+  agent_invalid_transition: {
+    kind: "conflict",
+    action: "inline",
+    message: "This action is not available for the current execution state.",
+    serverSays: true,
+  },
+  agent_idempotency_conflict: {
+    kind: "conflict",
+    action: "inline",
+    message: "This request ID was already used with different input.",
+    serverSays: true,
+  },
+  agent_cursor_invalid: {
+    kind: "input",
+    action: "inline",
+    message: "Refresh the execution history.",
+    serverSays: true,
+  },
+  agent_cursor_expired: {
+    kind: "conflict",
+    action: "inline",
+    message: "The saved cursor expired. Start synchronization again.",
+    serverSays: true,
+  },
+  agent_sync_unavailable: {
+    kind: "server",
+    action: "inline",
+    message: "Agent sync is temporarily unavailable.",
+    serverSays: true,
+  },
   support_unavailable: {
     kind: "server",
     action: "retry",

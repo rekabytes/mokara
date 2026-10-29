@@ -49,6 +49,12 @@ const db = {
       assert.equal(where.team.ownerId, OWNER);
       return s.siteCount ?? s.sites.length;
     },
+    updateMany: async ({ where, data }) => {
+      const row = s.sites.find((site) => site.id === where.id && site.teamId === where.teamId);
+      if (!row) return { count: 0 };
+      for (const [key, value] of Object.entries(data)) if (value !== undefined) row[key] = value;
+      return { count: 1 };
+    },
     create: async ({ data }) => {
       const r = { id: id(), createdAt: date(), ...data };
       s.sites.push(r);
@@ -604,4 +610,42 @@ test("queued updates reuse a renewed link even when a caller held an expired sna
   await queueSupportEmail(db, stale, "Second update");
   assert.equal(decryptSupport(ticket.accessEncrypted), latest);
   assert.ok(s.emails.every((email) => decryptSupport(email.textEncrypted).includes(`#${latest}`)));
+});
+
+test("website button text colors round-trip through creation, editing and public configuration", async () => {
+  s.sites = [];
+  const fields = {
+    name: "Branded site",
+    origins: ["https://shop.example.test"],
+    accent: "#15803d",
+    button_text_color: "#ffffff",
+    greeting: "Tell us what happened.",
+    enabled: true,
+  };
+  const created = await post(team, base + "/sites", fields);
+  assert.equal(created.status, 201);
+  const body = await created.json();
+  assert.equal(body.site.button_text_color, "#ffffff");
+  const row = s.sites.find((site) => site.id === body.site.id);
+  assert.equal(row.buttonTextColor, "#ffffff");
+  const config = await pub.request(`/sites/${row.id}`);
+  assert.equal(config.status, 200);
+  assert.equal((await config.json()).site.button_text_color, "#ffffff");
+  const update = async (data) =>
+    team.request(`${base}/sites/${row.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+  assert.equal((await update({ ...fields, button_text_color: "#0f172a" })).status, 200);
+  assert.equal(row.buttonTextColor, "#0f172a");
+  const { button_text_color: _text, ...legacy } = fields;
+  assert.equal((await update(legacy)).status, 200);
+  assert.equal(row.buttonTextColor, "#0f172a");
+  assert.equal((await update({ ...fields, button_text_color: null })).status, 200);
+  assert.equal(row.buttonTextColor, null);
+  assert.equal((await update({ ...fields, button_text_color: "red;display:none" })).status, 400);
+  assert.equal(row.buttonTextColor, null);
+  s.role = "member";
+  assert.equal((await update(fields)).status, 403);
 });

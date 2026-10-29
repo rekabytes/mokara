@@ -5,9 +5,23 @@ export const MCP_SCOPES = [
   "mokara:github",
   "mokara:drive:read",
   "mokara:drive:upload",
+  "mokara:agent:manage",
+  "mokara:agent:execute",
 ] as const;
 export type McpScope = (typeof MCP_SCOPES)[number];
 export const MCP_PERMISSIONS = [
+  {
+    scope: "mokara:agent:manage",
+    title: "Authorize agent work",
+    description:
+      "Mark tasks Ready for agent, withdraw readiness, request cancellation and requeue work. Editing or reading a task alone does not authorize execution.",
+  },
+  {
+    scope: "mokara:agent:execute",
+    title: "Execute ready tasks",
+    description:
+      "Claim tasks a user marked ready. Start work, renew claims and report progress or results for this installation. This permission does not mark tasks ready.",
+  },
   {
     scope: "mokara:drive:read",
     title: "Read mDrive files",

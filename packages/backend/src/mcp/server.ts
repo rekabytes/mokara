@@ -1,3 +1,4 @@
+import { registerAgentTools } from "./agent-tools.ts";
 import { MCP_WORKFLOW_INSTRUCTIONS, registerWorkflowPrompts } from "./workflows.ts";
 import { McpFailure } from "./errors.ts";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -117,7 +118,7 @@ export function createMcpServer(principal: McpPrincipal) {
         try {
           requireScope(principal, scope);
           const response = result(await read(inputSchema.parse(input)), options.image);
-          log.info(`mcp ${principal.connectionId} ${name} ${response.isError ? "limited" : "ok"}`);
+          log.info(`mcp ${name} ${response.isError ? "limited" : "ok"}`);
           return response;
         } catch (error) {
           const failure =
@@ -125,14 +126,15 @@ export function createMcpServer(principal: McpPrincipal) {
               ? {
                   error: error.code,
                   message: error.message,
+                  ...(error.details ? { details: error.details } : {}),
                   ...(error.retryAfter ? { retry_after_seconds: error.retryAfter } : {}),
                 }
               : {
                   error: "internal_error",
                   message:
-                    "Could not complete the operation. For uncertain writes, inspect connection activity before retrying.",
+                    "Could not complete the operation. Keep the same request_id and arguments. Inspect current execution state for agent work, or list_operations for ordinary writes.",
                 };
-          log.warn(`mcp ${principal.connectionId} ${name} ${failure.error}`);
+          log.warn(`mcp ${name} ${failure.error}`);
           return { isError: true, content: [{ type: "text", text: JSON.stringify(failure) }] };
         }
       }
@@ -307,6 +309,7 @@ export function createMcpServer(principal: McpPrincipal) {
   registerWorkspaceTools(register, principal);
   registerGitHubTools(register, principal);
   registerDriveTools(register, principal);
+  registerAgentTools(register, principal);
   return server;
 }
 

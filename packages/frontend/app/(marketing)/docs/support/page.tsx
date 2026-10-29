@@ -29,8 +29,9 @@ export default function SupportIntegrationGuide() {
             localhost origins are supported for local development.
           </li>
           <li>
-            Choose an accent color and introduction, leave <strong>Accept new tickets</strong>{" "}
-            enabled, then save.
+            Choose an accent using the color swatch, a preset or a six-digit hex value. The live
+            preview updates your business name, introduction and submit-button color without sending
+            a ticket. Leave <strong>Accept new tickets</strong> enabled, then save.
           </li>
           <li>
             Expand the saved website and select <strong>Copy embed</strong>.
@@ -39,6 +40,19 @@ export default function SupportIntegrationGuide() {
         <p>
           If your site uses both a bare domain and a www subdomain, add each origin separately. A
           saved website can allow up to ten origins.
+        </p>
+        <h3>Example setup</h3>
+        <p>
+          Use your business name, choose <code>#6366F1</code> for Mokara indigo or your own brand
+          color, and introduce the form with “Tell us what happened. Our team will get back to you.”
+          Paste the exact origin of your customer-facing website. The origin hint extracts it from
+          your entry for reference; it does not change your input or approve extra websites.
+        </p>
+        <p>
+          After saving, Mokara opens the saved website’s embed instructions. Copy its generated
+          snippet, add it to your Help page and send a test ticket. Copying the snippet alone does
+          not install the form. Turn off <strong>Accept new tickets</strong> to pause new
+          submissions.
         </p>
         <div className="docs-note">
           <p>

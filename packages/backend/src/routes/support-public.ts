@@ -81,6 +81,7 @@ supportPublicRoutes.get("/sites/:id", validate("param", siteParam), async (c) =>
       name: site.name,
       greeting: site.greeting,
       accent: site.accent,
+      button_text_color: site.buttonTextColor ?? null,
       origins: site.origins,
     },
     protection: {

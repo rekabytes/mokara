@@ -117,6 +117,11 @@ export function TaskRow({
         </button>
       </div>
 
+      {task.agent_ready && (
+        <span className="shrink-0 rounded-full bg-[var(--color-accent-soft)] px-2 py-1 text-[0.68rem] text-[var(--color-accent)]">
+          {task.agent_sync_paused ? "Agent paused" : "Ready for agent"}
+        </span>
+      )}
       {(task.project_id || task.kpis.length > 0) && (
         <span className="flex shrink-0 max-w-[320px] items-center gap-2 text-[0.72rem] text-[var(--color-ink-faint)] max-[900px]:hidden">
           {project && (

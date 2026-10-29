@@ -27,11 +27,11 @@ jobs:
         env:
           POSTGRES_USER: mokara
           POSTGRES_PASSWORD: mokara
-          POSTGRES_DB: mokara
+          POSTGRES_DB: mokara_agent_qa
         ports:
           - "5432:5432"
         options: >-
-          --health-cmd "pg_isready -U mokara -d mokara"
+          --health-cmd "pg_isready -U mokara -d mokara_agent_qa"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -87,8 +87,13 @@ jobs:
       # disposable database before publishing images for the staging deployment.
       - name: Migrations apply from empty
         env:
-          DATABASE_URL: postgresql://mokara:mokara@localhost:5432/mokara
+          DATABASE_URL: postgresql://mokara:mokara@localhost:5432/mokara_agent_qa
         run: pnpm db:migrate:deploy
+
+      - name: Agent execution PostgreSQL integration
+        env:
+          AGENT_SYNC_TEST_DATABASE_URL: postgresql://mokara:mokara@localhost:5432/mokara_agent_qa
+        run: pnpm --filter @mokara/backend test:agent-sync
 
   dev-images:
     name: Publish dev ${{ matrix.service }}

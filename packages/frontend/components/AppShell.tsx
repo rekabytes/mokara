@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { ReleaseNotice, ReleaseNotesButton } from "./changelog/ReleaseNotice";
+import "./changelog/changelog.css";
 import { redirect, usePathname } from "next/navigation";
 import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -172,6 +174,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
         </nav>
 
+        <ReleaseNotesButton onOpen={() => setNavOpenAt(null)} />
         <div className="flex flex-col gap-[0.6rem] border-t border-[var(--color-border-soft)] pt-[0.85rem]">
           <Link
             href="/settings"
@@ -231,6 +234,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </AnimatePresence>
 
       <main className="app-main w-full min-w-0 px-[clamp(1.5rem,4vw,3rem)] pt-4 pb-16 max-[800px]:pt-[4rem]">
+        <ReleaseNotice userId={user.id} />
         {children}
       </main>
 

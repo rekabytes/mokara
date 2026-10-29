@@ -1,3 +1,4 @@
+import { releases } from "../../backend/src/routes/changelog.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { api } from "../lib/api.ts";
@@ -171,6 +172,7 @@ const supportTicket = {
   updated_at: "2026-10-17",
 };
 const cases = [
+  ["changelog", [], { releases }],
   [
     "agentTask",
     ["w", "t"],

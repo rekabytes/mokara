@@ -135,6 +135,10 @@ function mirror(c: Context, answer: { status: number; json: unknown }): Response
   });
 }
 
+app.get("/api/changelog", sessionRequired, async (c) =>
+  mirror(c, await backend("GET", "/api/changelog"))
+);
+
 app.get("/api/overview", sessionRequired, async (c) =>
   mirror(c, await backend("GET", "/api/admin/overview", { token: sessionToken(c) }))
 );

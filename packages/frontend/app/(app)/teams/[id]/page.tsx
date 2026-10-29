@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { snap, DUR } from "@/lib/motion";
 import { cn } from "@/lib/cn";
 
+import { KpiGoalsPanel } from "@/components/kpis/KpiGoalsPanel";
 import { LayersPanel } from "./LayersPanel";
 import { LogoCard } from "./LogoCard";
 import { RocketIcon } from "./team-icons";
@@ -372,6 +373,7 @@ export default function TeamDetailPage() {
           )}
         </aside>
       </div>
+      <KpiGoalsPanel key={teamId} teamId={teamId} />
     </div>
   );
 }

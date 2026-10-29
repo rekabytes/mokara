@@ -46,8 +46,16 @@ export function registerWorkspaceTools(register: ToolRegistrar, principal: McpPr
     }
   );
   for (const [name, suffix, description] of [
-    ["list_kpis", "kpis", "Read workspace KPIs and ownership so you can select eligible bindings."],
-    ["get_kpi_progress", "kpis/progress", "Read weighted KPI progress."],
+    [
+      "list_kpis",
+      "kpis",
+      "Read task-based KPIs and ownership for eligible task bindings. For measured business goals use list_business_kpis.",
+    ],
+    [
+      "get_kpi_progress",
+      "kpis/progress",
+      "Read weighted task KPI progress. For measured business results use get_business_kpi.",
+    ],
     ["get_workspace_progress", "progress", "Read task progress for a workspace."],
   ] as const) {
     register(name, description, z.object(workspace).strict(), async (input) => {
@@ -255,7 +263,9 @@ export function registerWorkspaceTools(register: ToolRegistrar, principal: McpPr
   ) {
     register(
       name,
-      `Modify a ${kind} using Mokara's normal ownership rules. item_id is its ID.`,
+      kind === "kpi"
+        ? "Modify a task-based KPI using normal ownership rules. item_id is its legacy KPI ID, not a business goal ID."
+        : `Modify a ${kind} using Mokara's normal ownership rules. item_id is its ID.`,
       z.object({ ...write, item_id: uuid, data: schema }).strict(),
       (input) =>
         mutation(principal, name, "mokara:write", input, async () => {
@@ -285,7 +295,9 @@ export function registerWorkspaceTools(register: ToolRegistrar, principal: McpPr
   ) {
     register(
       name,
-      `Create a ${suffix} in an approved workspace using normal Mokara permissions.`,
+      suffix === "kpis"
+        ? "Create a task-based KPI for weighted task completion. This does not create a measured business goal; business goal creation uses the web app."
+        : `Create a ${suffix} in an approved workspace using normal Mokara permissions.`,
       z.object({ ...write, task_id: onTask ? uuid : uuid.optional(), data: schema }).strict(),
       (input) =>
         mutation(principal, name, "mokara:write", input, async () => {

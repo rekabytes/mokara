@@ -4,7 +4,7 @@ This feature is local on `agent-task-sync`. No commit, push, merge, release or
 publication is part of this implementation request.
 
 The [public integration guide](../../packages/frontend/public/docs/agent-execution.md)
-is the vendor-neutral client contract. `/docs/mcp` links it and lists all 66 tools,
+is the vendor-neutral client contract. `/docs/mcp` links it and lists all 72 tools,
 including 19 new agent-execution tools. The downloadable Mokara skill also explains
 explicit execution authorization.
 

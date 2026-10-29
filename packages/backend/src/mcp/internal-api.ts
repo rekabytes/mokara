@@ -36,7 +36,10 @@ export async function domainResponse(
     c.set("jti", principal.connectionId);
     await next();
   });
-  if (/^\/teams\/[^/]+\/(?:files|folders)(?:[/?]|$)/.test(path)) {
+  if (/^\/teams\/[^/]+\/kpi-goals(?:[/?]|$)/.test(path)) {
+    const { kpiGoalRoutes } = await import("../routes/kpi-goals.ts");
+    app.route("/", kpiGoalRoutes);
+  } else if (/^\/teams\/[^/]+\/(?:files|folders)(?:[/?]|$)/.test(path)) {
     const { fileRoutes } = await import("../routes/files.ts");
     app.route("/", fileRoutes);
   } else {

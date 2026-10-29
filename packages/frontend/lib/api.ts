@@ -1,3 +1,14 @@
+import {
+  kpiGoalListSchema,
+  kpiGoalResultSchema,
+  kpiGoalHistorySchema,
+  kpiGoalReviewSchema,
+  kpiGoalPeriodsSchema,
+  type CreateKpiPeriodInput,
+  type CreateKpiGoalInput,
+  type UpdateKpiGoalInput,
+  type KpiGoalCheckInInput,
+} from "./kpi-goals";
 import { changelogSchema } from "./changelog";
 import {
   agentDetailSchema,
@@ -345,6 +356,48 @@ function uploadViaXhr<T>(
 }
 
 export const api = {
+  kpiGoalPeriods: (teamId: string, goalId: string) =>
+    req(kpiGoalPeriodsSchema, `/teams/${teamId}/kpi-goals/${goalId}/periods`, {
+      cache: "no-store",
+    }),
+  createKpiPeriod: (teamId: string, goalId: string, data: CreateKpiPeriodInput) =>
+    req(kpiGoalResultSchema, `/teams/${teamId}/kpi-goals/${goalId}/periods`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  kpiGoalReview: (teamId: string, goalId: string, cursor?: string) =>
+    req(
+      kpiGoalReviewSchema,
+      `/teams/${teamId}/kpi-goals/${goalId}/review${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+      { cache: "no-store" }
+    ),
+  listKpiGoals: (teamId: string, cursor?: string, signal?: AbortSignal) =>
+    req(
+      kpiGoalListSchema,
+      `/teams/${teamId}/kpi-goals${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+      { signal, cache: "no-store" }
+    ),
+  createKpiGoal: (teamId: string, data: CreateKpiGoalInput) =>
+    req(kpiGoalResultSchema, `/teams/${teamId}/kpi-goals`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateKpiGoal: (teamId: string, goalId: string, data: UpdateKpiGoalInput) =>
+    req(kpiGoalResultSchema, `/teams/${teamId}/kpi-goals/${goalId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  checkInKpiGoal: (teamId: string, goalId: string, data: KpiGoalCheckInInput) =>
+    req(kpiGoalResultSchema, `/teams/${teamId}/kpi-goals/${goalId}/check-ins`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  kpiGoalHistory: (teamId: string, goalId: string, cursor?: string) =>
+    req(
+      kpiGoalHistorySchema,
+      `/teams/${teamId}/kpi-goals/${goalId}/history${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+      { cache: "no-store" }
+    ),
   changelog: (signal?: AbortSignal) =>
     req(changelogSchema, "/changelog", { signal, cache: "no-store" }),
   agentTask: (workspace: string, task: string, signal?: AbortSignal) =>

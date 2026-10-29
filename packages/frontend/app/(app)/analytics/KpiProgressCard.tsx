@@ -1,3 +1,5 @@
+import { ChevronDownIcon } from "@/components/Icons";
+import "./kpi-progress.css";
 import { LIST_VISIBLE_ROWS } from "./analytics-model";
 import type { useAnalyticsData } from "./use-analytics-data";
 
@@ -8,24 +10,31 @@ type Props = Pick<
 
 export function KpiProgressCard({ kpiProgress, kpiLoading, kpiError, loadKpiProgress }: Props) {
   return (
-    <section className="mt-4 rounded-[var(--radius-card)] border border-[var(--color-border-soft)] bg-[var(--color-surface-solid)] p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-18px_rgba(15,23,42,0.25)]">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[0.8rem] font-semibold">
-          KPI progress{" "}
-          <span className="font-normal text-[var(--color-ink-faint)]">
-            · {kpiProgress?.length ?? 0} KPIs
-          </span>
-        </span>
-        <span className="text-[0.7rem] text-[var(--color-ink-faint)]">
-          Σ(weight × status) ÷ Σ(weight) · canceled excluded
-        </span>
+    <section className="task-kpi-panel" aria-label="Task-based KPIs">
+      <div className="task-kpi-header">
+        <div>
+          <h2>
+            Task-based KPI progress <span>{kpiProgress?.length ?? 0}</span>
+          </h2>
+          <p>Progress from the work linked to each KPI.</p>
+        </div>
+        <details className="task-kpi-help">
+          <summary>
+            How weights work <ChevronDownIcon />
+          </summary>
+          <p>
+            Completed tasks earn full credit. In-progress tasks earn half credit. To-do tasks earn
+            no credit, and canceled tasks are excluded. Each task contributes according to its
+            assigned weight. A KPI with no linked tasks shows 0%.
+          </p>
+        </details>
       </div>
       {kpiLoading && !kpiProgress ? (
-        <div className="grid h-[80px] place-items-center text-[0.8rem] text-[var(--color-ink-faint)]">
+        <div className="grid h-[80px] place-items-center text-[0.8rem] text-[var(--color-ink-muted)]">
           Loading…
         </div>
       ) : kpiError ? (
-        <div className="grid h-[80px] place-items-center text-[0.8rem] text-[var(--color-ink-faint)]">
+        <div className="grid h-[80px] place-items-center text-[0.8rem] text-[var(--color-ink-muted)]">
           {kpiError.message}
           <button
             type="button"
@@ -39,7 +48,7 @@ export function KpiProgressCard({ kpiProgress, kpiLoading, kpiError, loadKpiProg
         <div className="relative">
           {/* PRD-09: 7 KPIs visible, the rest behind the card's own
                 vertical scrollbar — same cap as the heatmap above. */}
-          <ul className="m-0 flex max-h-[252px] list-none flex-col gap-0.5 overflow-y-auto p-0">
+          <ul className="task-kpi-rows">
             {(kpiProgress ?? []).map((k) => (
               <li
                 key={k.id}
@@ -51,30 +60,37 @@ export function KpiProgressCard({ kpiProgress, kpiLoading, kpiError, loadKpiProg
                 <span className="pill row-start-2 max-w-[140px] truncate justify-self-start shrink-0">
                   {k.owner_username}
                 </span>
-                <span className="col-span-full row-start-3 flex h-2 min-w-0 flex-1 overflow-hidden rounded-[999px] bg-[rgba(148,163,184,0.18)]">
+                <span
+                  className="col-span-full row-start-3 flex h-2 min-w-0 flex-1 overflow-hidden rounded-[999px] bg-[rgba(148,163,184,0.18)]"
+                  role="progressbar"
+                  aria-label={`${k.name} weighted task progress`}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={k.progress}
+                >
                   <span
-                    className="h-full rounded-[999px] bg-[var(--color-accent)] transition-[width] duration-300"
+                    className="h-full rounded-[999px] bg-[var(--color-accent)]"
                     style={{ width: `${k.progress}%` }}
                   />
                 </span>
                 <span className="col-start-2 row-start-1 w-[42px] shrink-0 text-right font-mono text-[0.76rem] text-[var(--color-ink)]">
                   {k.progress}%
                 </span>
-                <span className="col-start-2 row-start-2 min-[1100px]:w-[92px] shrink-0 text-right text-[0.72rem] text-[var(--color-ink-faint)]">
-                  {k.task_count} tied · Σ{k.weight_sum}
+                <span className="col-start-2 row-start-2 min-[1100px]:w-[130px] shrink-0 text-right text-[0.72rem] text-[var(--color-ink-muted)]">
+                  {k.task_count} tasks · {k.weight_sum} weight
                 </span>
               </li>
             ))}
             {(kpiProgress ?? []).length === 0 && (
-              <li className="py-2 text-[0.78rem] text-[var(--color-ink-faint)]">
-                No KPIs in this container yet — create them on the team page, then weight tasks
-                toward them from the task drawer.
+              <li className="py-2 text-[0.78rem] text-[var(--color-ink-muted)]">
+                No task-based KPIs yet. Create one on the team page, then link and weight tasks from
+                their task details.
               </li>
             )}
           </ul>
           {kpiProgress !== null && kpiProgress.length > LIST_VISIBLE_ROWS && (
             <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
-              <span className="rounded-[999px] bg-[var(--color-surface-solid)]/90 px-3 py-1 text-[0.72rem] text-[var(--color-ink-faint)] shadow-[var(--shadow-card)]">
+              <span className="rounded-[999px] bg-[var(--color-surface-solid)]/90 px-3 py-1 text-[0.72rem] text-[var(--color-ink-muted)] shadow-[var(--shadow-card)]">
                 {kpiProgress.length - LIST_VISIBLE_ROWS} more KPIs below
               </span>
             </div>

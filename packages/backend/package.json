@@ -16,6 +16,7 @@
     "test:uploads": "node --import tsx --experimental-test-module-mocks --test test/account-storage.test.mjs test/workspace-files.test.mjs test/file-types.test.mjs test/upload-body.test.mjs",
     "test:admin": "node --import tsx --experimental-test-module-mocks --test test/admin-monitoring.test.mjs test/billing-monitoring.test.mjs test/admin-login.test.mjs",
     "test:mcp": "node --import tsx --experimental-test-module-mocks --test test/mcp.test.mjs test/mcp-oauth.test.mjs test/mcp-write.test.mjs test/mcp-domain.test.mjs test/mcp-storage.test.mjs",
+    "test:kpi-goals": "node --import tsx --experimental-test-module-mocks --test test/kpi-goals.test.mjs test/kpi-goals.postgres.test.mjs test/mcp-kpi.postgres.test.mjs",
     "test:agent-sync": "node --import tsx --experimental-test-module-mocks --test test/agent-sync.postgres.test.mjs"
   },
   "dependencies": {

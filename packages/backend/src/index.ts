@@ -1,3 +1,5 @@
+import { agentSyncRoutes } from "./routes/agent-sync.ts";
+import { startAgentLeaseWorker } from "./lib/agent-sync-worker.ts";
 import { supportRoutes } from "./routes/support.ts";
 import { supportPublicRoutes } from "./routes/support-public.ts";
 import { startSupportEmailWorker } from "./lib/support-email.ts";
@@ -133,6 +135,7 @@ async function main() {
   authed.route("/teams", teamRoutes);
   authed.route("/invitations", invitationRoutes);
   authed.route("/", supportRoutes);
+  authed.route("/", agentSyncRoutes);
   authed.route("/", taskRoutes);
   authed.route("/", commentRoutes);
   authed.route("/", subtaskRoutes);
@@ -177,6 +180,7 @@ async function main() {
   const stopGitHubSync = startGitHubSyncWorker();
   const stopFileCleanup = startFileCleanupWorker();
   const stopSupportEmail = startSupportEmailWorker();
+  const stopAgentLeases = startAgentLeaseWorker();
 
   // 4) Graceful shutdown — drop idle and live connections immediately so the
   //  listening socket frees before tsx watch's next child tries to bind.
@@ -187,7 +191,7 @@ async function main() {
     // Narrowed: the Http2 variant of ServerType lacks closeAllConnections.
     if (s && "closeIdleConnections" in s) s.closeIdleConnections();
     if (s && "closeAllConnections" in s) s.closeAllConnections();
-    await Promise.all([stopGitHubSync(), stopFileCleanup(), stopSupportEmail()]);
+    await Promise.all([stopGitHubSync(), stopFileCleanup(), stopSupportEmail(), stopAgentLeases()]);
     await disconnectRedis();
     await disconnectDB();
     log.ok("Stopped");

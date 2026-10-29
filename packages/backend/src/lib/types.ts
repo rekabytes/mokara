@@ -79,6 +79,9 @@ export type GitHubIssueResponse = {
 };
 
 export type TaskResponse = {
+  agent_ready: boolean;
+  agent_sync_paused: boolean;
+  revision: string;
   id: string;
   team_id: string;
   title: string;
@@ -366,6 +369,9 @@ export function toTask(
   return {
     id: t.id,
     team_id: t.teamId,
+    agent_ready: t.agentReady ?? false,
+    agent_sync_paused: t.agentSyncPaused ?? false,
+    revision: String(t.agentRevision ?? 1),
     title: t.title,
     description: t.description ?? "",
     status: t.status,

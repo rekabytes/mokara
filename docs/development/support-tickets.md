@@ -144,3 +144,21 @@ attachment download/failure recovery; and linked task/GitHub issue creation.
 Confirm production proxy headers preserve the form-specific frame policy and
 private pages remain unframeable. Live browser/email delivery acceptance is a
 separate check from local automated tests.
+
+## Website setup and color preview
+
+The owner’s Add/Edit website form includes a three-step setup guide, brand accent
+and button text color pickers, editable hex values, presets and an inline customer
+form preview. The preview shares request/contact fields with the real form and is
+inert: it does not submit tickets, upload files or run email delivery. After saving,
+the saved website opens its generated embed instructions. Copying advances the
+instructions to testing; it does not report installation or a test ticket as complete.
+
+Apply migration `20261029093000_support_button_text_color` with the matching backend.
+The nullable `support_sites.button_text_color` column is exposed as optional nullable
+`button_text_color` in the site/config API. Omission preserves the setting on updates
+for older clients; explicit null selects automatic contrast. A custom six-digit hex
+color is used exactly as chosen. The editor shows the pair’s contrast ratio and a
+warning below 4.5:1. Automatic mode uses white text and darkens very light backgrounds
+when necessary. The real customer form and preview use the same color helper.
+No new environment variables or email provider settings are required.

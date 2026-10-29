@@ -2,10 +2,11 @@
 import { useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { api } from "@/lib/api";
 import type { SupportConfig } from "@/lib/support-types";
-import { supportAccentInk } from "@/lib/support-model";
+import { supportButtonStyle } from "@/lib/support-model";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { manualError } from "@/lib/errors";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { TicketRequestFields, TicketContactFields } from "@/components/support/ticket-fields";
 import { SupportVerification } from "@/components/support/SupportVerification";
 
 type PendingFile = { file: File; id: string; done: boolean };
@@ -156,7 +157,7 @@ export function TicketForm({ config }: { config: SupportConfig }) {
         <div className="support-actions mt-6">
           <a
             className="btn-base btn-primary"
-            style={{ color: supportAccentInk(config.site.accent) }}
+            style={supportButtonStyle(config.site.accent, config.site.button_text_color)}
             href={created.url}
             target="_blank"
             rel="noreferrer"
@@ -202,43 +203,7 @@ export function TicketForm({ config }: { config: SupportConfig }) {
           disabled={busy || !config.available}
           className="support-form border-0 min-w-0 p-0 m-0"
         >
-          <div className="support-grid">
-            <label className="support-field">
-              Request type
-              <select name="request_type">
-                <option>Report a bug</option>
-                <option>Request a feature</option>
-                <option>Billing</option>
-                <option>Other</option>
-              </select>
-            </label>
-            <label className="support-field">
-              Affected area
-              <input name="area" required maxLength={100} placeholder="e.g. Orders or account" />
-            </label>
-          </div>
-          <label className="support-field">
-            Subject
-            <input
-              name="subject"
-              required
-              maxLength={200}
-              placeholder="A short summary of your request"
-            />
-          </label>
-          <label className="support-field">
-            Details
-            <textarea
-              name="details"
-              required
-              maxLength={10000}
-              placeholder="What happened, and what did you expect?"
-            />
-            <span className="support-muted">
-              Include the steps that help us understand your request. Never include passwords or
-              payment details.
-            </span>
-          </label>
+          <TicketRequestFields />
           <div
             className="support-drop"
             onDragOver={(e) => e.preventDefault()}
@@ -275,23 +240,7 @@ export function TicketForm({ config }: { config: SupportConfig }) {
               ))}
             </div>
           </div>
-          <div className="support-grid">
-            <label className="support-field">
-              Your name
-              <input name="customer_name" autoComplete="name" required maxLength={100} />
-            </label>
-            <label className="support-field">
-              Email address
-              <input
-                name="customer_email"
-                type="email"
-                autoComplete="email"
-                required
-                maxLength={254}
-              />
-              <span className="support-muted">Used only for ticket updates.</span>
-            </label>
-          </div>
+          <TicketContactFields />
           <label className="support-honeypot" aria-hidden="true">
             Leave empty
             <input name="website" tabIndex={-1} autoComplete="off" />
@@ -308,7 +257,7 @@ export function TicketForm({ config }: { config: SupportConfig }) {
             <button
               type="submit"
               className="btn-base btn-primary"
-              style={{ color: supportAccentInk(config.site.accent) }}
+              style={supportButtonStyle(config.site.accent, config.site.button_text_color)}
               disabled={busy || (config.protection.required && !token)}
             >
               {busy ? "Submitting…" : "Submit ticket"}

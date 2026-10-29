@@ -8,7 +8,8 @@ export class McpFailure extends Error {
     readonly code: string,
     message: string,
     readonly status: 400 | 401 | 403 | 404 | 409 | 413 | 429 | 503,
-    readonly retryAfter?: number
+    readonly retryAfter?: number,
+    readonly details?: Record<string, unknown>
   ) {
     super(message);
   }
@@ -29,7 +30,14 @@ export function handleMcpHttpError(error: Error, c: Context) {
       );
     }
     if (error.retryAfter) c.header("Retry-After", String(error.retryAfter));
-    return c.json({ error: error.code, message: error.message }, error.status);
+    return c.json(
+      {
+        error: error.code,
+        message: error.message,
+        ...(error.details ? { details: error.details } : {}),
+      },
+      error.status
+    );
   }
   log.error("mcp request failed");
   return c.json({ error: "internal_error", message: "Agent access is unavailable." }, 500);

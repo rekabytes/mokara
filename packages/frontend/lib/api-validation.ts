@@ -225,6 +225,9 @@ const subtaskSchema = z.object({
 });
 export const subtaskResultSchema = z.object({ subtask: subtaskSchema });
 export const taskSchema = z.object({
+  agent_ready: z.boolean().optional(),
+  agent_sync_paused: z.boolean().optional(),
+  revision: z.string().optional(),
   id: z.string(),
   team_id: z.string(),
   title: z.string(),

@@ -90,9 +90,12 @@ test("public tool catalog covers all permissions and the complete current tool i
   const names = [...catalog.matchAll(/<td><code>([a-z_]+)<\/code><\/td>/g)].map(
     (match) => match[1]
   );
-  assert.equal(names.length, 47);
-  assert.equal(new Set(names).size, 47);
+  assert.equal(names.length, 66);
+  assert.equal(new Set(names).size, 66);
   for (const name of [
+    "claim_agent_task",
+    "read_agent_task_snapshot",
+    "list_agent_task_changes",
     "list_drive_items",
     "search_drive_items",
     "get_drive_file",

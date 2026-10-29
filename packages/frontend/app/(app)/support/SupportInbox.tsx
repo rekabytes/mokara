@@ -1,4 +1,6 @@
 "use client";
+import { SupportSelect } from "@/components/support/SupportSelect";
+
 import { useMemo, useState } from "react";
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { atomWithRefresh, loadable } from "jotai/utils";
@@ -25,6 +27,7 @@ export function SupportInbox({ teamId, name }: { teamId: string; name: string })
   );
   const state = useAtomValue(useMemo(() => loadable(resource), [resource])),
     refresh = useSetAtom(resource);
+  const [recentSiteId, setRecentSiteId] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null),
     [filter, setFilter] = useState("all"),
     [query, setQuery] = useState("");
@@ -80,7 +83,15 @@ export function SupportInbox({ teamId, name }: { teamId: string; name: string })
           Refresh inbox
         </button>
       </div>
-      <SupportSites teamId={teamId} data={data.sites} refresh={reload} />
+      <SupportSites
+        teamId={teamId}
+        data={data.sites}
+        recentSiteId={recentSiteId}
+        onSaved={(id) => {
+          setRecentSiteId(id);
+          reload();
+        }}
+      />
       {error && <ErrorBanner message={error.message} />}
       <div className="support-shell">
         <section className="support-card !p-0 overflow-hidden">
@@ -95,13 +106,13 @@ export function SupportInbox({ teamId, name }: { teamId: string; name: string })
             </label>
             <label className="support-field">
               Status
-              <select value={filter} onChange={(e) => setFilter(e.target.value)}>
+              <SupportSelect value={filter} onChange={(e) => setFilter(e.target.value)}>
                 <option value="all">All statuses</option>
                 <option value="open">Open</option>
                 <option value="in_progress">In progress</option>
                 <option value="waiting">Waiting for customer</option>
                 <option value="resolved">Resolved</option>
-              </select>
+              </SupportSelect>
             </label>
             <p className="support-muted">
               {visible.length} shown · {rows.length} loaded{next ? " · more available" : ""}

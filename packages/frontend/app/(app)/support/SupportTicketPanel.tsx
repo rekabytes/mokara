@@ -1,4 +1,6 @@
 "use client";
+import { SupportSelect } from "@/components/support/SupportSelect";
+
 import Link from "next/link";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
@@ -118,7 +120,7 @@ export function SupportTicketPanel({
       <div className="support-grid mb-5">
         <label className="support-field">
           Status
-          <select
+          <SupportSelect
             disabled={busy}
             value={ticket.status}
             onChange={(e) => {
@@ -136,11 +138,11 @@ export function SupportTicketPanel({
             <option value="in_progress">In progress</option>
             <option value="waiting">Waiting for customer</option>
             <option value="resolved">Resolved</option>
-          </select>
+          </SupportSelect>
         </label>
         <label className="support-field">
           Priority
-          <select
+          <SupportSelect
             disabled={busy}
             value={ticket.priority}
             onChange={(e) => {
@@ -152,11 +154,11 @@ export function SupportTicketPanel({
             <option value="low">Low</option>
             <option value="medium">Medium</option>
             <option value="high">High</option>
-          </select>
+          </SupportSelect>
         </label>
         <label className="support-field">
           Assignee
-          <select
+          <SupportSelect
             disabled={busy}
             value={ticket.assignee_id ?? ""}
             onChange={(e) => void patch({ assignee_id: e.target.value || null })}
@@ -167,7 +169,7 @@ export function SupportTicketPanel({
                 {m.display_name || m.username}
               </option>
             ))}
-          </select>
+          </SupportSelect>
         </label>
       </div>
       <p className="whitespace-pre-wrap break-words support-divider">{ticket.details}</p>
@@ -246,7 +248,7 @@ export function SupportTicketPanel({
                   <>
                     <label className="support-field">
                       Repository
-                      <select value={repoId} onChange={(e) => setRepoId(e.target.value)}>
+                      <SupportSelect value={repoId} onChange={(e) => setRepoId(e.target.value)}>
                         <option value="">Select a repository</option>
                         {repositories.map((r) => (
                           <option key={r.id} value={r.id}>
@@ -254,7 +256,7 @@ export function SupportTicketPanel({
                             {r.private ? " · private" : " · public"}
                           </option>
                         ))}
-                      </select>
+                      </SupportSelect>
                     </label>
                     <button
                       type="button"

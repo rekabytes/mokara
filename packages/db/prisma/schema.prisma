@@ -198,6 +198,10 @@ model TeamInvitation {
 }
 
 model Task {
+  agentReady           Boolean @default(false) @map("agent_ready")
+  agentSyncPaused      Boolean @default(false) @map("agent_sync_paused")
+  agentRevision        BigInt  @default(1) @map("agent_revision")
+  agentContentRevision BigInt  @default(1) @map("agent_content_revision")
   id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   teamId      String    @map("team_id") @db.Uuid
   projectId   String?   @map("project_id") @db.Uuid
@@ -733,6 +737,7 @@ model SupportSite {
   name String
   origins String[]
   accent String @default("#6366f1")
+  buttonTextColor String? @map("button_text_color")
   greeting String @default("Report an issue or send a request.")
   enabled Boolean @default(true)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -805,4 +810,67 @@ model SupportEmail {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   @@index([sentAt, nextAttemptAt])
   @@map("support_emails")
+}
+
+model AgentExecution {
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId                  String    @map("task_id") @db.Uuid
+  workspaceId             String    @map("workspace_id") @db.Uuid
+  projectId               String?   @map("project_id") @db.Uuid
+  connectionId            String?   @map("connection_id") @db.Uuid
+  agentName               String    @map("agent_name")
+  clientIdentifier        String    @default("external-client") @map("client_identifier")
+  installationId          String    @default(dbgenerated("gen_random_uuid()")) @map("installation_id") @db.Uuid
+  state                   String
+  acceptedRevision        BigInt    @map("accepted_revision")
+  acceptedContentRevision BigInt    @map("accepted_content_revision")
+  snapshot                Json
+  claimedAt               DateTime  @default(now()) @map("claimed_at") @db.Timestamptz(3)
+  startedAt               DateTime? @map("started_at") @db.Timestamptz(3)
+  heartbeatAt             DateTime  @default(now()) @map("heartbeat_at") @db.Timestamptz(3)
+  leaseExpiresAt          DateTime  @map("lease_expires_at") @db.Timestamptz(3)
+  finishedAt              DateTime? @map("finished_at") @db.Timestamptz(3)
+  progress                String    @default("")
+  progressPercent         Int?      @map("progress_percent")
+  result                  String?
+  failure                 String?
+  taskDeleted             Boolean   @default(false) @map("task_deleted")
+
+  @@index([workspaceId, taskId, claimedAt(sort: Desc), id(sort: Desc)], map: "agent_executions_history")
+  @@map("agent_executions")
+}
+
+model AgentSyncClock {
+  workspaceId String @id @map("workspace_id") @db.Uuid
+  sequence    BigInt @default(0)
+
+  @@map("agent_sync_clocks")
+}
+
+model AgentSyncEvent {
+  workspaceId  String   @map("workspace_id") @db.Uuid
+  sequence     BigInt
+  taskId       String   @map("task_id") @db.Uuid
+  projectId    String?  @map("project_id") @db.Uuid
+  kind         String
+  revision     BigInt
+  origin       String
+  connectionId String?  @map("connection_id") @db.Uuid
+  executionId  String?  @map("execution_id") @db.Uuid
+  occurredAt   DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
+
+  @@id([workspaceId, sequence])
+  @@map("agent_sync_events")
+}
+
+model AgentSyncRequest {
+  actorKey    String   @map("actor_key")
+  requestId   String   @map("request_id") @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  requestHash String   @map("request_hash")
+  result      Json
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@id([actorKey, requestId])
+  @@map("agent_sync_requests")
 }

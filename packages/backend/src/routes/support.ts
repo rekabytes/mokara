@@ -107,6 +107,9 @@ supportRoutes.post(
           name: input.name,
           origins: input.origins,
           accent: input.accent,
+          ...(input.button_text_color !== undefined
+            ? { buttonTextColor: input.button_text_color }
+            : {}),
           greeting: input.greeting,
           enabled: input.enabled,
         },
@@ -134,9 +137,13 @@ supportRoutes.put(
         { error: "forbidden", message: "Only the workspace owner can configure websites." },
         403
       );
+    const { button_text_color, ...fields } = c.req.valid("json");
     const result = await prisma.supportSite.updateMany({
       where: { id, teamId },
-      data: c.req.valid("json"),
+      data: {
+        ...fields,
+        ...(button_text_color !== undefined ? { buttonTextColor: button_text_color } : {}),
+      },
     });
     if (!result.count) return c.json({ error: "not_found", message: "Website not found." }, 404);
     return c.json({ ok: true });

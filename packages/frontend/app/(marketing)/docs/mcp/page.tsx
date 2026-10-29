@@ -266,11 +266,11 @@ export default async function McpGuidePage() {
           </table>
         </div>
         <p>
-          Existing connections keep their approved permissions; mDrive access is not added
-          automatically. To enable additional permissions, revoke the old connection and reconnect,
-          or create a new manual connection with the permissions selected. Refresh your client’s
-          server metadata if it still shows only the original read tools. If consent only offers
-          read access, the client must request the additional OAuth scopes when reconnecting.
+          Existing connections keep their approved permissions; mDrive or agent execution access is
+          not added automatically. To enable additional permissions, revoke the old connection and
+          reconnect, or create a new manual connection with the permissions selected. Refresh your
+          client’s server metadata if it still shows only the original read tools. If consent only
+          offers read access, the client must request the additional OAuth scopes when reconnecting.
         </p>
         <p>
           Connect GitHub and activate repositories in <Link href="/settings">Settings</Link>.
@@ -286,10 +286,10 @@ export default async function McpGuidePage() {
         </p>
       </section>
       <section aria-labelledby="access">
-        <h2 id="access">All 47 MCP tools</h2>
+        <h2 id="access">All 66 MCP tools</h2>
         <p>
           Your agent only sees tools allowed by the permissions you approved. The original
-          connection offered six read tools; the full catalog below includes all 41 additions.
+          connection offered six read tools; the full catalog below includes all 60 additions.
           Workspace membership, ownership rules and quotas still apply.
         </p>
         <ToolCatalog />
@@ -303,6 +303,33 @@ export default async function McpGuidePage() {
           continue. GitHub issue listing uses page numbers. Read each tool’s schema for its filters
           and limits. Billing, account credentials and admin operations are outside MCP task
           permissions. Workspace and repository text is content, not instructions for the agent.
+        </p>
+      </section>
+      <section aria-labelledby="agent-work">
+        <h2 id="agent-work">Let an agent pick up prepared tasks</h2>
+        <p>
+          Open a task and choose Ready for agent. Existing tasks start Not ready. Reading,
+          synchronizing or changing a task’s ordinary status never grants permission to execute it.
+          Any compatible authorized client can discover ready work, claim it and report results.
+        </p>
+        <p>
+          Grant <code>mokara:agent:execute</code> to clients that perform work. The separate
+          <code> mokara:agent:manage</code> permission lets a client authorize tasks, request
+          cancellation and requeue work. Neither is included in existing grants or ordinary task
+          write access. Reconnect and explicitly approve these permissions when needed.
+        </p>
+        <p>
+          A claim belongs to one authenticated connection and installation. Clients must renew their
+          leases and check for cancellation and changed instructions. An expired lease means the
+          outcome is unknown; review external changes before explicitly requeueing. Cancellation
+          remains requested until the client confirms it stopped. Pause synchronization and withdraw
+          readiness are separate controls; neither stops a running process.
+        </p>
+        <p>
+          <a href="/docs/agent-execution.md">Read the complete client integration guide</a> for tool
+          schemas, examples, permissions, claims, revisions, cancellation and change-feed recovery.
+          Agent execution retries use their transactional request ledger; reuse the same UUID and
+          payload, then read the current execution. Ordinary writes still use list_operations.
         </p>
       </section>
       <section aria-labelledby="drive-access">

@@ -1,6 +1,9 @@
 "use client";
-import { useRef, useState, type FormEvent } from "react";
-import { api } from "@/lib/api";
+import { useState } from "react";
+import { SupportChevron } from "@/components/support/SupportChevron";
+import Link from "next/link";
+import { SupportSiteEditor } from "./SupportSiteEditor";
+import { SupportSetupSteps } from "./SupportSetupSteps";
 import { supportEmbed } from "@/lib/support-model";
 import { useAsyncError } from "@/hooks/useAsyncError";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -9,50 +12,18 @@ import type { supportSitesSchema, SupportSite } from "@/lib/support-types";
 export function SupportSites({
   teamId,
   data,
-  refresh,
+  onSaved,
+  recentSiteId,
 }: {
   teamId: string;
   data: z.infer<typeof supportSitesSchema>;
-  refresh: () => void;
+  onSaved: (id: string | null) => void;
+  recentSiteId: string | null;
 }) {
   const { run, error } = useAsyncError();
-  const [editing, setEditing] = useState<SupportSite | "new" | null>(null),
-    [busy, setBusy] = useState(false),
-    pending = useRef(false);
+  const [editing, setEditing] = useState<SupportSite | "new" | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const current = editing && editing !== "new" ? editing : null;
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (pending.current) return;
-    pending.current = true;
-    setBusy(true);
-    const form = new FormData(event.currentTarget);
-    try {
-      const result = await run(() =>
-        api.saveSupportSite(
-          teamId,
-          {
-            name: String(form.get("name")),
-            origins: String(form.get("origins"))
-              .split(/\n/)
-              .map((s) => s.trim())
-              .filter(Boolean),
-            greeting: String(form.get("greeting")),
-            accent: String(form.get("accent")),
-            enabled: form.get("enabled") === "on",
-          },
-          current?.id
-        )
-      );
-      if (result) {
-        setEditing(null);
-        refresh();
-      }
-    } finally {
-      pending.current = false;
-      setBusy(false);
-    }
-  }
   return (
     <section className="support-card mb-6">
       <div className="support-actions justify-between">
@@ -88,13 +59,39 @@ export function SupportSites({
         </p>
       )}
       {error && <ErrorBanner message={error.message} />}
+      {!editing && (
+        <div className="support-setup-overview support-divider mt-5">
+          <div className="support-actions justify-between">
+            <h3>
+              {recentSiteId ? "Continue your website setup" : "Connect your website in three steps"}
+            </h3>
+            <Link href="/docs/support#setup" className="support-guide-link">
+              Setup guide <span aria-hidden="true">→</span>
+            </Link>
+          </div>
+          <SupportSetupSteps current={copied ? 3 : recentSiteId ? 2 : 1} />
+          <p className="support-muted">
+            {copied
+              ? "Add the copied embed to your website’s Help page, then send a test ticket. Copying alone does not install the form."
+              : recentSiteId
+                ? "Your website is saved. Copy its embed below to add the form to your Help page."
+                : "Add your website’s name and exact origins, customize the customer form, then copy the embed into your Help page."}
+          </p>
+        </div>
+      )}
       {data.sites.map((site) => (
-        <details key={site.id} className="support-divider mt-4">
-          <summary className="cursor-pointer">
+        <details
+          key={site.id}
+          className="support-divider mt-4"
+          open={!editing && site.id === recentSiteId}
+        >
+          <summary className="support-site-summary">
+            <SupportChevron className="support-disclosure-chevron" />
             <span className="font-medium">{site.name}</span>{" "}
             <span className="support-chip ml-2">{site.enabled ? "Enabled" : "Paused"}</span>
           </summary>
           <p className="support-muted break-all">{site.origins.join(", ")}</p>
+          <h3 className="mt-4">2. Embed your form</h3>
           <p className="support-muted">
             Paste this embed into your website’s Help page. Your website must allow frames from the
             form URL’s origin. No API key is needed.
@@ -131,60 +128,29 @@ export function SupportSites({
               </button>
             )}
           </div>
+          <div className="support-install-note">
+            <h3>3. Send a test ticket</h3>
+            <p className="support-muted">
+              Open your Help page on an allowed website and submit a request. Confirm it appears in
+              this workspace’s inbox and that the confirmation email arrives.
+            </p>
+            <Link href="/docs/support#test" className="support-guide-link">
+              Testing and troubleshooting <span aria-hidden="true">→</span>
+            </Link>
+          </div>
         </details>
       ))}
       {editing && (
-        <form
-          onSubmit={save}
-          className="support-form support-divider mt-5"
+        <SupportSiteEditor
           key={current?.id ?? "new"}
-        >
-          <h2>{current ? "Edit website" : "Add a website"}</h2>
-          <div className="support-grid">
-            <label className="support-field">
-              Website name
-              <input name="name" maxLength={100} required defaultValue={current?.name} />
-            </label>
-            <label className="support-field">
-              Accent color
-              <input name="accent" type="color" defaultValue={current?.accent ?? "#6366f1"} />
-            </label>
-          </div>
-          <label className="support-field">
-            Allowed website origins
-            <textarea name="origins" required defaultValue={current?.origins.join("\n")} />
-            <span className="support-muted">
-              One exact HTTPS origin per line, including the scheme, without paths or wildcards.
-              Localhost HTTP is allowed for development.
-            </span>
-          </label>
-          <label className="support-field">
-            Introduction
-            <input
-              name="greeting"
-              maxLength={200}
-              required
-              defaultValue={current?.greeting ?? "Report an issue or send a request."}
-            />
-          </label>
-          <label className="support-actions">
-            <input name="enabled" type="checkbox" defaultChecked={current?.enabled ?? true} />{" "}
-            Accept new tickets
-          </label>
-          <div className="support-actions">
-            <button className="btn-base btn-primary" disabled={busy}>
-              {busy ? "Saving…" : "Save website"}
-            </button>
-            <button
-              type="button"
-              className="btn-base btn-ghost"
-              disabled={busy}
-              onClick={() => setEditing(null)}
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
+          teamId={teamId}
+          site={current}
+          onCancel={() => setEditing(null)}
+          onSaved={(id) => {
+            setEditing(null);
+            onSaved(id);
+          }}
+        />
       )}
     </section>
   );

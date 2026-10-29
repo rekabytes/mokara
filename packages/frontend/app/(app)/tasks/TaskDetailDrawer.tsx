@@ -1,4 +1,5 @@
 "use client";
+import { AgentExecutionPanel } from "./AgentExecutionPanel";
 
 import { useDialogFocus } from "@/hooks/use-dialog-focus";
 import { AttachmentsSection } from "./AttachmentsSection";
@@ -53,6 +54,7 @@ export function TaskDetailDrawer({
   currentUser,
   projects,
   kpis,
+  onAgentChange,
   onClose,
   onUpdate,
   onSetKpis,
@@ -64,6 +66,7 @@ export function TaskDetailDrawer({
   currentUser: User | null;
   projects: Project[];
   kpis: Kpi[];
+  onAgentChange: (detail: import("@/lib/agent-execution").AgentDetail) => void;
   onClose: () => void;
   onUpdate: (patch: TaskPatch) => void;
   onSetKpis: (bindings: BindingDraft[]) => void;
@@ -454,6 +457,7 @@ export function TaskDetailDrawer({
         {/* Checklist — PRD-11 Phase 1.2: creation-time only, so this is a
             viewer for steps that exist. `key` remounts it per task so the
             seeded list can never bleed from one task to the next. */}
+        <AgentExecutionPanel key={task.id} task={task} onChange={onAgentChange} />
         <SubtasksSection key={task.id} task={task} />
 
         {/* Comments — fills remaining drawer height (PRD-03 Phase 1) */}

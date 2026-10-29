@@ -2,7 +2,9 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpPrincipal } from "./access.ts";
 
-export const MCP_WORKFLOW_INSTRUCTIONS = `Resolve destinations before writing. Use list_workspaces for workspaces, list_projects for Mokara projects and list_github_repositories for active GitHub repositories. A project is not a repository. A request for a GitHub issue or a task in owner/repository authorizes publishing there. Do not ask for the same permission again.
+export const MCP_WORKFLOW_INSTRUCTIONS = `Reading, synchronizing, or changing ordinary task status never authorizes external execution. For agent work, discover get_agent_execution_capabilities, list_ready_agent_tasks and get_agent_task. Only claim an explicitly ready task with its current revision, then read the immutable accepted snapshot and authorized attachments before starting. Use the claiming connection and stable installation_id for execution updates. Renew leases, check cancellation and new_information, and stop on lost ownership. Never requeue an expired or unknown execution without explicit user recovery. Agent execution writes use their own transactional retry ledger: retry the same request_id and payload, then read current execution state; list_operations covers ordinary task writes only.
+
+Resolve destinations before writing. Use list_workspaces for workspaces, list_projects for Mokara projects and list_github_repositories for active GitHub repositories. A project is not a repository. A request for a GitHub issue or a task in owner/repository authorizes publishing there. Do not ask for the same permission again.
 
 GitHub access follows the user's active repositories without reconnecting. The connection needs GitHub permission, and the user must still have repository access. Access alone does not authorize publishing. Do not treat a screenshot as a publishing preference. If a name could mean a project or a repository and publishing intent is unclear, ask one short question before creating anything.
 

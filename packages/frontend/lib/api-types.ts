@@ -100,6 +100,9 @@ export type GitHubIntegration = {
 };
 
 export type Task = {
+  agent_ready?: boolean;
+  agent_sync_paused?: boolean;
+  revision?: string;
   id: string;
   team_id: string;
   title: string;

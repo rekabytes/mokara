@@ -1,4 +1,10 @@
 import {
+  agentDetailSchema,
+  agentResultSchema,
+  agentHistoryResultSchema,
+  type AgentUserCommand,
+} from "./agent-execution";
+import {
   supportSitesSchema,
   supportSiteSchema,
   supportListSchema,
@@ -338,6 +344,15 @@ function uploadViaXhr<T>(
 }
 
 export const api = {
+  agentTask: (workspace: string, task: string, signal?: AbortSignal) =>
+    req(agentDetailSchema, `/teams/${workspace}/tasks/${task}/agent`, { signal }),
+  agentCommand: (data: AgentUserCommand) =>
+    req(agentResultSchema, "/agent/commands", { method: "POST", body: JSON.stringify(data) }),
+  agentHistory: (workspace: string, task: string, cursor?: string) =>
+    req(
+      agentHistoryResultSchema,
+      `/teams/${workspace}/tasks/${task}/agent/history${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`
+    ),
   supportSites: (teamId: string, signal?: AbortSignal) =>
     req(supportSitesSchema, `/teams/${teamId}/support/sites`, { signal, cache: "no-store" }),
   saveSupportSite: async (teamId: string, data: SupportSiteDraft, id?: string) =>

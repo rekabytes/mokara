@@ -94,11 +94,57 @@ const groups = [
       ["retry_github_sync", "Retry synchronization for a task’s linked issue."],
     ],
   },
+  {
+    title: "Agent execution reads · 7 tools",
+    scope: "mokara:read",
+    tools: [
+      ["get_agent_execution_capabilities", "Discover readiness, lease and synchronization rules."],
+      ["list_ready_agent_tasks", "Discover explicitly ready tasks in a workspace or project."],
+      ["get_agent_task", "Read full instructions, readiness, revision and current execution."],
+      [
+        "read_agent_task_snapshot",
+        "Read large current instructions in revision-checked JSON chunks.",
+      ],
+      ["list_agent_task_changes", "Read the durable task and execution change feed."],
+      ["list_agent_execution_history", "Read execution history, newest first."],
+      ["read_agent_execution_snapshot", "Read immutable accepted instructions in JSON chunks."],
+    ],
+  },
+  {
+    title: "Authorize agent work · 4 tools",
+    scope: "mokara:agent:manage",
+    tools: [
+      ["set_task_agent_readiness", "Explicitly authorize work or withdraw readiness."],
+      ["set_task_agent_sync_paused", "Pause discovery without stopping an external process."],
+      [
+        "requeue_agent_task",
+        "Explicitly authorize a new run after reviewing the previous outcome.",
+      ],
+      ["request_agent_execution_cancellation", "Request cancellation; wait for confirmation."],
+    ],
+  },
+  {
+    title: "Execute agent work · 8 tools",
+    scope: "mokara:agent:execute",
+    tools: [
+      ["claim_agent_task", "Atomically claim one ready task for this connection and installation."],
+      [
+        "start_agent_execution",
+        "Start a claimed execution after reading its accepted instructions.",
+      ],
+      ["renew_agent_execution_lease", "Renew ownership before the server-time lease expires."],
+      ["report_agent_execution_progress", "Report progress without renewing the lease."],
+      ["complete_agent_execution", "Save results without changing ordinary task status."],
+      ["fail_agent_execution", "Record failure without automatically retrying work."],
+      ["acknowledge_agent_execution_cancellation", "Confirm the external process has stopped."],
+      ["release_agent_execution", "Release a claim; started work becomes an unknown outcome."],
+    ],
+  },
 ] as const;
 
 export function ToolCatalog() {
   return groups.map((group) => (
-    <div key={group.scope}>
+    <div key={group.title}>
       <h3>{group.title}</h3>
       <p>
         Required permission: <code>{group.scope}</code>.

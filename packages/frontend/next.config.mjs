@@ -22,7 +22,7 @@ const csp = [
     : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com",
   "frame-src 'self' https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self'",
+  "img-src 'self' https://makakami.com.my/badge/mokara.svg https://api.producthunt.com/widgets/embed-image/v1/featured.svg",
   "font-src 'self'",
   "connect-src 'self'",
   "object-src 'none'",

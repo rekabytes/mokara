@@ -622,11 +622,44 @@
   border: 1px solid var(--color-border-soft);
   border-radius: 5px;
 }
+.home-hero-badge {
+  display: inline-flex;
+}
+.home-hero-badge img {
+  display: block;
+  width: auto;
+  height: 44px;
+}
+.home-directory {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding-block: 12px;
+}
+.home-directory a {
+  display: inline-flex;
+  border-radius: 10px;
+  background: var(--color-surface-solid);
+  box-shadow: var(--shadow-card);
+}
+.home-directory > div {
+  display: flex;
+}
+.home-directory a:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 5px;
+}
+.home-directory img {
+  display: block;
+  width: auto;
+  height: 44px;
+}
 .home-faq {
   display: grid;
   grid-template-columns: 0.75fr 1.25fr;
   gap: 80px;
-  border-top: 1px solid var(--color-border-soft);
   padding-block: 70px 90px;
 }
 .home-faq .home-text-link {

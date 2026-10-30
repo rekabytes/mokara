@@ -11,6 +11,8 @@ import { HomeField } from "./HomeField";
 import { HomeSection } from "./HomeSection";
 import { HomeWorkflow } from "./HomeWorkflow";
 import { HomeProduct } from "./HomeProduct";
+import { HomeDirectoryBadge } from "./HomeDirectoryBadge";
+import { HomeProductHuntBadge } from "./HomeProductHuntBadge";
 import "./homepage.css";
 
 export function generateMetadata(): Metadata {
@@ -82,11 +84,8 @@ export default async function LandingPage() {
               <div className="home-hero-action">
                 <Link className="public-button public-button-primary" href={startHref}>
                   {startLabel}
-                  <Arrow />
                 </Link>
-                <a href="#product" className="home-text-link">
-                  Look around <Arrow />
-                </a>
+                <HomeProductHuntBadge className="home-hero-badge" />
               </div>
               <p className="home-reassurance">
                 {hasSession
@@ -247,6 +246,8 @@ export default async function LandingPage() {
             </figcaption>
           </figure>
         </HomeSection>
+
+        <HomeDirectoryBadge />
 
         <HomeSection id="faq" className="home-faq public-container" labelledBy="faq-title">
           <div>

@@ -12,6 +12,14 @@ import type { Transition, Variants } from "framer-motion";
 /** Matches `--ease-snap` in globals.css. Mutable tuple: framer-motion's bezier type. */
 export const EASE_SNAP: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
+export const homepageBadgeFloat: Variants = {
+  rest: { transform: "translate3d(0, 0px, 0)", transition: { duration: 0 } },
+  float: {
+    transform: ["translate3d(0, 0px, 0)", "translate3d(0, -6px, 0)"],
+    transition: { duration: 3, ease: [0.45, 0, 0.55, 1], repeat: Infinity, repeatType: "reverse" },
+  },
+};
+
 export const DUR = {
   /** Toggles, checkmarks, banners. */
   fast: 0.12,
